@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { motion } from 'motion/react'
 import { ArrowLeft, Building2, Globe, Mail, Newspaper, ScrollText } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { CoverArt } from '@/components/common/cover-art'
+import { RevealSection } from '@/components/common/reveal-section'
 
 export const Route = createFileRoute('/about')({
   component: AboutPage,
@@ -12,12 +12,6 @@ export const Route = createFileRoute('/about')({
 // 关于本刊：定位、理念、编委会、卷期与联系方式。
 // 编委会为编辑部化名的虚构阵容（本刊自己就是一本正经与荒诞并存的刊物，
 // 编委信息按刊物设定的方式呈现，不指向任何真实人物）。
-const rise = {
-  initial: { opacity: 0.3, y: 14 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: '0px 0px 200px 0px' },
-  transition: { duration: 0.45, ease: 'easeOut' as const },
-}
 
 const BOARD = [
   {
@@ -81,7 +75,7 @@ function AboutPage() {
       />
 
       <div className="space-y-10">
-        <motion.section {...rise} className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
+        <RevealSection className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
           <CoverArt seed="about" title="Rubbish" subtitle="Vol. 1 · 2026" className="w-full max-w-52" />
           <div>
             <p className="font-serif text-lg leading-relaxed">
@@ -96,9 +90,9 @@ function AboutPage() {
               不收版面费，不设学历门槛，不问出处。
             </p>
           </div>
-        </motion.section>
+        </RevealSection>
 
-        <motion.section {...rise}>
+        <RevealSection>
           <h2 className="text-xl font-medium">编辑部</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {BOARD.map((m) => (
@@ -119,9 +113,9 @@ function AboutPage() {
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             编委署名为编辑部化名。本刊实行双盲评审，真实审稿人身份仅编辑部掌握。
           </p>
-        </motion.section>
+        </RevealSection>
 
-        <motion.section {...rise}>
+        <RevealSection>
           <h2 className="text-xl font-medium">刊史</h2>
           <ol className="mt-4 space-y-4 border-l border-border pl-5">
             {TIMELINE.map(([when, what]) => (
@@ -135,9 +129,9 @@ function AboutPage() {
               </li>
             ))}
           </ol>
-        </motion.section>
+        </RevealSection>
 
-        <motion.section {...rise}>
+        <RevealSection>
           <h2 className="text-xl font-medium">出版信息</h2>
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
@@ -155,9 +149,9 @@ function AboutPage() {
               </div>
             ))}
           </dl>
-        </motion.section>
+        </RevealSection>
 
-        <motion.section {...rise} className="rounded-xl border bg-gradient-to-br from-primary/5 to-accent/10 p-8">
+        <RevealSection className="rounded-xl border bg-gradient-to-br from-primary/5 to-accent/10 p-8">
           <h2 className="flex items-center gap-2 text-lg font-medium">
             <Mail className="h-5 w-5 text-primary" />
             联系编辑部
@@ -178,7 +172,7 @@ function AboutPage() {
               支持本刊
             </Link>
           </p>
-        </motion.section>
+        </RevealSection>
       </div>
     </div>
   )

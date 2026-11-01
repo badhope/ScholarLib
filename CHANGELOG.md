@@ -9,6 +9,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **关于页滚动揭示兜底**：将仍使用失效 `whileInView` 的关于页区块统一改为原生 IntersectionObserver 驱动的 `RevealSection`，避免截图、打印或未触发观察器时内容停留在0.3透明度。
+
 ## [1.8.1] — 2026-10-31
 
 ### Fixed
