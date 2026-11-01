@@ -102,7 +102,7 @@ async def create_comment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_level(1)),
 ) -> CommentResponse:
-    """Post a comment (L2+; published resources only)."""
+    """Post a comment (L1+; published resources only)."""
     tenant_id = require_tenant_id()
     body = payload.body.strip()
     if not body:

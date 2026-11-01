@@ -65,6 +65,22 @@ async def award(
     value = XP_RULES.get(action, 0) if points is None else points
     if value <= 0 and action != "admin.grant":
         return False
+    from app.modules.gamification.xp import DAILY_COMMENT_XP_CAP
+
+    if action == "comment.create":
+        day_start = utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        earned_today = (
+            await db.execute(
+                select(func.coalesce(func.sum(UserXpEvent.points), 0)).where(
+                    UserXpEvent.tenant_id == user.tenant_id,
+                    UserXpEvent.user_id == user.id,
+                    UserXpEvent.action == action,
+                    UserXpEvent.created_at >= day_start,
+                )
+            )
+        ).scalar_one()
+        if int(earned_today) >= DAILY_COMMENT_XP_CAP:
+            return False
     exists = (
         await db.execute(
             select(UserXpEvent.id).where(

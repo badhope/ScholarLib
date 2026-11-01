@@ -19,6 +19,12 @@
 
 ### Fixed
 
+- **评论 XP 每日上限此前只定义未执行**：`DAILY_COMMENT_XP_CAP` 常量存在但发放路径从未读取，
+  L1 可评论后新账号能靠连续评论刷到 L2/L3。`gamification.service.award` 现对
+  `comment.create` 按 UTC 当日累计 XP 封顶 10 分，超限时评论仍成功但不加分。
+- **等级能力文案与门禁脱节**：L1 已可阅读、评论、投稿，但 `ladder` 仍把「发表评论」写在 L2、
+  「提交稿件」写在 L3。已改为 L2 = 关注/阅读列表/跨设备进度、L3 = 作品集/审稿意见/ORCID，
+  与 `require_level(1)` 实际门禁一致；评论接口文档串同步由 L2+ 改为 L1+。
 - **注册接口账户枚举**：`POST /api/auth/register` 成功与邮箱/用户名冲突现在返回
   完全一致的 201 `{"message": ...}`，且注册路径不再下发刷新 Cookie —— 此前成功
   返回 TokenResponse、冲突返回 MessageResponse，调用方一眼可分。注册响应不再

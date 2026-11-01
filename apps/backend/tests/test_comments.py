@@ -157,3 +157,33 @@ async def test_admin_can_delete_any_comment(
 async def test_delete_missing_comment_404(client: AsyncClient, test_user: dict) -> None:
     r = await client.delete("/api/comments/999999", headers=auth_headers(test_user))
     assert r.status_code == 404
+
+
+async def test_comment_xp_is_capped_per_day(client: AsyncClient, admin_user: dict) -> None:
+    """L1 也能评论后，评论 XP 必须受每日上限约束，否则新号可刷级。"""
+    from app.modules.gamification.xp import DAILY_COMMENT_XP_CAP, XP_RULES
+
+    rid = await _create_resource(client, admin_user, "Comment XP Cap Target")
+    user = await register_user(client, email="comment-xp-cap@example.com", username="commentxpcap")
+
+    per_comment = XP_RULES["comment.create"]
+    max_comments = DAILY_COMMENT_XP_CAP // per_comment
+    assert max_comments >= 1
+
+    for i in range(max_comments + 2):
+        r = await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": f"每日上限测试评论 {i}"},
+            headers=auth_headers(user),
+        )
+        assert r.status_code == 201
+
+    me = await client.get("/api/auth/me", headers=auth_headers(user))
+    assert me.status_code == 200
+    body = me.json()
+
+    from app.modules.gamification.xp import XP_RULES as RULES
+
+    baseline = RULES["register"]
+    earned = body["xp"] - baseline
+    assert earned == DAILY_COMMENT_XP_CAP, f"expected cap {DAILY_COMMENT_XP_CAP}, got {earned}"

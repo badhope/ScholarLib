@@ -66,12 +66,12 @@ LEVELS: tuple[LevelSpec, ...] = (
         roles=(),
         capabilities=(
             "L1 全部权限",
-            "发表评论",
             "关注作者 / 订阅学科",
             "建立阅读列表",
             "跨设备阅读进度",
+            "社区规范徽章",
         ),
-        description="完成初始阅读量后解锁社交与收藏能力：评论、关注、阅读列表。",
+        description="完成初始阅读量后解锁社交与收藏能力：关注、阅读列表、跨设备进度。评论与投稿自 L1 起即可用。",
     ),
     LevelSpec(
         level=3,
@@ -83,11 +83,11 @@ LEVELS: tuple[LevelSpec, ...] = (
         roles=(),
         capabilities=(
             "L2 全部权限",
-            "提交稿件",
             "查看审稿意见与版本历史",
             "申请 ORCID 关联",
+            "作者署名页与作品集",
         ),
-        description="获得投稿资格。投稿前必须完整阅读并确认《投稿规范》。",
+        description="完成投稿规范确认后的正式作者身份：作品集、审稿意见可见、ORCID 关联。投稿自 L1 起即可用。",
     ),
     LevelSpec(
         level=4,
