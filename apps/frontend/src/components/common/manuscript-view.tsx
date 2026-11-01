@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import {
+  Children,
+  isValidElement,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
@@ -42,8 +49,153 @@ function headingHash(text: string): string {
 
 function splitManuscript(md: string): { main: string; refs: string } {
   const idx = md.lastIndexOf('\n## 参考文献')
-  if (idx < 0) return { main: md, refs: '' }
+  if (idx < 0) {
+    if (md.startsWith('## 参考文献')) return { main: '', refs: md }
+    return { main: md, refs: '' }
+  }
   return { main: md.slice(0, idx), refs: md.slice(idx + 1) }
+}
+
+interface AbstractSplit {
+  before: string
+  abstract: string
+  label: string
+  after: string
+}
+
+const ABSTRACT_HEADING =
+  /^#{2,3}[ \t]*(摘[ \t\u3000]*要|Abstract|ABSTRACT)(?:[ \t]*[（(][^）)]*[）)])?[ \t]*$/i
+const ABSTRACT_QUOTE =
+  /^>[ \t]*(?:\*\*)?[ \t]*(摘[ \t\u3000]*要|Abstract|ABSTRACT)[ \t]*(?:\*\*)?[ \t\u3000:：]*(.*)$/i
+const NEXT_HEADING = /^#{1,3}[ \t]+\S/
+const KEYWORDS_LINE = /^(?:\*\*)?[ \t]*(关键词|关键字|Keywords?)(?:\*\*)?[ \t]*[:：]/i
+
+function abstractLabel(heading: string): string {
+  return /^abstract$/i.test(heading.trim()) ? 'Abstract' : '摘要'
+}
+
+// 摘要从正文流中摘出，交给独立卡片渲染；关键词/下一节/分隔线都视为摘要结束。
+// 兼容两种真实稿件结构：清洗后的 `## 摘要` 与存量稿的 `> **摘 要** …`。
+export function splitAbstract(md: string): AbstractSplit {
+  const lines = md.split('\n')
+  const headingAt = lines.findIndex((line) => ABSTRACT_HEADING.test(line.trim()))
+  if (headingAt >= 0) {
+    const heading = ABSTRACT_HEADING.exec(lines[headingAt].trim())?.[1] ?? '摘要'
+    let end = lines.length
+    for (let i = headingAt + 1; i < lines.length; i++) {
+      const line = lines[i].trim()
+      if (NEXT_HEADING.test(line) || KEYWORDS_LINE.test(line) || line === '---') {
+        end = i
+        break
+      }
+    }
+    const abstract = lines.slice(headingAt + 1, end).join('\n').trim()
+    if (abstract) {
+      return {
+        before: lines.slice(0, headingAt).join('\n').trim(),
+        abstract,
+        label: abstractLabel(heading),
+        after: lines.slice(end).join('\n').trim(),
+      }
+    }
+  }
+
+  const quoteAt = lines.findIndex((line) => ABSTRACT_QUOTE.test(line.trim()))
+  if (quoteAt >= 0) {
+    const heading = ABSTRACT_QUOTE.exec(lines[quoteAt].trim())?.[1] ?? '摘要'
+    const body = [ABSTRACT_QUOTE.exec(lines[quoteAt].trim())?.[2] ?? '']
+    let end = quoteAt + 1
+    while (end < lines.length && /^>/.test(lines[end].trim())) {
+      const quoted = lines[end].trim().replace(/^>[ \t]?/, '')
+      if (KEYWORDS_LINE.test(quoted) || NEXT_HEADING.test(quoted)) break
+      body.push(quoted)
+      end++
+    }
+    const abstract = body.join('\n').trim()
+    if (abstract) {
+      return {
+        before: lines.slice(0, quoteAt).join('\n').trim(),
+        abstract,
+        label: abstractLabel(heading),
+        after: lines.slice(end).join('\n').trim(),
+      }
+    }
+  }
+
+  return { before: '', abstract: '', label: '摘要', after: md }
+}
+
+function nodeText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children)
+  return ''
+}
+
+const CAPTION_TEXT = /^(?:图|表|Figure|Fig\.?|Table)[ \t\u3000]*\d+/i
+const KEYWORDS_TEXT = /^(?:关键词|关键字|Keywords?)[ \t]*[:：]/i
+
+// 图注/表注：整段为一行、且源稿用斜体或粗体标记（`*图 1 …*` / `**表 1 …**`）。
+function paragraphClass(children: ReactNode): string | undefined {
+  const text = nodeText(children).trim()
+  if (KEYWORDS_TEXT.test(text)) return 'md-keywords'
+  if (!CAPTION_TEXT.test(text)) return undefined
+  const items = Children.toArray(children)
+  const only = items.length === 1 ? items[0] : null
+  const emphasized = isValidElement(only) && (only.type === 'em' || only.type === 'strong')
+  // 无强调标记时只认「图 1 / 表 1：」这种带全角分隔的独立短行，
+  // 避免把「图 1 显示…」这类正文句子误判成图注。
+  const labelled = /^(?:图|表)[ \t\u3000]*\d+[\u3000.、:：]/.test(text) && text.length <= 90
+  if (!emphasized && !labelled) return undefined
+  return /^(?:表|Table)/i.test(text)
+    ? 'md-caption md-caption-table'
+    : 'md-caption md-caption-figure'
+}
+
+function referenceEntries(refs: string): string[] {
+  const body = refs.replace(/^#{1,6}[ \t]*参考文献[^\n]*\n?/i, '').trim()
+  if (!body) return []
+  return body
+    .split(/\n(?=[ \t]*\[\d+\])/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+const markdownComponents: Components = {
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer nofollow">
+      {children}
+    </a>
+  ),
+  img: ({ src, alt }) =>
+    // 空/非字符串 src（例如转换失败的本地绝对路径被清洗成空串）
+    // 直接不渲染：浏览器对 src="" 会重新请求整页，且控制台报错。
+    typeof src === 'string' && src ? (
+      <img src={src} alt={alt ?? ''} loading="lazy" />
+    ) : null,
+  p: ({ children }) => <p className={paragraphClass(children)}>{children}</p>,
+  table: ({ children }) => (
+    <div className="md-table-wrap">
+      <table>{children}</table>
+    </div>
+  ),
+}
+
+function ManuscriptMarkdown({ children, math = true }: { children: string; math?: boolean }) {
+  return (
+    <ReactMarkdown
+      urlTransform={(url) =>
+        // 转换管线把图表内嵌为 data:image URI；默认清洗会剥掉 data: 协议
+        // 导致破图。这里只放行图片 data URI，其余仍走默认清洗。
+        url.startsWith('data:image/') ? url : defaultUrlTransform(url)
+      }
+      remarkPlugins={math ? [remarkGfm, remarkMath] : [remarkGfm]}
+      rehypePlugins={math ? [[rehypeKatex, { strict: false }]] : []}
+      components={markdownComponents}
+    >
+      {children}
+    </ReactMarkdown>
+  )
 }
 
 export const TOC_OPEN_EVENT = 'rubbish:open-toc'
@@ -84,9 +236,13 @@ export function ManuscriptView({
 
   // 目录与正文/参考文献拆分：纯字符串操作，无需 memo
   const split = data ? splitManuscript(data) : { main: '', refs: '' }
+  const sections = split.main
+    ? splitAbstract(split.main)
+    : { before: '', abstract: '', label: '摘要', after: '' }
   const main = split.main
   const refs = split.refs
-  const refCount = refs ? (refs.match(/^\[\d+\]/gm)?.length ?? 0) : 0
+  const refEntries = refs ? referenceEntries(refs) : []
+  const refCount = refEntries.length
  const [toc, setToc] = useState<TocEntry[]>([])
  const articleRef = useRef<HTMLElement>(null)
  useEffect(() => {
@@ -279,30 +435,19 @@ export function ManuscriptView({
         )}
 
         <article ref={articleRef} className="markdown-body min-w-0 flex-1">
-          <ReactMarkdown
-            urlTransform={(url) =>
-              // 转换管线把图表内嵌为 data:image URI；默认清洗会剥掉 data: 协议
-              // 导致破图。这里只放行图片 data URI，其余仍走默认清洗。
-              url.startsWith('data:image/') ? url : defaultUrlTransform(url)
-            }
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[[rehypeKatex, { strict: false }]]}
-            components={{
-              a: ({ href, children }) => (
-                <a href={href} target="_blank" rel="noopener noreferrer nofollow">
-                  {children}
-                </a>
-              ),
-              img: ({ src, alt }) =>
-                // 空/非字符串 src（例如转换失败的本地绝对路径被清洗成空串）
-                // 直接不渲染：浏览器对 src="" 会重新请求整页，且控制台报错。
-                typeof src === 'string' && src ? (
-                  <img src={src} alt={alt ?? ''} loading="lazy" />
-                ) : null,
-              }}
-          >
-            {main}
-          </ReactMarkdown>
+          {sections.abstract ? (
+            <>
+              {sections.before && <ManuscriptMarkdown>{sections.before}</ManuscriptMarkdown>}
+              <section role="region" aria-label={sections.label} className="md-abstract">
+                <ManuscriptMarkdown>
+                  {`## ${sections.label}\n\n${sections.abstract}`}
+                </ManuscriptMarkdown>
+              </section>
+              {sections.after && <ManuscriptMarkdown>{sections.after}</ManuscriptMarkdown>}
+            </>
+          ) : (
+            <ManuscriptMarkdown>{main}</ManuscriptMarkdown>
+          )}
 
           {refs && (
             <details
@@ -320,7 +465,11 @@ export function ManuscriptView({
                 参考文献（{refCount} 条）· 点击展开
               </summary>
               <div className="border-t px-4 py-3">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{refs}</ReactMarkdown>
+                <div className="markdown-body refs-body">
+                  <ManuscriptMarkdown math={false}>
+                    {refEntries.join('\n\n')}
+                  </ManuscriptMarkdown>
+                </div>
               </div>
             </details>
           )}

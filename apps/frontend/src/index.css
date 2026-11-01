@@ -4,6 +4,9 @@
 @theme {
   --font-serif: "Noto Serif SC Variable", "Noto Serif SC", "Source Han Serif SC",
     "Songti SC", "SimSun", ui-serif, Georgia, serif;
+  /* 标题黑体：走系统无衬线栈，不额外加载字体（中文字体包体代价高） */
+  --font-heading: "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC",
+    "Noto Sans CJK SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -173,117 +176,242 @@ h4 {
 /* 期刊门面动效改由 motion 库驱动（MotionConfig reducedMotion="user" 自动尊重系统设置） */
 
 /* ---------------------------------------------------------------------------
- * 在线阅读 Markdown 学术排版（0.6.2，manuscript-view）
- * 正文衬线、标题层级清晰、表格三线化、图注居中、公式随主题色。
+ * 在线阅读 Markdown 学术排版（manuscript-view）
+ * 正文宋体、标题黑体分级、摘要卡片、图注/表注、三线表、文献悬挂缩进。
+ * 移动端只收紧字号与间距；宽表由 .md-table-wrap 横向滚动，不撑破页面。
  * ------------------------------------------------------------------------- */
 .markdown-body {
-  font-size: 1rem;
-  line-height: 1.9;
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  line-height: 1.95;
+  letter-spacing: 0.012em;
+  word-spacing: 0.02em;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+  /* 中英混排：支持的浏览器自动在 CJK 与拉丁字符间补 1/4 空格 */
+  text-autospace: normal;
   color: var(--color-foreground);
- overflow-wrap: anywhere;
+  overflow-wrap: anywhere;
 }
 .markdown-body > *:first-child { margin-top: 0; }
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
-.markdown-body h4 {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  line-height: 1.4;
-  margin: 2em 0 0.6em;
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--color-foreground);
   scroll-margin-top: 4rem;
 }
-.markdown-body h1 { font-size: 1.6rem; }
-.markdown-body h2 { font-size: 1.35rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.35rem; }
-.markdown-body h3 { font-size: 1.15rem; }
-.markdown-body h4 { font-size: 1rem; }
-.markdown-body p { margin: 0.85em 0; text-align: justify; }
-/* 论文阅读习惯（1.6.0）：正文段首行缩进两字。纯图片段落与图注除外。 */
-.markdown-body p { text-indent: 2em; }
-.markdown-body p:has(> img:only-child) { text-indent: 0; }
-.markdown-body img + em { text-indent: 0; }
-.markdown-body strong { font-weight: 600; }
-.markdown-body a { color: var(--color-primary); text-underline-offset: 3px; }
-.markdown-body a:hover { text-decoration: underline; }
-.markdown-body ul, .markdown-body ol { margin: 0.85em 0; padding-left: 1.6em; }
-.markdown-body ul { list-style: disc; }
-.markdown-body ol { list-style: decimal; }
-.markdown-body li { margin: 0.3em 0; }
-.markdown-body blockquote {
-  margin: 1.2em 0;
-  border-left: 3px solid var(--color-primary);
-  background: color-mix(in oklab, var(--color-primary) 5%, transparent);
-  padding: 0.6em 1em;
+.markdown-body h1 {
+  font-size: 2.05rem;
+  font-weight: 800;
+  margin: 1.2em 0 1.1em;
+  padding-bottom: 0.55rem;
+  border-bottom: 2px solid color-mix(in oklab, var(--color-primary) 40%, var(--color-border));
+}
+.markdown-body h2 {
+  font-size: 1.5rem;
+  margin: 2.4em 0 0.85em;
+  padding: 0.1em 0 0.1em 0.7rem;
+  border-left: 5px solid var(--color-primary);
+}
+.markdown-body h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 2em 0 0.65em;
+  padding-left: 0.55rem;
+  border-left: 3px solid color-mix(in oklab, var(--color-primary) 48%, var(--color-border));
+  line-height: 1.4;
+}
+.markdown-body h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 1.6em 0 0.5em;
+}
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  margin: 1.4em 0 0.45em;
   color: var(--color-muted-foreground);
 }
+.markdown-body p {
+  margin: 0 0 1em;
+  text-align: justify;
+  text-indent: 2em;
+  text-justify: inter-ideograph;
+}
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body p:has(> img:only-child) {
+  margin: 1.8em 0 0.35em;
+  text-align: center;
+  text-indent: 0;
+}
+.markdown-body strong { font-weight: 700; }
+.markdown-body a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--color-primary) 45%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+.markdown-body a:hover { text-decoration-color: var(--color-primary); }
+.markdown-body ul,
+.markdown-body ol { margin: 1em 0; padding-left: 1.7em; }
+.markdown-body ul { list-style: disc; }
+.markdown-body ol { list-style: decimal; }
+.markdown-body li { margin: 0.35em 0; text-indent: 0; }
+.markdown-body li::marker { color: var(--color-primary); }
+.markdown-body li > p { margin: 0.25em 0; text-indent: 0; }
+.markdown-body blockquote {
+  margin: 1.5em 0;
+  border-left: 4px solid color-mix(in oklab, var(--color-primary) 70%, var(--color-border));
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: color-mix(in oklab, var(--color-primary) 5%, var(--color-muted));
+  padding: 0.85em 1.1em;
+  color: color-mix(in oklab, var(--color-foreground) 84%, var(--color-muted-foreground));
+}
+.markdown-body blockquote p { margin: 0.35em 0; text-align: left; text-indent: 0; }
+.markdown-body blockquote > :first-child { margin-top: 0; }
+.markdown-body blockquote > :last-child { margin-bottom: 0; }
 .markdown-body img {
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 1.6em auto 0.5em;
+  margin: 1.6em auto 0.4em;
   border-radius: 0.5rem;
   border: 1px solid var(--color-border);
   /* 白底只给图本身，暗色主题下不刺眼 */
   background: white;
 }
-/* 图注：图片后紧跟的一行斜体/短段落按期刊图注处理（居中、小号、灰） */
-.markdown-body img + em,
-.markdown-body p:has(> img:only-child) + p {
-  display: block;
-  text-align: center;
+/* 图注：`*图 1　…*` 整段斜体；表注：`*表 1　…*` / `**表 1　…**`。 */
+.markdown-body .md-caption {
+  max-width: 94%;
+  margin: 0.45em 0 1.6em;
   font-size: 0.8125rem;
-  line-height: 1.6;
+  line-height: 1.7;
   color: var(--color-muted-foreground);
-  margin: 0.35em auto 1.6em;
-  max-width: 92%;
+  text-align: center;
+  text-indent: 0;
+}
+.markdown-body .md-caption-figure { margin-left: auto; margin-right: auto; }
+.markdown-body .md-caption-table { max-width: 100%; }
+.markdown-body .md-caption em { font-style: normal; }
+.markdown-body .md-caption strong { color: var(--color-foreground); }
+.markdown-body .md-keywords {
+  margin: 1.1em 0 1.4em;
+  padding: 0.6em 0.8em;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 0.35rem 0.35rem 0;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: var(--color-muted-foreground);
+  text-indent: 0;
+}
+.markdown-body .md-keywords strong { color: var(--color-foreground); }
+/* 摘要卡片：与正文拉开层次，标题用小型黑体标签 */
+.markdown-body .md-abstract {
+  margin: 0.4rem 0 2rem;
+  padding: 1.15rem 1.35rem 1.2rem;
+  border: 1px solid color-mix(in oklab, var(--color-primary) 18%, var(--color-border));
+  border-left: 4px solid var(--color-primary);
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--color-primary) 4%, var(--color-card));
+  box-shadow: 0 1px 2px rgb(20 40 70 / 4%);
+  scroll-margin-top: 4rem;
+}
+.markdown-body .md-abstract h2 {
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.24em;
+  color: var(--color-primary);
+}
+.markdown-body .md-abstract p {
+  margin: 0.45em 0;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  text-indent: 0;
+  color: color-mix(in oklab, var(--color-foreground) 90%, var(--color-muted-foreground));
+}
+.markdown-body .md-table-wrap {
+  max-width: 100%;
+  margin: 1.4em 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .markdown-body table {
- display: block;
- max-width:100%;
- overflow-x: auto;
   width: 100%;
-  margin: 1.4em 0;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  line-height: 1.65;
+  font-variant-numeric: tabular-nums;
 }
-.markdown-body thead { border-top: 2px solid var(--color-foreground); border-bottom: 1.5px solid var(--color-foreground); }
-.markdown-body tbody tr:last-child { border-bottom: 2px solid var(--color-foreground); }
-.markdown-body th, .markdown-body td { padding: 0.5em 0.7em; text-align: left; }
-.markdown-body tbody tr + tr { border-top: 1px solid var(--color-border); }
+.markdown-body thead th {
+  padding: 0.55em 0.75em;
+  border-top: 2px solid var(--color-foreground);
+  border-bottom: 1px solid var(--color-foreground);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.markdown-body tbody td {
+  padding: 0.5em 0.75em;
+  text-align: left;
+  vertical-align: top;
+}
+/* 三线表：顶线、表头线、底线，无竖线与行间横线 */
+.markdown-body tbody tr:last-child td { border-bottom: 2px solid var(--color-foreground); }
+.markdown-body tbody tr:hover { background: color-mix(in oklab, var(--color-primary) 3%, transparent); }
 .markdown-body code {
-  font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  font-size: 0.85em;
-  background: var(--color-muted);
-  border-radius: 0.25rem;
-  padding: 0.15em 0.4em;
+  font-family: ui-monospace, "SF Mono", Consolas, "Cascadia Code", monospace;
+  font-size: 0.875em;
+  background: color-mix(in oklab, var(--color-muted) 78%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.38em;
+  color: color-mix(in oklab, var(--color-primary) 70%, var(--color-foreground));
+  overflow-wrap: anywhere;
 }
 .markdown-body pre {
-  background: var(--color-muted);
+  background: color-mix(in oklab, var(--color-muted) 82%, transparent);
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
   padding: 1em;
   overflow-x: auto;
   font-size: 0.85rem;
+  line-height: 1.7;
 }
-.markdown-body pre code { background: transparent; padding: 0; }
-.markdown-body hr { margin: 2em 0; border-color: var(--color-border); }
+.markdown-body pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.markdown-body hr { margin: 2.2em 0; border: 0; border-top: 1px solid var(--color-border); }
 .markdown-body .katex { font-size: 1.05em; }
 .markdown-body .katex-display { margin: 1.2em 0; overflow-x: auto; overflow-y: hidden; }
 
-@media (max-width: 767px) {
-  .markdown-body img {
-    max-width: 100%;
-    margin: 1.2em auto 0.4em;
-  }
-  .markdown-body table {
-    font-size: 0.8125rem;
-  }
-}
-
 
 /* 参考文献折叠块（manuscript-view） */
+.refs-collapse { scroll-margin-top: 4rem; }
 .refs-collapse summary {
   color: var(--color-foreground);
+  font-family: var(--font-heading);
+  letter-spacing: 0.02em;
 }
 .refs-collapse summary::marker {
   color: var(--color-primary);
@@ -291,14 +419,19 @@ h4 {
 .refs-collapse[open] summary {
   border-bottom: 1px solid var(--color-border);
 }
-.refs-collapse .markdown-body {
+.refs-collapse .refs-body {
+  font-family: var(--font-serif);
   font-size: 0.85rem;
+  line-height: 1.8;
   color: var(--color-muted-foreground);
 }
-.refs-collapse .markdown-body p {
+.refs-collapse .refs-body p {
+  margin: 0.5em 0;
+  padding-left: 2.2em;
   text-align: left;
-  margin: 0.3em 0;
+  text-indent: -2.2em;
 }
+.refs-collapse .refs-body a { overflow-wrap: anywhere; }
 
 /* 打印兜底：motion 初始态不阻断打印内容（0.7.1 视觉审计） */
 @media print {
@@ -378,18 +511,33 @@ textarea {
   }
 }
 /* 减弱动效：所有过渡/动画降到最短，保留最终状态 */
-/* 移动端正文：手机上正文占满 100% 宽度后，1.6rem 的标题会占三到四行、
-   把摘要整个推出首屏。按屏宽下调一级，并收紧段落间距。 */
+/* 移动端正文：正文占满 100% 宽度后，标题需按屏宽下调一级并收紧间距；
+   段落保持首行缩进，宽表交给 .md-table-wrap 横向滚动。 */
 @media (max-width: 767px) {
-  .markdown-body { font-size: 0.95rem; line-height: 1.85; }
-  .markdown-body h1 { font-size: 1.25rem; }
-  .markdown-body h2 { font-size: 1.1rem; }
-  .markdown-body h3 { font-size: 1rem; }
-  .markdown-body h1,
-  .markdown-body h2,
-  .markdown-body h3 { margin: 1.5em 0 0.5em; }
-  .markdown-body p { margin: 0.7em 0; }
-  .markdown-body img { max-width: 100%; }
+  .markdown-body {
+    font-size: 0.9688rem;
+    line-height: 1.9;
+    letter-spacing: 0.006em;
+  }
+  .markdown-body h1 { font-size: 1.45rem; margin-bottom: 0.8em; }
+  .markdown-body h2 { font-size: 1.22rem; margin: 1.9em 0 0.7em; padding-left: 0.55rem; border-left-width: 4px; }
+  .markdown-body h3 { font-size: 1.08rem; margin: 1.6em 0 0.55em; }
+  .markdown-body h4 { font-size: 1rem; }
+  .markdown-body p { margin-bottom: 0.85em; }
+  .markdown-body .md-abstract {
+    margin: 0.2rem 0 1.6rem;
+    padding: 0.95rem 1rem 1rem;
+    border-radius: 0.6rem;
+  }
+  .markdown-body .md-abstract h2 { font-size: 0.75rem; letter-spacing: 0.2em; }
+  .markdown-body .md-abstract p { font-size: 0.92rem; line-height: 1.85; }
+  .markdown-body .md-caption { max-width: 100%; font-size: 0.78rem; }
+  .markdown-body img { margin: 1.2em auto 0.35em; }
+  .markdown-body table { font-size: 0.8125rem; }
+  .markdown-body thead th { padding: 0.5em 0.65em; }
+  .markdown-body tbody td { padding: 0.45em 0.65em; }
+  .markdown-body pre { padding: 0.8em; font-size: 0.8rem; }
+  .refs-collapse .refs-body p { padding-left: 1.7em; text-indent: -1.7em; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -491,20 +639,6 @@ html {
 }
 .badge-pop:hover {
   transform: scale(1.06);
-}
-
-/* 移动端正文：手机上正文占满 100% 宽度后，1.6rem 的标题会占三到四行、
-   把摘要整个推出首屏。按屏宽下调一级，并收紧段落间距。 */
-@media (max-width: 767px) {
-  .markdown-body { font-size: 0.95rem; line-height: 1.85; }
-  .markdown-body h1 { font-size: 1.25rem; }
-  .markdown-body h2 { font-size: 1.1rem; }
-  .markdown-body h3 { font-size: 1rem; }
-  .markdown-body h1,
-  .markdown-body h2,
-  .markdown-body h3 { margin: 1.5em 0 0.5em; }
-  .markdown-body p { margin: 0.7em 0; }
-  .markdown-body img { max-width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
