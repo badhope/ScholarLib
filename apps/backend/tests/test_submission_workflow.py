@@ -99,6 +99,75 @@ async def test_admin_assigns_reviewer_flips_status_to_under_review(
     assert (await _get(client, sub["id"], admin_user))["status"] == "under_review"
 
 
+async def test_author_cannot_be_assigned_or_decide_own_submission(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    await _assign_role(client, admin_user, int(test_user["user_id"]), "reviewer")
+    await _assign_role(client, admin_user, int(test_user["user_id"]), "editor")
+    sub = await _create_submission(client, test_user)
+    assigned = await client.post(
+        f"/api/submissions/{sub['id']}/assignments",
+        json={"reviewer_id": test_user["user_id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert assigned.status_code == 403
+    decision = await client.patch(
+        f"/api/submissions/{sub['id']}/decision",
+        json={"decision": "reject"},
+        headers=auth_headers(test_user),
+    )
+    assert decision.status_code == 403
+    assert (await _get(client, sub["id"], test_user))["status"] == "pending"
+
+
+async def test_admin_cannot_review_own_submission(client: AsyncClient, admin_user: dict) -> None:
+    await client.post(
+        "/api/gamification/onboarding/author",
+        json={"accept_rules": True},
+        headers=auth_headers(admin_user),
+    )
+    sub = await _create_submission(client, admin_user)
+    response = await client.patch(
+        f"/api/submissions/{sub['id']}/review",
+        json={"status": "rejected"},
+        headers=auth_headers(admin_user),
+    )
+    assert response.status_code == 403
+
+
+async def test_legacy_self_assignment_cannot_accept_or_submit(
+    client: AsyncClient, admin_user: dict, test_user: dict, db_session: object
+) -> None:
+    await _assign_role(client, admin_user, int(test_user["user_id"]), "reviewer")
+    sub = await _create_submission(client, test_user)
+    from app.modules.submission.models import Submission
+
+    entry = (
+        await db_session.execute(select(Submission).where(Submission.id == sub["id"]))
+    ).scalar_one()
+    assignment = ReviewAssignment(
+        tenant_id=entry.tenant_id,
+        submission_id=entry.id,
+        reviewer_id=test_user["user_id"],
+        assigned_by=admin_user["user_id"],
+        status="pending",
+    )
+    db_session.add(assignment)
+    await db_session.commit()
+    accepted = await client.post(
+        f"/api/review/assignments/{assignment.id}/accept", headers=auth_headers(test_user)
+    )
+    assert accepted.status_code == 403
+    assignment.status = "accepted"
+    await db_session.commit()
+    submitted = await client.post(
+        f"/api/review/assignments/{assignment.id}/submit",
+        json={"recommendation": "accept", "scores": {}, "comments_to_author": "ok"},
+        headers=auth_headers(test_user),
+    )
+    assert submitted.status_code == 403
+
+
 async def test_non_editor_cannot_assign_reviewer(client: AsyncClient, test_user: dict) -> None:
     sub = await _create_submission(client, test_user)
     reviewer = await _register(client, "rev_two", "rev2@example.com")
@@ -221,6 +290,38 @@ async def test_author_sees_report_without_editor_comments(
     assert len(reports) == 1
     assert reports[0]["comments_to_author"] == "Please clarify section 3."
     assert reports[0]["comments_to_editor"] is None
+
+
+async def test_submitter_editor_cannot_access_or_change_review_management(
+    client: AsyncClient, test_user: dict, admin_user: dict, db_session: object
+) -> None:
+    await _assign_role(client, admin_user, int(test_user["user_id"]), "editor")
+    sub = await _create_submission(client, test_user)
+    reviewer = await _register_reviewer(client, admin_user, "rev_conflict", "conflict@example.com")
+    created = await client.post(
+        f"/api/submissions/{sub['id']}/assignments",
+        json={"reviewer_id": reviewer["user_id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert created.status_code == 201
+    assignment_id = created.json()["id"]
+    headers = auth_headers(test_user)
+    listed = await client.get(f"/api/submissions/{sub['id']}/assignments", headers=headers)
+    assert listed.status_code == 403
+    cancelled = await client.delete(
+        f"/api/submissions/{sub['id']}/assignments/{assignment_id}", headers=headers
+    )
+    assert cancelled.status_code == 403
+    anonymous = await client.put(
+        f"/api/submissions/{sub['id']}/anonymized-file",
+        json={"anonymized_file_url": "https://example.com/anonymous.pdf"},
+        headers=headers,
+    )
+    assert anonymous.status_code == 403
+    await _completed_report(db_session, sub["id"], None)
+    reports = await client.get(f"/api/submissions/{sub['id']}/reports", headers=headers)
+    assert reports.status_code == 200
+    assert reports.json()[0]["comments_to_editor"] is None
 
 
 async def test_editor_sees_full_report_including_editor_comments(

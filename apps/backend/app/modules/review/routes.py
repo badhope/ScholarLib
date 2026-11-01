@@ -227,6 +227,8 @@ async def accept_assignment(
 ) -> AssignmentResponse:
     """Reviewer accepts the invitation."""
     a = await _get_assignment_for_reviewer(db, assignment_id, current_user.id)
+    if a.submission is None or a.submission.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot review own submission")
     if a.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -310,6 +312,8 @@ async def submit_review_report(
 ) -> ReviewReportResponse:
     """Reviewer submits the review report (terminal)."""
     a = await _get_assignment_for_reviewer(db, assignment_id, current_user.id)
+    if a.submission is None or a.submission.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot review own submission")
     if a.status != "accepted":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

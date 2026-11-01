@@ -7,7 +7,6 @@ import rehypeKatex from 'rehype-katex'
 import { ListTree } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { api } from '@/lib/api'
-import { useIsMobile } from '@/hooks/use-is-mobile'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Loading } from '@/components/common/state'
 
@@ -47,44 +46,7 @@ function splitManuscript(md: string): { main: string; refs: string } {
   return { main: md.slice(0, idx), refs: md.slice(idx + 1) }
 }
 
-const ABSTRACT_MARK = "> **摘　要**"
-
-/** 阅读页底部操作栏「目录」按钮 → 本组件打开目录抽屉的事件名。 */
 export const TOC_OPEN_EVENT = 'rubbish:open-toc'
-
-/**
- * 把正文拆成「题录块」与「正文块」。
- *
- * 移动端一屏只有 ~660px，标题 + 期刊行 + DOI + 作者 + 三条机构 + 关键词
- * 会占掉整整一屏，读者要点进来才看得到摘要。这里把标题之后、摘要之前
- * 的题录行单独拎出来，移动端折进一个 details；桌面端仍原样铺开。
- */
-function splitFrontMatter(main: string): { title: string; meta: string; rest: string } {
-  const idx = main.indexOf(ABSTRACT_MARK)
-  const head = idx >= 0 ? main.slice(0, idx) : ''
-  const rest = idx >= 0 ? main.slice(idx) : main
-  const lines = head.split('\n')
-  const titleIdx = lines.findIndex((l) => l.startsWith('# '))
-  if (titleIdx < 0) return { title: '', meta: '', rest: main }
-  const title = lines[titleIdx]
-  const meta = lines.slice(titleIdx + 1).join('\n').trim()
-  return { title, meta, rest }
-}
-
-function extractHeadings(md: string): TocEntry[] {
-  const entries: TocEntry[] = []
-  const seen = new Set<string>()
-  for (const line of md.split('\n')) {
-    const m = /^(##|###)\s+(.+)$/.exec(line.trim())
-    if (!m) continue
-    const text = m[2].replace(/^\d+(\.\d+)*[\u3000]?/, '').trim() || m[2]
-    let id = `h-${headingHash(text)}`
-    while (seen.has(id)) id += '-x'
-    seen.add(id)
-    entries.push({ id, level: m[1] === '##' ? 2 : 3, text })
-  }
-  return entries
-}
 
 export function ManuscriptView({
   resourceId,
@@ -93,8 +55,7 @@ export function ManuscriptView({
   useWindowScroll = false,
   onTocChange,
 }: ManuscriptViewProps) {
-  const isMobile = useIsMobile()
-  const scrollRef = useRef<HTMLDivElement>(null)
+   const scrollRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null)
   const [refsOpen, setRefsOpen] = useState(false)
@@ -126,16 +87,24 @@ export function ManuscriptView({
   const main = split.main
   const refs = split.refs
   const refCount = refs ? (refs.match(/^\[\d+\]/gm)?.length ?? 0) : 0
-  const front = (() => {
-    if (!main) return null
-    return splitFrontMatter(main)
-  })()
-  const toc = (() => {
-    if (!main) return []
-    const entries = extractHeadings(main)
-    if (refs) entries.push({ id: 'refs', level: 2, text: '参考文献' })
-    return entries
-  })()
+ const [toc, setToc] = useState<TocEntry[]>([])
+ const articleRef = useRef<HTMLElement>(null)
+ useEffect(() => {
+ if (!data || !articleRef.current) return
+ const seen = new Set<string>()
+ const entries: TocEntry[] = []
+ articleRef.current.querySelectorAll<HTMLHeadingElement>('h2, h3').forEach((heading) => {
+ if (heading.closest('#refs')) return
+ const text = heading.textContent?.trim() ?? ''
+ let id = `h-${headingHash(text)}`
+ while (seen.has(id)) id += '-x'
+ seen.add(id)
+ heading.id = id
+ entries.push({ id, level: heading.tagName === 'H2' ?2 :3, text })
+ })
+ if (refs) entries.push({ id: 'refs', level:2, text: '参考文献' })
+ setToc(entries)
+ }, [data, refs])
 
   // 目录条目数上报给阅读页：不足 3 条时底部不出现「目录」按钮，
   // 避免按下去弹出一个几乎空白的抽屉。
@@ -309,36 +278,7 @@ export function ManuscriptView({
           </nav>
         )}
 
-        <article className="markdown-body min-w-0 flex-1">
-          {/* 移动端题录折叠：标题保留（读者要确认打开的是哪篇），
-              期刊/DOI/作者/机构/关键词收进一行摘要，点开再看。 */}
-          {isMobile && front && (
-            <>
-              <ReactMarkdown>{front.title}</ReactMarkdown>
-              {front.meta && (
-                <details className="my-3 rounded-lg border bg-muted/30">
-                  <summary className="cursor-pointer select-none px-3 py-2 text-xs text-muted-foreground">
-                    题录信息（作者、机构、DOI、关键词）
-                  </summary>
-                  <div className="border-t px-3 py-2 text-sm">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        a: ({ href, children }) => (
-                          <a href={href} target="_blank" rel="noopener noreferrer nofollow">
-                            {children}
-                          </a>
-                        ),
-                        img: () => null,
-                      }}
-                    >
-                      {front.meta}
-                    </ReactMarkdown>
-                  </div>
-                </details>
-              )}
-            </>
-          )}
+        <article ref={articleRef} className="markdown-body min-w-0 flex-1">
           <ReactMarkdown
             urlTransform={(url) =>
               // 转换管线把图表内嵌为 data:image URI；默认清洗会剥掉 data: 协议
@@ -359,15 +299,9 @@ export function ManuscriptView({
                 typeof src === 'string' && src ? (
                   <img src={src} alt={alt ?? ''} loading="lazy" />
                 ) : null,
-              h2: ({ children }) => (
-                <h2 id={`h-${headingHash(String(children))}`}>{children}</h2>
-              ),
-              h3: ({ children }) => (
-                <h3 id={`h-${headingHash(String(children))}`}>{children}</h3>
-              ),
-            }}
+              }}
           >
-            {isMobile && front ? front.rest : main}
+            {main}
           </ReactMarkdown>
 
           {refs && (

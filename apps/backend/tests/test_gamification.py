@@ -112,7 +112,7 @@ async def test_l4_requires_accepted_paper_not_just_xp(
     assert me2.json()["level"] == 4, "录用达成 → 升 L4"
 
 
-async def test_level_one_cannot_comment(client: AsyncClient, admin_user: dict) -> None:
+async def test_level_one_can_comment(client: AsyncClient, admin_user: dict) -> None:
     sample = {
         "type": "paper",
         "title": "Comment Gate Target",
@@ -131,11 +131,10 @@ async def test_level_one_cannot_comment(client: AsyncClient, admin_user: dict) -
     token = r.json()["access_token"]
     posted = await client.post(
         "/api/comments",
-        json={"resource_id": rid, "body": "L1 不应能发言"},
+        json={"resource_id": rid, "body": "L1 可以发言"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert posted.status_code == 403
-    assert posted.json()["detail"]["code"] == "level_required"
+    assert posted.status_code == 201
 
 
 async def test_author_onboarding_unlocks_level_three(client: AsyncClient) -> None:

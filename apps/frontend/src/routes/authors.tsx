@@ -68,7 +68,6 @@ function AuthorsPage() {
   const profile = useGamificationProfile({ enabled: isAuthenticated })
   const acceptRules = useAcceptAuthorRules()
   const rulesAccepted = profile.data?.rules_accepted ?? false
-  const currentLevel = profile.data?.level.level ?? 0
 
   return (
     <div className="mx-auto max-w-4xl py-8">
@@ -339,7 +338,7 @@ function AuthorsPage() {
           {!isAuthenticated ? (
             <>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                注册后先确认社区规范（L2），再来这里确认投稿规范（L3），即可投稿。
+                注册后阅读并确认投稿规范，即可投稿，无需达到特定等级。
               </p>
               <Button asChild className="mt-5">
                 <Link to="/register">
@@ -350,11 +349,11 @@ function AuthorsPage() {
           ) : rulesAccepted ? (
             <>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                你已确认本版《投稿与编辑规范》。{currentLevel < 3 ? '完成作者引导后即可投稿。' : '现在可以新建投稿了。'}
+                你已确认本版《投稿与编辑规范》，现在可以新建投稿了。
               </p>
               <Button asChild className="mt-5">
-                <Link to={currentLevel >= 3 ? '/submissions' : '/profile'}>
-                  {currentLevel >= 3 ? '进入我的投稿' : '完成作者引导'}
+                <Link to="/submissions">
+                  进入我的投稿
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
@@ -362,7 +361,7 @@ function AuthorsPage() {
           ) : (
             <>
               <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-                读完本页即视为了解规则。点下方按钮确认后，你的账号会升到 L3 并开放投稿入口。
+                阅读本页后，请确认投稿规范以开放投稿入口。确认可获得积分，等级按积分规则计算。
               </p>
               <Button
                 className="mt-5"

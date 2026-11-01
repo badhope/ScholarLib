@@ -174,7 +174,7 @@ function ProfilePage() {
   const unlocked = data.badges.filter((b) => b.unlocked)
   const locked = data.badges.filter((b) => !b.unlocked)
   const needsCommunity = level.level < 2
-  const needsAuthor = level.level < 3
+  const needsAuthor = !data.rules_accepted
 
   return (
     <div className="space-y-6">
@@ -248,9 +248,12 @@ function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  确认社区规范后解锁 L2：评论、关注作者、订阅学科、阅读列表。
-                </p>
-                <Button
+ L1 即可阅读和评论。阅读社区规范并确认可获得积分，等级由积分决定。
+ </p>
+ <Button asChild size="sm" variant="outline">
+ <Link to="/policies">阅读社区规范</Link>
+ </Button>
+ <Button
                   size="sm"
                   onClick={() => ackCommunity.mutate()}
                   disabled={ackCommunity.isPending}
@@ -269,7 +272,7 @@ function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  阅读并接受《投稿与编辑规范》，解锁 L3 投稿权限。规范改版后需重新确认。
+                  阅读并接受《投稿与编辑规范》后即可投稿，无需达到 L3。规范改版后需重新确认。
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild size="sm" variant="outline">
@@ -300,7 +303,7 @@ function ProfilePage() {
           <CardContent>
             <Ladder levels={data.ladder} current={level.level} />
             <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-              L1–L4 由积分自动解锁；L5 起为编辑部授予的职责岗位，不靠积分购买。
+              L2、L3 按积分解锁；L4还需稿件录用；L5 起由编辑部授予。
             </p>
           </CardContent>
         </Card>

@@ -180,6 +180,7 @@ h4 {
   font-size: 1rem;
   line-height: 1.9;
   color: var(--color-foreground);
+ overflow-wrap: anywhere;
 }
 .markdown-body > *:first-child { margin-top: 0; }
 .markdown-body h1,
@@ -237,6 +238,9 @@ h4 {
   max-width: 92%;
 }
 .markdown-body table {
+ display: block;
+ max-width:100%;
+ overflow-x: auto;
   width: 100%;
   margin: 1.4em 0;
   border-collapse: collapse;

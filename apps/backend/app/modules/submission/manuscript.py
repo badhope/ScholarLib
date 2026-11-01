@@ -23,15 +23,89 @@ from __future__ import annotations
 
 import base64
 import logging
+import math
 import os
 import re
 import tempfile
 from io import BytesIO
 from pathlib import Path
 
+import pymupdf
+
 logger = logging.getLogger(__name__)
 
 _MD_SUFFIX = ".md"
+
+
+def _original_simple_pdf_image(doc: pymupdf.Document) -> bytes | None:
+
+    try:
+        if len(doc) != 1:
+            return None
+        page = doc[0]
+        if page.rotation or list(page.annots() or ()) or list(page.widgets() or ()):
+            return None
+        images = page.get_image_info(xrefs=True)
+        if len(images) != 1 or page.get_bboxlog()[0][0] != "fill-image":
+            return None
+        if len(page.get_bboxlog()) != 1 or images[0]["has-mask"]:
+            return None
+        image = images[0]
+        a, b, c, d, _, _ = image["transform"]
+        if a <= 0 or d <= 0 or b != 0 or c != 0:
+            return None
+        if not math.isclose(a * image["height"], d * image["width"], rel_tol=1e-5):
+            return None
+        if doc.xref_get_key(image["xref"], "Decode")[0] != "null":
+            return None
+        if not page.rect.contains(pymupdf.Rect(image["bbox"])):
+            return None
+        streams = page.get_contents()
+        if len(streams) != 1:
+            return None
+        number = rb"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+        matrix = rb"\s+".join([number] * 6)
+        pattern = rb"\s*q\s+" + matrix + rb"\s+cm\s+/[^\s/]+\s+Do\s+Q\s*"
+        if not re.fullmatch(pattern, doc.xref_stream(streams[0])):
+            return None
+        xref = image["xref"]
+        if doc.xref_get_key(xref, "Mask")[0] != "null":
+            return None
+        node = page.xref
+        seen = set()
+        while node:
+            if node in seen:
+                return None
+            seen.add(node)
+            if doc.xref_get_key(node, "Resources/ColorSpace")[0] != "null":
+                return None
+            parent_type, parent = doc.xref_get_key(node, "Parent")
+            if parent_type == "null":
+                break
+            if parent_type != "xref":
+                return None
+            node = int(parent.split()[0])
+        color_space = doc.xref_get_key(xref, "ColorSpace")
+        if color_space not in (("name", "/DeviceRGB"), ("name", "/DeviceGray")):
+            return None
+        if doc.xref_get_key(xref, "Filter") != ("name", "/DCTDecode"):
+            return None
+        if doc.xref_get_key(xref, "DecodeParms")[0] != "null":
+            return None
+        original = doc.xref_stream_raw(xref)
+        pixmap = pymupdf.Pixmap(original)
+        expected = 3 if color_space[1] == "/DeviceRGB" else 1
+        if pixmap.alpha or pixmap.colorspace is None or pixmap.colorspace.n != expected:
+            return None
+        extracted = doc.extract_image(xref)
+        if not extracted or extracted["ext"] != "jpeg" or extracted["smask"]:
+            return None
+        if extracted["image"] != original:
+            return None
+        return bytes(original)
+
+    except Exception:
+        return None
 
 
 def _pdf_to_markdown(contents: bytes) -> str | None:
@@ -67,20 +141,22 @@ def _pdf_to_markdown(contents: bytes) -> str | None:
                     image_size_limit=0.0,
                     dpi=220,
                 )
-            # pymupdf4llm 产出对临时目录图片的文件引用：逐个内嵌为 data URI，
-            # 让 Markdown 自包含（阅读器无需额外的图片端点）。
-            # 引用可能是裸文件名，也可能是带临时目录的绝对路径（Windows 上实测
-            # 为 `![](C:/Users/.../Temp/rubbish-md-xxx/-0001-00.png)`），所以按
-            # 文件名匹配所有形如 `](含有该文件名的路径)` 的引用，统一替换。
-            for name in sorted(os.listdir(tmp)):
+            names = sorted(os.listdir(tmp))
+            original = _original_simple_pdf_image(doc) if len(names) == 1 else None
+            if original and len(re.findall(r"!\[[^\]]*\]\([^)]+\)", md)) != 1:
+                original = None
+            for name in names:
                 path = Path(tmp, name)
                 if not path.is_file():
                     continue
                 mime = "image/jpeg" if name.lower().endswith((".jpg", ".jpeg")) else "image/png"
-                b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+                b64 = base64.b64encode(original or path.read_bytes()).decode("ascii")
+                mime = "image/jpeg" if original else mime
                 data_uri = f"data:{mime};base64,{b64}"
-                pattern = r"!\[([^\]]*)\]\(([^)\n]*" + re.escape(name) + r")\)"
-                md = re.sub(pattern, f"![\\g<1>]({data_uri})", md)
+                paths = (name, path.as_posix(), str(path))
+                for image_ref in set(paths):
+                    pattern = r"!\[([^\]]*)\]\(" + re.escape(image_ref) + r"\)"
+                    md = re.sub(pattern, f"![\\g<1>]({data_uri})", md)
         md = md.strip()
         return md or None
     finally:
@@ -147,8 +223,10 @@ def _convert_to_markdown_inner(contents: bytes, ext: str) -> str | None:
 
 
 def markdown_storage_key(file_path: str) -> str:
-    """与原稿件同目录、同主名的 .md key（{tenant}/{sid}/{name}.md）。"""
-    return str(Path(file_path).with_suffix(_MD_SUFFIX)).replace("\\", "/")
+    path = Path(file_path)
+    if path.suffix.lower() == _MD_SUFFIX:
+        return f"{file_path}.derived.md".replace("\\", "/")
+    return str(path.with_suffix(_MD_SUFFIX)).replace("\\", "/")
 
 
 __all__ = ["convert_to_markdown", "markdown_storage_key"]

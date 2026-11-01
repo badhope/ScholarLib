@@ -41,6 +41,15 @@ export default function PdfViewer({
   // docRef 持有加载好的文档对象，卸载时销毁释放内存
   const docRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null)
   const pageNumRef = useRef(0)
+ const pagePropRef = useRef(initialPage)
+ const onPageChangeRef = useRef(onPageChange)
+ const onLoadedRef = useRef(onLoaded)
+ const renderTaskRef = useRef<pdfjsLib.RenderTask | null>(null)
+ useEffect(() => {
+ pagePropRef.current = initialPage
+ onPageChangeRef.current = onPageChange
+ onLoadedRef.current = onLoaded
+ })
   const [totalPages, setTotalPages] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -54,11 +63,14 @@ export default function PdfViewer({
     // canvas 常驻挂载后这里正常拿得到；拿不到说明组件正在卸载，直接放弃
     if (!canvas) return
     const token = ++renderTokenRef.current
+ renderTaskRef.current?.cancel()
+ renderTaskRef.current = null
     const target = Math.min(Math.max(1, num), doc.numPages)
     pageNumRef.current = target
     setPage(target)
     try {
       const pdfPage = await doc.getPage(target)
+ if (token !== renderTokenRef.current) return
       // 按容器宽度自适应（1.5x 保证高清屏清晰），单页纵向布局。
       // pdf.js 各版本 viewBox API 有波动，用 scale=1 视口宽度求基准最稳。
       const base = Math.min(canvas.parentElement?.clientWidth ?? 800, 900)
@@ -74,16 +86,20 @@ export default function PdfViewer({
       // v5 渲染全在主线程 canvasContext，稳定不卡（v6 worker 侧渲染实测会静默挂起）
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await pdfPage.render({ canvasContext: ctx, viewport } as any).promise
+        const task = pdfPage.render({ canvasContext: ctx, viewport } as any)
+ renderTaskRef.current = task
+ await task.promise
+ if (renderTaskRef.current === task) renderTaskRef.current = null
       } catch (err) {
-        const msg = `PDF 页面渲染失败：${err instanceof Error ? err.message : String(err)}`
+        if (token !== renderTokenRef.current) return
+ const msg = `PDF 页面渲染失败：${err instanceof Error ? err.message : String(err)}`
         ;(window as unknown as { __pdfErr?: string }).__pdfErr = msg
         console.error('[pdf-viewer]', err)
         if (token === renderTokenRef.current) setError(msg)
         return
       }
       if (token === renderTokenRef.current) {
-        onPageChange?.(target)
+        onPageChangeRef.current?.(target)
       }
     } catch (err) {
       // getPage / viewport 等前置步骤失败：同样 surface，不再静默。
@@ -110,8 +126,8 @@ export default function PdfViewer({
         docRef.current = doc
         setTotalPages(doc.numPages)
         setLoading(false)
-        onLoaded?.(doc.numPages)
-        await renderPage(initialPage, doc)
+onLoadedRef.current?.(doc.numPages)
+ await renderPage(pagePropRef.current, doc)
       } catch (err) {
         if (!disposed) {
           const msg = `PDF 加载失败（文件可能已损坏或格式不支持）：${err instanceof Error ? err.message : String(err)}`
@@ -124,6 +140,9 @@ export default function PdfViewer({
     })()
     return () => {
       disposed = true
+ renderTokenRef.current++
+ renderTaskRef.current?.cancel()
+ renderTaskRef.current = null
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       void (docRef.current as any)?.destroy()
       docRef.current = null
@@ -131,7 +150,13 @@ export default function PdfViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])
 
-  const goTo = (delta: number) => {
+  useEffect(() => {
+ const doc = docRef.current
+ if (doc && initialPage !== pageNumRef.current) void renderPage(initialPage, doc)
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [initialPage])
+
+ const goTo = (delta: number) => {
     const doc = docRef.current
     if (!doc) return
     void renderPage(pageNumRef.current + delta, doc)

@@ -150,6 +150,8 @@ async def review_submission(
     Terminal: once reviewed, a submission cannot be re-reviewed.
     """
     entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot review own submission")
     if entry.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -235,6 +237,10 @@ async def assign_reviewer(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot assign reviewer in status '{entry.status}'",
         )
+    if current_user.id == entry.submitted_by:
+        raise HTTPException(status_code=403, detail="Cannot assign reviewers to own submission")
+    if body.reviewer_id == entry.submitted_by:
+        raise HTTPException(status_code=403, detail="Cannot assign author as reviewer")
     # 审稿人必须存在且属于当前租户
     reviewer = (
         await db.execute(
@@ -337,11 +343,13 @@ async def assign_reviewer(
 )
 async def list_assignments(
     submission_id: int,
-    _: User = Depends(require_editor),
+    current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> AssignmentListResponse:
     """列出 submission 的所有审稿分配（编辑视角，含审稿人身份）。"""
     entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot manage own submission reviews")
     rows = (
         (
             await db.execute(
@@ -398,6 +406,8 @@ async def cancel_assignment(
 ) -> MessageResponse:
     """编辑撤销审稿人邀请。已 completed 的不可撤销（保留审稿历史）。"""
     entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot manage own submission reviews")
     a = (
         await db.execute(
             select(ReviewAssignment).where(
@@ -494,7 +504,7 @@ async def list_review_reports(
             if reviewer_id != current_user.id:
                 continue
         # 作者：剥离 editor-only comments
-        if is_author and not is_editor:
+        if is_author:
             out.append(
                 ReviewReportResponse(
                     id=r.id,
@@ -552,6 +562,9 @@ async def editor_decision(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot decide in status '{entry.status}'",
         )
+
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot decide own submission")
 
     decision = body.decision
     # 旧别名归一化
@@ -706,6 +719,8 @@ async def set_anonymized_file(
     传 ``null`` 清除（例如作者补充了合规的匿名稿链接后不再需要）。
     """
     entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot manage own submission reviews")
 
     url = str(body.anonymized_file_url) if body.anonymized_file_url else None
     if url is not None and not url.lower().startswith(("http://", "https://")):

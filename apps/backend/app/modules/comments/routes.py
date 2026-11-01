@@ -100,7 +100,7 @@ async def list_comments(
 async def create_comment(
     payload: CommentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_level(2)),
+    current_user: User = Depends(require_level(1)),
 ) -> CommentResponse:
     """Post a comment (L2+; published resources only)."""
     tenant_id = require_tenant_id()

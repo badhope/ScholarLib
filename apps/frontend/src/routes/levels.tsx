@@ -140,7 +140,7 @@ function LevelsPage() {
           </p>
           <p className="text-muted-foreground">
             <strong className="text-foreground">投稿轨（L1–L4）</strong>
-            L1–L3 随确认动作解锁，L4 必须有稿件被本刊录用——积分满 400 也只是必要条件，
+            L1 可阅读、评论，确认投稿规范后即可投稿；L2、L3 按积分解锁，L4 必须有稿件被本刊录用——积分满 400 也只是必要条件，
             <strong className="text-foreground">投稿并录用才是升级的重磅</strong>；
             <strong className="text-foreground">职责轨（L5–L9）</strong>
             L5/L6 按下方冻结标准开放申请、编辑部审批，L7 以上由编辑部按贡献直接提拔。

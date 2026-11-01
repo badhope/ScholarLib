@@ -198,8 +198,7 @@ function ReaderPage() {
 
   // 翻页：页码钳制 + 按真实页数自动折算进度，到末页自动勾选“已读完”（仍可手动覆盖）
   const goToPage = (newPage: number) => {
-    void flush()
-    const clamped = Math.max(1, newPage)
+ const clamped = Math.min(totalPages ?? Infinity, Math.max(1, newPage))
     setPage(clamped)
     if (totalPages && totalPages > 0) {
       setProgressPercent(Math.min(100, Math.round((clamped / totalPages) * 100)))
@@ -355,10 +354,12 @@ function ReaderPage() {
                 if (done) setCompleted(true)
               }}
             />
-          ) : data.download_url && isSafeDownloadUrl(data.download_url) ? (
-            <PdfViewer
+) : isAuthenticated && !hasSynced ? (
+ <Loading />
+ ) : data.download_url && isSafeDownloadUrl(data.download_url) ? (
+ <PdfViewer
               url={data.download_url}
-              initialPage={progress.data?.page ?? 1}
+              initialPage={page}
               onLoaded={handleLoaded}
               onPageChange={(p) => goToPage(p)}
               showPager={!isMobile}
@@ -405,7 +406,7 @@ function ReaderPage() {
                     onChange={(e) =>
                       // 清空输入框时 Number('') === 0，会让 30s 后把 page:0
                       // 原样上报；这里兜底到第 1 页。
-                      setPage(Math.max(1, Number(e.target.value) || 1))
+                      goToPage(Math.max(1, Number(e.target.value) ||1))
                     }
                     className="h-8 w-20"
                   />
