@@ -3,6 +3,12 @@ import { describe, expect, it } from 'vitest'
 
 const source = (name: string) => readFileSync(`src/routes/${name}.tsx`, 'utf8')
 
+describe('homepage issue information', () => {
+ it('does not advertise a fixed issue in the masthead', () => {
+ expect(source('index')).not.toMatch(/第\s*1\s*卷\s*·\s*第\s*1\s*期\s*·\s*2026\s*年/)
+ })
+})
+
 describe('onboarding guidance', () => {
  it('directs L1 readers to the rules without claiming comments require L2', () => {
  const profile = source('profile')

@@ -712,7 +712,7 @@ function HomePage() {
               custom={3}
               className="mt-3 text-xs text-muted-foreground/80"
             >
-              第 1 卷 · 第 1 期 · 2026 年 · ISSN 申请中
+              ISSN 申请中
             </motion.p>
 
             <motion.div

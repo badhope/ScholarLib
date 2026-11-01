@@ -25,7 +25,7 @@ dependencies = [
     "certifi==2026.10.19",
     "h2==4.4.1",
     "tenacity==9.1.4",
-    "authlib==1.7.2",
+    "authlib==1.9.1",
     "bibtexparser==1.4.4",
     "rispy==0.10.0",
     "pyotp==2.10.0",

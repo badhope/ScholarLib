@@ -109,7 +109,7 @@ class Resource(Base, TenantScopedMixin):
     # 0–100；grade = A+/A/B/C/D；breakdown 存各维度得分明细（可复现）。
     quality_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     quality_grade: Mapped[str | None] = mapped_column(String(4), nullable=True)
-    quality_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSONBVariant, nullable=True)
+    quality_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     # 封面：主题图本地化的相对路径（/assets/covers/xxx.jpg）。
     # 为空时前端回退到生成的纸面卡（CoverArt），不会出现破图。
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)

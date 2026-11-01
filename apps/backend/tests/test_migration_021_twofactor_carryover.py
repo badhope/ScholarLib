@@ -18,8 +18,12 @@ import importlib.util
 import re
 from pathlib import Path
 from types import ModuleType
+from unittest.mock import patch
+
+from sqlalchemy.dialects import postgresql
 
 from app.core.totp import decrypt_secret, encrypt_secret
+from app.modules.catalog.models import Resource
 
 _MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]
@@ -70,6 +74,32 @@ def test_initial_schema_declares_encrypted_2fa_columns() -> None:
     # 守卫：明文密钥列不得出现在 users 表里。
     assert not re.search(r'sa\.Column\(["\']two_factor_secret["\']', users_block), (
         "plaintext two_factor_secret must not exist in the consolidated schema"
+    )
+
+
+def test_quality_breakdown_matches_migration_postgresql_type() -> None:
+    path = _MIGRATION_PATH.parent / "d1e2f3a4b5c6_010_gamification_quality_announcements.py"
+    spec = importlib.util.spec_from_file_location("migration_quality", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    with (
+        patch.object(module.op, "add_column") as add_column,
+        patch.object(module.op, "create_table"),
+        patch.object(module.op, "create_index"),
+        patch.object(module.op, "execute"),
+        patch.object(module.op, "get_bind"),
+    ):
+        module.upgrade()
+    columns = [
+        call.args[1]
+        for call in add_column.call_args_list
+        if call.args[0] == "resources" and call.args[1].name == "quality_breakdown"
+    ]
+    assert len(columns) == 1
+    dialect = postgresql.dialect()
+    assert str(columns[0].type.compile(dialect=dialect)) == str(
+        Resource.__table__.c.quality_breakdown.type.compile(dialect=dialect)
     )
 
 

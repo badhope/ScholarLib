@@ -54,6 +54,7 @@ export default function PdfViewer({
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+ const [attempt, setAttempt] = useState(0)
   // 渲染竞态守卫：页码快速连点时丢弃过期渲染结果
   const renderTokenRef = useRef(0)
 
@@ -112,9 +113,16 @@ export default function PdfViewer({
 
   // 文档加载：只跑一次（url 固定）
   useEffect(() => {
-    let disposed = false
-    ;(async () => {
-      try {
+ let disposed = false
+ pageNumRef.current =0
+ ;(async () => {
+ await Promise.resolve()
+ if (disposed) return
+ setError(null)
+ setLoading(true)
+ setTotalPages(0)
+ setPage(1)
+ try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const task = pdfjsLib.getDocument({ url } as any)
         const doc = await task.promise
@@ -148,7 +156,7 @@ onLoadedRef.current?.(doc.numPages)
       docRef.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url])
+  }, [url, attempt])
 
   useEffect(() => {
  const doc = docRef.current
@@ -177,9 +185,10 @@ onLoadedRef.current?.(doc.numPages)
           </div>
         )}
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <p className="text-center text-sm text-muted-foreground">{error}</p>
-          </div>
+ <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4">
+ <p className="text-center text-sm text-muted-foreground">{error}</p>
+ <button type="button" className="rounded-md border px-3 py-1.5 text-sm" onClick={() => setAttempt((value) => value +1)}>重试</button>
+ </div>
         )}
       </div>
       {showPager && totalPages > 0 && !error && (
