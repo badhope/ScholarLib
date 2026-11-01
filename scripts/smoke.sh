@@ -153,13 +153,9 @@ authz_check() {  # $1=access_token $2=expected username
 }
 
 if [ "$CODE" = "201" ]; then
-    if [ -n "$(token_from_body)" ]; then
-        ok "POST /api/auth/register -> 201 with access token"
-    else
-        # 201 without a token is the anti-enumeration duplicate response;
-        # with a random username this is unlikely — treat via login attempt.
-        skip "register returned 201 without token (duplicate-collapse response) — falling back to login"
-    fi
+    # 注册端点对成功与冲突返回同一 MessageResponse（防枚举），不再下发令牌；
+    # 真实注册由下面的登录步骤验证。
+    ok "POST /api/auth/register -> 201 (uniform anti-enumeration response)"
     auth_via_login "$REG_USER" "$REG_PASS"
     if [ "$CODE" = "200" ] && [ -n "${_LT:-}" ]; then
         ok "POST /api/auth/login -> 200 with access token (fresh user)"

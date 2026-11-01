@@ -39,8 +39,8 @@ async def test_register_works_without_captcha_when_policy_off(
     r = await client.post("/api/auth/register", json=_payload())
     assert r.status_code in (201, 200)
     body = r.json()
-    # Without captcha: token issued + user created OR duplicate message.
-    assert "access_token" in body or body.get("message")
+    # Registration never issues tokens: success and duplicate look the same.
+    assert set(body) == {"message"}
 
 
 @pytest.mark.asyncio

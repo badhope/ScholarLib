@@ -10,15 +10,20 @@ from __future__ import annotations
 
 import builtins
 import sys
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from conftest import auth_headers
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search as fulltext
 from app.core.config import settings
+from app.models import Tenant
+from app.modules.catalog.models import Resource
 
 
 @pytest.fixture(autouse=True)
@@ -208,3 +213,63 @@ async def test_catalog_route_falls_back_to_db(
     assert resp.status_code == 200
     titles = [r["title"] for r in resp.json()["data"]]
     assert "Fallback Unique Zebra" in titles
+
+
+@pytest.mark.parametrize("search_unavailable", [False, True])
+async def test_db_author_search_respects_visibility_and_tenant(
+    client: AsyncClient,
+    admin_user: dict,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    search_unavailable: bool,
+) -> None:
+    tenant = (await db_session.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
+    other = Tenant(slug="other", name="Other")
+    db_session.add(other)
+    await db_session.flush()
+    resources = []
+    for tenant_id, state, publish_at in (
+        (tenant.id, "published", None),
+        (tenant.id, "draft", None),
+        (tenant.id, "published", datetime.now(UTC) + timedelta(days=1)),
+        (other.id, "published", None),
+    ):
+        resource = Resource(
+            tenant_id=tenant_id,
+            title="Unrelated title",
+            authors=["Someone Else", "Alice Wonderland"],
+            type="paper",
+            year=2024,
+            discipline="physics",
+            tags=[],
+            abstract="Unrelated abstract",
+            preview="",
+            publication_status=state,
+            publish_at=publish_at,
+        )
+        db_session.add(resource)
+        resources.append(resource)
+    await db_session.commit()
+
+    monkeypatch.setattr(
+        settings, "meilisearch_url", "http://localhost:7700" if search_unavailable else ""
+    )
+
+    async def fake_search(**_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(fulltext, "search_resource_ids", fake_search)
+    response = await client.get("/api/catalog", params={"q": "wonder"})
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["data"]] == [resources[0].id]
+    assert response.json()["meta"]["total"] == 1
+    sorted_response = await client.get("/api/catalog", params={"q": "wonder", "sort": "issue"})
+    assert sorted_response.status_code == 200
+    assert [row["id"] for row in sorted_response.json()["data"]] == [resources[0].id]
+
+    response = await client.get(
+        "/api/catalog", params={"q": "wonder"}, headers=auth_headers(admin_user)
+    )
+    assert response.status_code == 200
+    assert {row["id"] for row in response.json()["data"]} == {r.id for r in resources[:3]}
+    assert response.json()["meta"]["total"] == 3

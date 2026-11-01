@@ -15,7 +15,7 @@ Three groups:
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 _PAYLOAD = {
@@ -144,19 +144,10 @@ async def test_get_submission_other_user_forbidden(client: AsyncClient, test_use
     """A different user cannot see someone else's submission."""
     created = await _create_submission(client, test_user)
     # Register a second user and try to read test_user's submission.
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other@example.com",
-            "username": "otheruser",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other@example.com", username="otheruser")
     response = await client.get(
         f"/api/submissions/{created['id']}",
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 403
 
@@ -437,18 +428,9 @@ async def test_submitter_cannot_delete_reviewed(
 
 async def test_other_user_cannot_delete(client: AsyncClient, test_user: dict) -> None:
     created = await _create_submission(client, test_user)
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other2@example.com",
-            "username": "otheruser2",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other2@example.com", username="otheruser2")
     response = await client.delete(
         f"/api/submissions/{created['id']}",
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 403

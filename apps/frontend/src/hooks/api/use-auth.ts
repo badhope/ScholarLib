@@ -63,9 +63,11 @@ export function useTwoFactorLogin() {
 export function useRegister() {
   const setAuth = useAuthStore((s) => s.setAuth)
   const qc = useQueryClient()
-  return useMutation<TokenResponse, Error, UserCreate>({
-    mutationFn: async (body) => (await api.post<TokenResponse>('/auth/register', body)).data,
+  return useMutation<TokenResponse | MessageResponse, Error, UserCreate>({
+    mutationFn: async (body) =>
+      (await api.post<TokenResponse | MessageResponse>('/auth/register', body)).data,
     onSuccess: (data) => {
+      if (!('access_token' in data) || !data.access_token) return
       setAuth(data.access_token, {
         id: data.user_id,
         username: data.username,

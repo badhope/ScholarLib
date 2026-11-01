@@ -15,7 +15,7 @@ Contract:
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,17 +43,7 @@ _PAYLOAD = {
 
 
 async def _register(client: AsyncClient, tag: str) -> dict:
-    resp = await client.post(
-        "/api/auth/register",
-        json={
-            "email": f"{tag}@example.org",
-            "username": tag,
-            "password": "password123",
-        },
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    return {"token": data["access_token"], "user_id": data["user_id"]}
+    return await register_user(client, email=f"{tag}@example.org", username=tag)
 
 
 async def _grant_reviewer(db_session: AsyncSession, user_id: int) -> None:

@@ -202,6 +202,24 @@ async def list_resources(
     # 排序扩展：卷期归档按「卷 → 期 → 期内序号」排（pages 存三位期内序号）。
     # 注意不能先 stmt.order_by(...) 再交给 paginate：paginate 会以传入的
     # order_by 覆盖（空元组等于清空排序）。
+    if q is not None:
+        pattern = f"%{q}%"
+        if db.get_bind().dialect.name == "postgresql":
+            authors = (
+                func.jsonb_array_elements_text(Resource.authors)
+                .table_valued("value")
+                .render_derived()
+            )
+        else:
+            authors = func.json_each(Resource.authors).table_valued("value")
+        author_match = select(1).select_from(authors).where(authors.c.value.ilike(pattern)).exists()
+        stmt = stmt.where(
+            (Resource.title.ilike(pattern))
+            | (Resource.abstract.ilike(pattern))
+            | (Resource.venue.ilike(pattern))
+            | (Resource.discipline.ilike(pattern))
+            | author_match
+        )
     if sort == "issue":
         rows, meta = await paginate(
             db,
@@ -211,18 +229,6 @@ async def list_resources(
             order_by=(Resource.volume.asc(), Resource.issue.asc(), Resource.pages.asc()),
         )
         return ResourceListResponse(data=await _with_engagement(db, rows), meta=meta)
-    if q is not None:
-        # 与 Meilisearch 索引的 _SEARCHABLE 字段对齐：标题 / 摘要 / 作者 /
-        # 关键词 / 标签。此前 DB 路径只查前两项，同一个搜索词在「配了
-        # Meilisearch」和「没配」两种部署上给出不同结果，按作者名搜论文
-        # 在默认部署里直接搜不到。
-        pattern = f"%{q}%"
-        stmt = stmt.where(
-            (Resource.title.ilike(pattern))
-            | (Resource.abstract.ilike(pattern))
-            | (Resource.venue.ilike(pattern))
-            | (Resource.discipline.ilike(pattern))
-        )
 
     # Sort with deterministic tiebreaker — order_by is applied by paginate.
     sort_col = getattr(Resource, sort, Resource.created_at) if sort else Resource.created_at

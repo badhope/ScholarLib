@@ -128,37 +128,55 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
             yield ac
 
 
+async def register_user(
+    client: AsyncClient,
+    *,
+    email: str,
+    username: str,
+    password: str = "password123",
+) -> dict[str, str | int | bool]:
+    """Create a user through the public API and return authenticated creds.
+
+    ``POST /api/auth/register`` intentionally issues no tokens (success and
+    duplicate responses must be indistinguishable), so tests that need a
+    session complete the normal login step — the same flow the SPA uses.
+    """
+    register = await client.post(
+        "/api/auth/register",
+        json={"email": email, "username": username, "password": password},
+    )
+    register.raise_for_status()
+    login = await client.post(
+        "/api/auth/login",
+        json={"username": username, "password": password},
+    )
+    login.raise_for_status()
+    data = login.json()
+    return {
+        "email": email,
+        "username": username,
+        "password": password,
+        "token": data["access_token"],
+        "refresh_token": data["refresh_token"],
+        "user_id": data["user_id"],
+        "is_admin": data["is_admin"],
+    }
+
+
 @pytest_asyncio.fixture
 async def test_user(client: AsyncClient) -> dict[str, str | int | bool]:
     """Register a normal user via the API and return login credentials."""
-    response = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "user@example.com",
-            "username": "testuser",
-            "password": "password123",
-        },
-    )
-    response.raise_for_status()
-    data = response.json()
+    user = await register_user(client, email="user@example.com", username="testuser")
     # 等级体系上线后，新用户是 L1；投稿/评论/阅读列表分别要求 L3/L2/L2。
     # 测试主体默认代表"已完成引导的作者"，因此在这里走一次作者引导，
     # 让 L1→L3 的规则不被每个用例重复实现。
     onboard = await client.post(
         "/api/gamification/onboarding/author",
         json={"accept_rules": True},
-        headers={"Authorization": f"Bearer {data['access_token']}"},
+        headers={"Authorization": f"Bearer {user['token']}"},
     )
     onboard.raise_for_status()
-    return {
-        "email": "user@example.com",
-        "username": "testuser",
-        "password": "password123",
-        "token": data["access_token"],
-        "refresh_token": data["refresh_token"],
-        "user_id": data["user_id"],
-        "is_admin": data["is_admin"],
-    }
+    return user
 
 
 @pytest_asyncio.fixture

@@ -12,7 +12,7 @@ actually change the manuscript. Now:
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 _PAYLOAD = {
@@ -288,20 +288,13 @@ async def test_stranger_cannot_read_version_history(client: AsyncClient, test_us
     submission = await _create(client, test_user)
 
     # 另一个普通用户
-    register = await client.post(
-        "/api/auth/register",
-        json={
-            "username": "outsider_v",
-            "email": "outsider_v@example.com",
-            "password": "OutsiderPass123!",
-        },
+    outsider = await register_user(
+        client, email="outsider_v@example.com", username="outsider_v", password="OutsiderPass123!"
     )
-    register.raise_for_status()
-    token = register.json()["access_token"]
 
     resp = await client.get(
         f"/api/submissions/{submission['id']}/versions",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {outsider['token']}"},
     )
     assert resp.status_code == 403
 

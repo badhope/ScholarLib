@@ -14,7 +14,7 @@ owner; another user gets 404 on every operation.
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 _RESOURCE_PAYLOAD = {
@@ -149,19 +149,10 @@ async def test_get_list_other_user_404(client: AsyncClient, test_user: dict) -> 
     """Another registered user cannot see someone else's list."""
     created = await _create_list(client, test_user)
     # Register a second user
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other@example.com",
-            "username": "otheruser",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other@example.com", username="otheruser")
     response = await client.get(
         f"/api/reading-lists/{created['id']}",
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 404
 
@@ -223,19 +214,10 @@ async def test_delete_list(client: AsyncClient, test_user: dict) -> None:
 
 async def test_delete_other_user_404(client: AsyncClient, test_user: dict) -> None:
     created = await _create_list(client, test_user)
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other2@example.com",
-            "username": "other2user",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other2@example.com", username="other2user")
     response = await client.delete(
         f"/api/reading-lists/{created['id']}",
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 404
     # Owner can still see the list (delete didn't happen)
@@ -303,20 +285,11 @@ async def test_add_item_to_other_user_list_404(
 ) -> None:
     rid = await _create_resource(client, admin_user)
     created = await _create_list(client, test_user)
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other3@example.com",
-            "username": "other3user",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other3@example.com", username="other3user")
     response = await client.post(
         f"/api/reading-lists/{created['id']}/items",
         json={"resource_id": rid},
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 404
 
@@ -362,19 +335,10 @@ async def test_remove_item_other_user_404(
         json={"resource_id": rid},
         headers=auth_headers(test_user),
     )
-    second = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "other4@example.com",
-            "username": "other4user",
-            "password": "password123",
-        },
-    )
-    second.raise_for_status()
-    second_token = second.json()["access_token"]
+    second = await register_user(client, email="other4@example.com", username="other4user")
     response = await client.delete(
         f"/api/reading-lists/{created['id']}/items/{rid}",
-        headers={"Authorization": f"Bearer {second_token}"},
+        headers={"Authorization": f"Bearer {second['token']}"},
     )
     assert response.status_code == 404
 

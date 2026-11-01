@@ -50,8 +50,9 @@ async def get_capabilities() -> CapabilitiesResponse:
     return CapabilitiesResponse(
         email_backend=settings.email_backend,
         email_delivery=delivers,
-        # Registration currently issues tokens immediately; verification is
-        # recorded but never gates access, so the UI must not block on it.
+        # Registration issues no tokens (uniform anti-enumeration response);
+        # verification is recorded but never gates login, so the UI must not
+        # block on it.
         email_verification_required=False,
         oidc_enabled=settings.oidc_enabled,
         registration_open=True,

@@ -5,47 +5,102 @@ from __future__ import annotations
 from httpx import AsyncClient
 
 
-async def test_register_creates_user_and_returns_tokens(client: AsyncClient) -> None:
-    response = await client.post(
+async def test_register_success_and_duplicates_are_observably_identical(
+    client: AsyncClient, test_user: dict
+) -> None:
+    """成功、邮箱冲突、用户名冲突必须返回完全一致的响应。
+
+    修复前成功分支返回 TokenResponse 并下发刷新 Cookie，冲突分支返回
+    MessageResponse 且不下发 Cookie，调用方据此可直接枚举账号。
+    """
+    created = await client.post(
         "/api/auth/register",
         json={
-            "email": "newuser@example.com",
-            "username": "newuser",
+            "email": "fresh-register@example.com",
+            "username": "fresh_register",
             "password": "password123",
         },
     )
-    assert response.status_code == 201
-    data = response.json()
-    assert "access_token" in data
-    assert "refresh_token" in data
-    assert data["token_type"] == "bearer"
-    assert data["username"] == "newuser"
-    assert data["is_admin"] is False
-    # Refresh token cookie should be set.
-    assert "rubbish_refresh" in response.cookies
-
-
-async def test_register_duplicate_email_returns_201_no_token(
-    client: AsyncClient, test_user: dict
-) -> None:
-    """Anti-enumeration: re-registering an existing email returns 201 with
-    the same body shape as success but WITHOUT issuing tokens."""
-    response = await client.post(
+    duplicate_email = await client.post(
         "/api/auth/register",
         json={
             "email": "user@example.com",
-            "username": "another",
+            "username": "fresh_register_2",
             "password": "password123",
         },
     )
-    assert response.status_code == 201
-    body = response.json()
-    # No tokens leaked — anti-takeover contract.
-    assert "access_token" not in body
-    assert "refresh_token" not in body
-    assert "message" in body
-    # No refresh cookie set on duplicate registration.
-    assert "rubbish_refresh" not in response.cookies
+    duplicate_username = await client.post(
+        "/api/auth/register",
+        json={
+            "email": "fresh-register-2@example.com",
+            "username": "testuser",
+            "password": "password123",
+        },
+    )
+
+    for response in (created, duplicate_email, duplicate_username):
+        assert response.status_code == 201
+        assert set(response.json()) == {"message"}
+        assert "access_token" not in response.json()
+        assert "refresh_token" not in response.json()
+        # 同 Cookie 设置行为：注册路径一律不建立会话。
+        assert "rubbish_refresh" not in response.cookies
+        assert "set-cookie" not in response.headers
+
+    assert created.json() == duplicate_email.json() == duplicate_username.json()
+
+
+async def test_registered_user_can_log_in_with_the_credentials(
+    client: AsyncClient,
+) -> None:
+    """统一响应不得牺牲可用性：新账号仍能用注册凭据正常登录。"""
+    register = await client.post(
+        "/api/auth/register",
+        json={
+            "email": "login-after-register@example.com",
+            "username": "login_after_register",
+            "password": "password123",
+        },
+    )
+    assert register.status_code == 201
+    assert "access_token" not in register.json()
+
+    login = await client.post(
+        "/api/auth/login",
+        json={"username": "login_after_register", "password": "password123"},
+    )
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+    me = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["username"] == "login_after_register"
+
+
+async def test_duplicate_registration_does_not_change_existing_credentials(
+    client: AsyncClient, test_user: dict
+) -> None:
+    """冲突请求携带的新密码不得覆盖既有账号密码（防账号接管）。"""
+    attempt = await client.post(
+        "/api/auth/register",
+        json={
+            "email": "user@example.com",
+            "username": "attacker_username",
+            "password": "attackerpass123",
+        },
+    )
+    assert attempt.status_code == 201
+
+    hijack = await client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": "attackerpass123"},
+    )
+    assert hijack.status_code == 401
+
+    original = await client.post(
+        "/api/auth/login",
+        json={"username": "testuser", "password": "password123"},
+    )
+    assert original.status_code == 200
 
 
 async def test_login_returns_valid_tokens(client: AsyncClient, test_user: dict) -> None:

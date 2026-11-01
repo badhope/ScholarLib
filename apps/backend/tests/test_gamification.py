@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 
@@ -24,13 +24,8 @@ async def test_ladder_is_public_and_has_nine_levels(client: AsyncClient) -> None
 
 
 async def test_new_user_starts_at_level_one(client: AsyncClient) -> None:
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "fresh@example.com", "username": "fresh", "password": "password123"},
-    )
-    assert r.status_code == 201
-    token = r.json()["access_token"]
-    me = await client.get("/api/users/me", headers={"Authorization": f"Bearer {token}"})
+    user = await register_user(client, email="fresh@example.com", username="fresh")
+    me = await client.get("/api/users/me", headers={"Authorization": f"Bearer {user['token']}"})
     assert me.status_code == 200
     body = me.json()
     assert body["level"] == 1
@@ -40,12 +35,8 @@ async def test_new_user_starts_at_level_one(client: AsyncClient) -> None:
 
 async def test_level_one_can_submit_after_rules_ack(client: AsyncClient) -> None:
     """1.8.0 投稿零等级门槛：L1 注册即可投，唯一前置是确认当版《投稿规范》。"""
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "l1@example.com", "username": "l1user", "password": "password123"},
-    )
-    token = r.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    user = await register_user(client, email="l1@example.com", username="l1user")
+    headers = {"Authorization": f"Bearer {user['token']}"}
     body = {
         "title": "L1 direct submission",
         "type": "paper",
@@ -124,26 +115,18 @@ async def test_level_one_can_comment(client: AsyncClient, admin_user: dict) -> N
     rid = (await client.post("/api/catalog", json=sample, headers=auth_headers(admin_user))).json()[
         "id"
     ]
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "l1c@example.com", "username": "l1comment", "password": "password123"},
-    )
-    token = r.json()["access_token"]
+    r = await register_user(client, email="l1c@example.com", username="l1comment")
     posted = await client.post(
         "/api/comments",
         json={"resource_id": rid, "body": "L1 可以发言"},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {r['token']}"},
     )
     assert posted.status_code == 201
 
 
 async def test_author_onboarding_unlocks_level_three(client: AsyncClient) -> None:
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "onboard@example.com", "username": "onboard", "password": "password123"},
-    )
-    token = r.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    user = await register_user(client, email="onboard@example.com", username="onboard")
+    headers = {"Authorization": f"Bearer {user['token']}"}
 
     community = await client.post("/api/gamification/onboarding/community", headers=headers)
     assert community.status_code == 200
@@ -174,11 +157,8 @@ async def test_author_onboarding_unlocks_level_three(client: AsyncClient) -> Non
 
 
 async def test_author_onboarding_requires_accept_flag(client: AsyncClient) -> None:
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "noaccept@example.com", "username": "noaccept", "password": "password123"},
-    )
-    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    user = await register_user(client, email="noaccept@example.com", username="noaccept")
+    headers = {"Authorization": f"Bearer {user['token']}"}
     resp = await client.post(
         "/api/gamification/onboarding/author", json={"accept_rules": False}, headers=headers
     )
@@ -186,11 +166,8 @@ async def test_author_onboarding_requires_accept_flag(client: AsyncClient) -> No
 
 
 async def test_profile_returns_badges_and_progressive_reveal(client: AsyncClient) -> None:
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "profile@example.com", "username": "profileuser", "password": "password123"},
-    )
-    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    user = await register_user(client, email="profile@example.com", username="profileuser")
+    headers = {"Authorization": f"Bearer {user['token']}"}
     profile = await client.get("/api/gamification/me", headers=headers)
     assert profile.status_code == 200
     body = profile.json()
@@ -222,11 +199,8 @@ async def test_reading_awards_xp_once(client: AsyncClient, admin_user: dict) -> 
     rid = (await client.post("/api/catalog", json=sample, headers=auth_headers(admin_user))).json()[
         "id"
     ]
-    r = await client.post(
-        "/api/auth/register",
-        json={"email": "reader@example.com", "username": "xpreader", "password": "password123"},
-    )
-    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    r = await register_user(client, email="reader@example.com", username="xpreader")
+    headers = {"Authorization": f"Bearer {r['token']}"}
     first = await client.post(f"/api/reader/history/{rid}", headers=headers)
     assert first.status_code == 201
     second = await client.post(f"/api/reader/history/{rid}", headers=headers)

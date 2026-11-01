@@ -11,6 +11,10 @@
 
 ### Fixed
 
+- **注册接口账户枚举**：`POST /api/auth/register` 成功与邮箱/用户名冲突现在返回
+  完全一致的 201 `{"message": ...}`，且注册路径不再下发刷新 Cookie —— 此前成功
+  返回 TokenResponse、冲突返回 MessageResponse，调用方一眼可分。注册响应不再
+  携带令牌，真实注册仍可用刚设置的凭据立即登录。
 - **关于页滚动揭示兜底**：将仍使用失效 `whileInView` 的关于页区块统一改为原生 IntersectionObserver 驱动的 `RevealSection`，避免截图、打印或未触发观察器时内容停留在0.3透明度。
 
 ## [1.8.1] — 2026-10-31

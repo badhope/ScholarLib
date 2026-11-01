@@ -85,11 +85,9 @@ from app.schemas import (
     VerifyEmailRequest,
 )
 
-# Anti-enumeration: same body returned whether registration succeeded
-# or hit a duplicate-email/username collision.
-_REGISTER_DUPLICATE_MESSAGE = (
-    "If the email is not yet registered, a verification email has been sent."
-)
+# Anti-enumeration: the same body is returned whether registration succeeded
+# or hit a duplicate-email/username collision, and neither path issues tokens.
+_REGISTER_MESSAGE = "If the email is not yet registered, a verification email has been sent."
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -126,22 +124,22 @@ def _extract_refresh_token(request: Request, body_token: str | None) -> str | No
 
 @router.post(
     "/register",
-    response_model=TokenResponse | MessageResponse,
+    response_model=MessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def register(
     request: Request,
-    response: Response,
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-) -> TokenResponse | MessageResponse:
+) -> MessageResponse:
     """Register a new user under the current tenant.
 
-    Anti-enumeration: a duplicate email/username collapses to the same 201
-    response as a successful registration, but WITHOUT issuing tokens. The
-    owner of an existing matching email is notified of the attempt (best
-    effort when SMTP is configured) so they can act on it; the caller
-    cannot tell whether the registration succeeded.
+    Anti-enumeration: success and a duplicate email/username return the SAME
+    201 ``MessageResponse`` and neither path sets a session cookie, so the
+    caller cannot tell whether the account already existed. Tokens are only
+    issued by ``POST /auth/login`` after the user submits the credentials
+    they just chose. The owner of an existing matching email is notified of
+    the duplicate attempt (best effort when SMTP is configured).
     """
     # CAPTCHA check if the policy is enabled.
     await verify_captcha_token(request, payload.captcha_token)
@@ -163,12 +161,12 @@ async def register(
     try:
         await db.commit()
     except IntegrityError:
-        # Duplicate email or username — collapse to the same 201 response as
-        # a successful registration so the caller cannot enumerate accounts.
-        # No token is issued (anti-takeover) and no second user is created.
+        # Duplicate email or username — identical 201 body to the success
+        # path. No token is issued (anti-takeover) and no second user is
+        # created.
         await db.rollback()
         await _notify_duplicate_registration(db, payload.email, payload.username)
-        return MessageResponse(message=_REGISTER_DUPLICATE_MESSAGE)
+        return MessageResponse(message=_REGISTER_MESSAGE)
     await db.refresh(user)
 
     # 注册即得 10 XP：L1 起步，确认社区规范后到 L2。
@@ -184,7 +182,8 @@ async def register(
     except Exception:
         logger.warning("verification_email_send_failed", user_id=user.id, exc_info=True)
 
-    return await _issue_tokens(user, response, db)
+    # Same body as the duplicate branch; the client signs in via /auth/login.
+    return MessageResponse(message=_REGISTER_MESSAGE)
 
 
 @router.post(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 from tests.test_catalog import _SAMPLE
@@ -43,20 +43,11 @@ async def test_post_comment_requires_auth(client: AsyncClient, admin_user: dict)
 
 async def test_l1_user_can_post_comment(client: AsyncClient, admin_user: dict) -> None:
     rid = await _create_resource(client, admin_user, "Comment L1 Gate")
-    registered = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "comment-l1@example.com",
-            "username": "comment_l1",
-            "password": "password123",
-        },
-    )
-    assert registered.status_code == 201
-    token = registered.json()["access_token"]
+    l1_user = await register_user(client, email="comment-l1@example.com", username="comment_l1")
     posted = await client.post(
         "/api/comments",
         json={"resource_id": rid, "body": "L1读者评论"},
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {l1_user['token']}"},
     )
     assert posted.status_code == 201
 

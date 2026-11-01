@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 from app.core import storage as storage_mod
@@ -198,18 +198,10 @@ async def test_stranger_cannot_download(
 ) -> None:
     """既非作者、也非编辑/审稿人的普通用户必须拿不到未发表稿件。"""
     submission = await _submit_with_file(client, test_user, tmp_path, monkeypatch)
-    stranger = await client.post(
-        "/api/auth/register",
-        json={
-            "email": "stranger@example.com",
-            "username": "stranger",
-            "password": "password123",
-        },
-    )
-    assert stranger.status_code in (200, 201)
+    stranger = await register_user(client, email="stranger@example.com", username="stranger")
     resp = await client.get(
         f"/api/submissions/{submission['id']}/files",
-        headers={"Authorization": f"Bearer {stranger.json()['access_token']}"},
+        headers={"Authorization": f"Bearer {stranger['token']}"},
     )
     assert resp.status_code == 403
 

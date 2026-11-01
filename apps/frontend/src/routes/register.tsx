@@ -13,7 +13,7 @@ export const Route = createFileRoute('/register')({
   component: RegisterPage,
 })
 
-function RegisterPage() {
+export function RegisterPage() {
   const navigate = useNavigate()
   const registerMut = useRegister()
   const capabilities = useCapabilities()
@@ -34,7 +34,20 @@ function RegisterPage() {
       return
     }
     try {
-      await registerMut.mutateAsync({ email, username, password })
+      const result = await registerMut.mutateAsync({ email, username, password })
+      if (!('access_token' in result) || !result.access_token) {
+        // 注册端点对成功与冲突返回同一响应（防枚举），且注册响应不再建立会话：
+        // 有邮件投递 → 去验证页；否则 → 去登录页用刚设置的密码登录。
+        if (emailDelivery) {
+          toast.success('注册成功，请查收邮件完成验证')
+          void navigate({ to: '/verify-email', search: { email } })
+        } else {
+          toast.success('注册请求已受理，请使用刚设置的密码登录')
+          void navigate({ to: '/login' })
+        }
+        return
+      }
+      // 兼容旧后端（滚动发布期间仍可能返回 TokenResponse）。
       // 后端默认 console 邮件后端：验证链接只写进服务器日志，不会真的发信。
       // 只有 SMTP 真的接通时才引导用户去收件箱，否则直接进工作台。
       if (emailDelivery) {
@@ -62,7 +75,7 @@ function RegisterPage() {
           创建 Rubbish 账号，即可投稿、审稿与在线阅读。
           {capabilities.isFetched && !emailDelivery && (
             <span className="mt-2 block text-xs text-muted-foreground">
-              当前站点未开通邮件服务：注册后直接登录，邮箱验证与找回密码暂不可用，
+              当前站点未开通邮件服务：注册后可直接用邮箱和密码登录，邮箱验证与找回密码暂不可用，
               忘记密码请联系编辑部。
             </span>
           )}

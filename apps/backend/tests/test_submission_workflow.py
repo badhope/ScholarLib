@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -40,13 +40,8 @@ async def _create_submission(client: AsyncClient, user: dict) -> dict:
 
 async def _register(client: AsyncClient, username: str, email: str) -> dict:
     """注册一个额外的普通用户（审稿人 / 无关第三方）。"""
-    response = await client.post(
-        "/api/auth/register",
-        json={"email": email, "username": username, "password": "password123"},
-    )
-    response.raise_for_status()
-    data = response.json()
-    return {"token": data["access_token"], "user_id": data["user_id"], "username": username}
+    user = await register_user(client, email=email, username=username)
+    return {"token": user["token"], "user_id": user["user_id"], "username": username}
 
 
 async def _register_reviewer(
