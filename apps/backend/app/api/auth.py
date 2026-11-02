@@ -726,18 +726,39 @@ async def resend_verification(
     return MessageResponse(message="If the account exists, a verification email was sent")
 
 
+def _as_aware(dt: datetime) -> datetime:
+    """SQLite 读回 naive datetime（无时区），PG 读回 aware——统一到 aware 再比。
+
+    测试跑在 SQLite 上；生产 PostgreSQL 不受影响。request/verify 两个
+    验证码端点都要处理同一问题，所以放在端点定义之前。
+    """
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
 @router.post(
     "/forgot-password",
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
 )
-def _as_aware(dt: datetime) -> datetime:
-    """SQLite 读回 naive datetime（无时区），PG 读回 aware——统一到 aware 再比。
-
-    测试跑在 SQLite 上；生产 PostgreSQL 不受影响。放 auth.py 顶部附近
-    是因为 request/verify 两个端点都要处理同一问题。
-    """
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """Trigger a password-reset email. Always returns 200 (don't leak
+    whether an account exists for the address)."""
+    tenant_id = get_current_tenant_id()
+    stmt = select(User).where(func.lower(User.email) == payload.email.strip().lower())
+    if tenant_id is not None:
+        stmt = stmt.where(User.tenant_id == tenant_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        return MessageResponse(message="If the account exists, a reset email was sent")
+    try:
+        await _send_password_reset_email(user)
+    except Exception:
+        logger.warning("password_reset_email_failed", user_id=user.id, exc_info=True)
+    return MessageResponse(message="If the account exists, a reset email was sent")
 
 
 @router.post(

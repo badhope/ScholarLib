@@ -50,52 +50,38 @@ Rubbish 是一个**模块化、多租户的学术期刊发表平台**:核心只�
 5. **部署** — Docker Compose(dev + prod)、Caddy TLS、Alembic 迁移在容器启动时执行、structlog JSON 日志、health 端点上报模块加载状态。详见 [docs/integrations.md](integrations.md) 的 SMTP + OIDC + Crossref/arXiv 接入。
 
 
-## 1.0.0 新增模块（等级 / 公告 / 评分）
+## 身份体系 3.0（1.9.0 起）
 
-- **gamification** — 九级双轨阶梯（`ladder.py`，代码即口径）、XP 台账
-  （`user_xp_events`，唯一约束保证幂等）、成就定义（`badges.py`，27 枚）与
-  渐进展示。级别门禁通过 `app/api/levels.py` 的 `require_level(n)` 注入到
-  评论（L2）、阅读列表（L2）、投稿（L3）三条写路径；`require_rules_ack`
-  与 `users.rules_ack_version` 绑定，规范改版后旧确认自动失效。
+**身份管权限，积分只是荣誉。** 这是等级系统唯一需要记住的一句话。
+
+- **四层身份**（`ladder.py`，代码即口径）：读者（注册即得）→ 作者
+  （确认当版《投稿规范》，合规动作而非门槛）→ 审稿人（编辑部授予）→
+  编辑（提拔）。映射到后端 `require_reader` / `require_author` /
+  `require_reviewer` / `require_editor`，不存在"等级到了权限没到"的错位。
+- **XP 是荣誉统计**：只回答"参与了多少"，不决定任何权限。评论、阅读
+  列表、关注这些社交动作不再有积分门槛——拦真实读者没有收益。
+- `require_level(n)` 保留为废弃别名：内部按身份序号判定，防止遗漏调用点
+  回退到积分模型。
+- 审稿人申请、27 枚成就、每日签到保留；签到与积分只出现在个人页，
+  不再出现在任何权限路径上。
+
+## 双赛道（track）
+
+`submissions.track` 与 `resources.track`（serious / absurd，CHECK 约束 +
+复合索引，迁移 013）。投稿时作者必选——赛道是写作意图的声明，不是质量
+评级；目录公开面按赛道筛选，统计分赛道报（`by_track`），详情页展示赛道
+徽章。历史数据全部落 `serious`（保守侧：误标正经稿为荒诞的伤害更大）。
+
+## 质量评分与公告（1.0.0 起）
+
+- **gamification** — 四层身份、XP 台账（`user_xp_events`，唯一约束保证
+  幂等）、成就定义（`badges.py`，27 枚）；投稿门禁绑定
+  `rules_ack_version`，规范改版后旧确认自动失效。
 - **announcements** — 单表 + 发布窗口；公开只读 `/api/announcements/active`，
-  管理员 CRUD 带审计。首访卡由前端 localStorage 记忆，不落用户维度状态。
-- **quality** — RQS v1.0 评分口径（`rubric.py`）：四类稿件画像各自一套维度
-  权重（合计 100），等级带 A+/A/B/C/D，纯度系数 = RQS/50。评分由离线流水线
-  写入 `resources.quality_*`，运行时只读；口径公开在 `/api/quality/rubric`，
-  改口径必须升 `RUBRIC_VERSION` 并整库重评。
-
-这三者都遵循同一约束：**口径进代码、结果进数据**。数据库只存分数与明细，
-不存可编辑的权重表，避免两篇不同月份入库的文章不可比较。
-
-## 1.8.0 变更：投稿零门槛 + 投稿驱动升级（scoring 2.0）
-
-- **投稿门槛放开**：`POST /api/submissions` 移除 `require_level(3)`——注册登录即可投，
-  唯一前置是确认当版《投稿规范》（`rules_ack_version`，合规动作而非等级门槛）。
-- **升级口径 2.0**（ladder.py `SCORING_VERSION = "2.0"`）：XP 单独只能买到 L3
-  （`XP_ONLY_MAX_LEVEL = 3`）；L4 = XP≥400 **且** 录用稿件 ≥1——积分满不再是
-  充分条件，投稿并录用才是升级的重磅。L5/L6 申请制、L7+ 提拔制不变。
-- **实现**：`effective_level(xp, roles, is_admin, accepted_papers)` 增加必传录用数
-  （类型签名强制全部调用点同步口径）；录用数查询抽为
-  `gamification/applications.py::accepted_paper_count`（L4 指标与 L5 画像共用）；
-  `level_snapshot` 转 async 并返回 `metric_remaining`（下一级还差几篇录用）。
-- **口径变更遵守 ladder 自身约束**：改口径必须升 SCORING_VERSION 并同步前端展示。
-
-## 1.7.0 新增：职员角色申请（L5/L6）
-
-等级阶梯里 L5 审稿人、L6 资深审稿人原先只能由管理员在 `/admin/users` 直接授角色，
-用户侧没有「我该怎么升」的可执行路径。1.7.0 补上申请制：
-
-- **资格口径仍进代码** — `gamification/applications.py` 冻结两条门槛：L5 = 至少
-  1 篇稿件被录用且最高 RQS ≥ 60（C 级下限，未评分稿件不参与）；L6 = 已是 L5 且
-  完成审稿 ≥ 5 份。L7–L9 编辑职不开放申请，只由编辑部提拔。
-- **申请进数据** — `role_applications` 表（迁移 012）承载 `pending → approved|rejected`
-  状态机，终态不可回滚（重申 = 新行）。`tenant_id` + RLS 与其余模块一致；
-  `uq_role_applications_pending` 部分唯一索引保证「同一用户同一角色仅一条待审」，
-  审批端点对申请行 `with_for_update()` 防止并发重复批准。
-- **审批即授权** — `POST /api/gamification/admin/applications/{id}/decision` 在同一
-  事务内授 `UserRole`、写站内通知、写审计；拒绝原因随通知下发。
-- **顺带的资料补齐** — `users.bio`（≤200 字，空串即清除）在同一迁移落地，
-  设置页可编辑、个人中心展示。
+  管理员 CRUD 带审计。首访卡由前端 localStorage 记忆。
+- **quality** — RQS v1.0 评分口径（`rubric.py`）：四类稿件画像各自一套
+  维度权重（合计 100），等级带 A+/A/B/C/D。评分由离线流水线写入
+  `resources.quality_*`，运行时只读；口径公开在 `/api/quality/rubric`。
 
 ## 模块长什么样
 

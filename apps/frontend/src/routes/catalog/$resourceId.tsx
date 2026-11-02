@@ -33,7 +33,7 @@ import {
   useUnsubscribeDiscipline,
   useUpdateResource,
 } from '@/hooks/api/use-modules'
-import type { ResourceUpdate } from '@/lib/types'
+import type { ResourceResponse, ResourceUpdate } from '@/lib/types'
 import { extractError, formatDateTime, parseListField } from '@/lib/utils'
 import {
   absurdityLevel,
@@ -194,6 +194,8 @@ function CatalogDetailPage() {
         {/* 主体 */}
         <div className="space-y-6 lg:col-span-2">
           <AbstractCard text={data.abstract} collapsible={isMobile} />
+
+          <CitationCard resource={data} />
 
           <FoldCard title="元数据" defaultOpen={!isMobile}>
             <CardContent>
@@ -1105,5 +1107,74 @@ function RelatedResources({
         ))}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * 「引用本文」卡：GB/T 7714-2015 顺序编码制 + BibTeX 双格式一键复制。
+ * 为什么放详情页顶部而不是藏在导出菜单：引用是读者拿到一篇论文后的
+ * 第一个动作（写综述、挂参考文献），藏在下拉里等于没有。
+ */
+function CitationCard({ resource }: { resource: ResourceResponse }) {
+  const firstAuthor = resource.authors[0] ?? '佚名'
+  const authorPart =
+    resource.authors.length > 3
+      ? `${firstAuthor}, 等`
+      : resource.authors.join(', ')
+  const pagesPart = resource.pages ? `: ${resource.pages}` : ''
+  const venuePart = resource.venue || 'Rubbish'
+  const gbt7714 =
+    `${authorPart}. ${resource.title}[J]. ${venuePart}, ${resource.year}` +
+    `${resource.volume ? `, ${resource.volume}` : ''}${resource.issue ? `(${resource.issue})` : ''}${pagesPart}.`
+  const bibtex = [
+    `@article{rubbish${resource.id}${resource.year},`,
+    `  title  = {${resource.title}},`,
+    `  author = {${resource.authors.join(' and ')}},`,
+    `  journal= {${venuePart}},`,
+    `  year   = {${resource.year}},`,
+    resource.volume ? `  volume = {${resource.volume}},` : null,
+    resource.issue ? `  number = {${resource.issue}},` : null,
+    resource.pages ? `  pages  = {${resource.pages}},` : null,
+    resource.doi ? `  doi    = {${resource.doi}},` : null,
+    `}`,
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  const [copied, setCopied] = useState<'gbt' | 'bib' | null>(null)
+  const copy = async (kind: 'gbt' | 'bib') => {
+    const text = kind === 'gbt' ? gbt7714 : bibtex
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(kind)
+      toast.success(kind === 'gbt' ? '已复制 GB/T 7714 引用' : '已复制 BibTeX')
+      window.setTimeout(() => setCopied(null), 1600)
+    } catch {
+      toast.error('复制失败，请手动选择文本')
+    }
+  }
+
+  return (
+    <FoldCard title="引用本文" defaultOpen={false}>
+      <CardContent className="space-y-3">
+        <div>
+          <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+            GB/T 7714-2015（顺序编码制）
+          </p>
+          <div className="rounded-md border bg-muted/40 px-3 py-2 font-serif text-[13px] leading-relaxed">
+            {gbt7714}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => copy('gbt')}>
+            <Quote className="h-3.5 w-3.5" />
+            {copied === 'gbt' ? '已复制' : '复制 GB/T 7714'}
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => copy('bib')}>
+            {copied === 'bib' ? '已复制 BibTeX' : '复制 BibTeX'}
+          </Button>
+        </div>
+      </CardContent>
+    </FoldCard>
   )
 }

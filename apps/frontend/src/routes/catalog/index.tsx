@@ -594,6 +594,34 @@ function DisciplineChips({
     )
 
   return (
+    <>
+    <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="按赛道筛选">
+      {/* 赛道切换：本刊的主分野，放在学科筛选之前——读者第一个问题是
+          "我要读正经的还是荒诞的"，第二个问题才是学科。 */}
+      {(
+        [
+          { value: undefined, label: '全部', count: stats?.total },
+          { value: 'serious' as const, label: '正经研究', count: stats?.by_track?.serious },
+          { value: 'absurd' as const, label: '荒诞研究', count: stats?.by_track?.absurd },
+        ]
+      ).map((t) => (
+        <button
+          key={t.label}
+          type="button"
+          className={
+            'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ' +
+            ((search.track ?? undefined) === t.value
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-input bg-card hover:bg-muted/60')
+          }
+          aria-pressed={(search.track ?? undefined) === t.value}
+          onClick={() => updateSearch({ track: t.value, page: 1 })}
+        >
+          {t.label}
+          {t.count != null && <span className="ml-1 tabular-nums opacity-70">{t.count}</span>}
+        </button>
+      ))}
+    </div>
     <div className="mb-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="按学科（栏目）快速筛选">
       <button
         type="button"
@@ -637,5 +665,6 @@ function DisciplineChips({
         </button>
       )}
     </div>
+    </>
   )
 }

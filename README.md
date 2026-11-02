@@ -42,12 +42,12 @@
 | **Author** | Submit manuscripts (with PDF), multi-version revisions, track review status (pending / major / minor / accept / reject) |
 | **Editor** | Assign reviewers, decide (with editorial notes), manuscript management workbench |
 | **Reviewer** | Review reports, blind review (single / double), decision recommendation |
-| **Reader** | Public catalog search, **in-browser reading (pdf.js) — no login wall**, cross-device reading progress (local-storage fallback for guests), follow authors, subscribe |
+| **Reader** | Public catalog search, **passwordless email-code sign-in**, **in-reader typography controls (font size / line height / serif)**, **instant manuscript structure check on upload**, **in-browser reading (pdf.js) — no login wall**, cross-device reading progress (local-storage fallback for guests), follow authors, subscribe |
 | **Community** | Reader comments on published papers (public read, login to post, owner/admin delete with audit), guest mode with local storage |
-| **Journal** | Dual-track acceptance (serious + absurd research), editorial metrics (R factor, absurdity index) with hidden methodology, author guide / policies / about pages, submission templates |
-| **Admin** | Users / volumes / issues / journals management, audit logs, batch import (BibTeX / RIS / CSV / DOI / arXiv) |
+| **Journal** | **First-class dual tracks (serious / absurd: required at submission, catalog filter, detail badge, per-track stats)**, editorial metrics (R factor, absurdity index) with hidden methodology, author guide / policies / about pages, submission templates |
+| **Admin** | Users (search / suspend / grant & revoke roles) / volumes / issues / journals management, audit logs, batch import (BibTeX / RIS / CSV / DOI / arXiv) |
 
-**Secure by default**: WebAuthn passkeys + TOTP 2FA, server-side JWT revocation with key rotation, sign-up captcha, per-action audit logs, multi-tenant isolation (PostgreSQL RLS).
+**Secure by default**: passwordless email-code sign-in (hashed one-time codes, rate limited), WebAuthn passkeys + TOTP 2FA, server-side JWT revocation with key rotation, sign-up captcha, per-action audit logs, multi-tenant isolation (PostgreSQL RLS).
 
 **Lightweight deployment**: single-node `docker compose up`; PostgreSQL for production, SQLite + single-port service for dev/demo.
 

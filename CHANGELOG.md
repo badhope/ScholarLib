@@ -9,6 +9,46 @@
 
 ## [Unreleased]
 
+### Added
+
+- **邮箱验证码登录（passwordless email-code sign-in）**：`POST /api/auth/email-code/request`
+  + `/verify`。6 位一次性码，SHA-256(email:code:secret) 哈希存储（库泄露不可回用），
+  10 分钟有效、错 5 次作废、同邮箱 60 秒 1 条 / 24 小时 10 条限流；未注册邮箱响应与
+  已注册完全一致（反枚举）；2FA 账户照常走 pending token 第二因子。登录页双 tab
+  （密码 | 邮箱验证码）。新表 `email_login_codes`（迁移 014，含 RLS）。
+- **稿件结构自动检查**：`POST /api/submissions/{id}/files` 响应新增
+  `format_report`——按《投稿规范》§3.1 逐项检测摘要 / 关键词 / 引言-方法-结果-讨论-结论 /
+  参考文献 / 篇幅，作者上传后立刻知道"缺什么、怎么补"，不等编辑部退修。
+- **阅读器排版控制**：阅读页右上角控制条——字号 ±（0.85–1.5em）、行距三档（1.6/1.95/2.3）、
+  宋体/黑体切换；`localStorage` 持久化，跨篇生效。
+
+### Changed
+
+- **邮件官方化**：全部邮件页脚改为「Rubbish 编辑部系统自动发送 + 官方域名 + 官方读者一群
+  1084870548 + 防钓鱼提示」；新增验证码邮件模板（大字码块 + "编辑部不会索要验证码"）。
+- **身份体系 3.0**（1.9.0 主体，随 Unreleased 汇总）：九级 XP 阶梯退役，改为四层身份
+  （读者/作者/审稿人/编辑），与 `require_*` 门禁一一对应；XP 降为荣誉统计，
+  评论与阅读列表的积分门槛移除。`/levels` 页文案同步。
+- **双赛道一等公民**（1.9.0）：`submissions` / `resources` 增加 `track`
+  （serious/absurd），投稿必选、目录可筛、详情页徽章、统计分赛道（迁移 013）。
+- **录用必须有评审**：`accept` 要求 ≥1 份 completed 审稿意见（409
+  `no_completed_reviews`）；确需免评审走 `POST /submissions/{id}/waive-review`
+  显式豁免（理由 ≥10 字，进审计日志）。
+- **管理员用户搜索 300ms 防抖**：此前每键一请求。
+
+### Fixed
+
+- 双盲评审泄漏：审稿人视角改字段白名单制，`admin_note` / `editor_note` /
+  `reviewed_by` 单盲与双盲下都不再透出。
+- ReDoS：`markdown_clean.RUNNING_HEAD` 指数回溯线性化；稿件转换移线程池
+  + 60s 硬超时（一份特制 PDF 不再能卡死事件循环）。
+- 上传文件名 CRLF 注入 `Content-Disposition`；HTTP Range suffix 语义反了；
+  修回决定错记"拒稿"积分并吞掉后续真拒稿奖励。
+- 迁移 013 SQLite 路径：原生 `ALTER TABLE ADD COLUMN` 替代 batch 重建
+  （绕开 SQLite 反射未命名外键抛 "Constraint must have a name"）。
+- 投稿 403 `rules_ack_required` 时前端只报"提交失败"——现明确说明并引导去
+  作者指南确认规范。
+
 ### Changed
 
 - **在线阅读排版层级强化**：`manuscript-view` 将摘要（`## 摘要` 或旧稿

@@ -253,6 +253,8 @@ export interface ResourceStats {
   total: number
   by_type: Record<string, number>
   by_discipline: Record<string, number>
+  /** 赛道分布：正经/荒诞各多少篇（首页与目录赛道 tab 用） */
+  by_track?: Record<string, number>
   downloads_total?: number
   reads_total?: number
 }
