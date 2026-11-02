@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from app.core.schemas import Authors, PaginationMeta
+from app.core.tracks import Track
 
 
 class AuthorMeta(BaseModel):
@@ -59,6 +60,8 @@ class ResourceBase(BaseModel):
     """Shared fields for create / update / response."""
 
     type: ResourceType
+    # 赛道：正经研究 / 荒诞研究。本刊的核心分野，公开面按此分组与筛选。
+    track: Track = "serious"
     title: str = Field(min_length=1, max_length=1000)
     authors: Authors = Field(min_length=1, max_length=200)
     year: int = Field(ge=-3000, le=2100)
@@ -146,6 +149,7 @@ class ResourceUpdate(BaseModel):
     """Body for PATCH /catalog/{id}. All fields optional."""
 
     type: ResourceType | None = None
+    track: Track | None = None
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     # 与 ResourceCreate 用同一个 Authors 注解：PATCH 也必须做逐元素校验
     # （长度 1..200、非空），否则可以写入空串或超长作者名。
@@ -219,6 +223,9 @@ class ResourceStats(BaseModel):
     total: int
     by_type: dict[str, int]
     by_discipline: dict[str, int]
+    # 赛道分布：首页/目录首页的「正经 N 篇 / 荒诞 M 篇」直接读这里。
+    # 不分赛道时 total 会把两种完全不同的阅读预期混成一个数字。
+    by_track: dict[str, int] = Field(default_factory=dict)
     downloads_total: int = 0
     reads_total: int = 0
 

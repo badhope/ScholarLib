@@ -199,13 +199,11 @@ function ProfilePage() {
               ) : null}
               <p className="mt-2 text-xs text-muted-foreground">
                 总积分 <span className="font-semibold tabular-nums text-foreground">{level.xp}</span>
-                {level.next_level_xp != null && (
+                {/* 身份 3.0：积分是荣誉统计，不再是"距下一等级"的进度条。 */}
+                {level.next_identity && (
                   <>
-                    {' · '}距下一等级还需{' '}
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {Math.max(0, level.next_level_xp - level.xp)}
-                    </span>{' '}
-                    XP
+                    {' · '}
+                    {level.next_identity.name}：{level.next_identity.how}
                   </>
                 )}
                 {' · '}角色：{level.roles.length ? level.roles.join('、') : '读者'}
@@ -221,18 +219,15 @@ function ProfilePage() {
               </p>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-[width] duration-500"
-                style={{ width: `${Math.round(level.progress * 100)}%` }}
-              />
+          {/* 身份没有"进度条"：身份要么有（授予/确认），要么没有（去申请）。
+              用下一步动作替代旧版的 XP 进度条。 */}
+          {level.next_identity && (
+            <div className="mt-4 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              下一步：<span className="font-medium text-foreground">{level.next_identity.name}</span>
+              {' — '}
+              {level.next_identity.how}
             </div>
-            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-              <span>L{level.level}</span>
-              {level.next_level_xp != null ? <span>L{level.level + 1}</span> : <span>已达顶阶</span>}
-            </div>
-          </div>
+          )}
         </div>
       </Card>
 

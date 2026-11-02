@@ -55,6 +55,32 @@ RUNNING_HEAD = re.compile(
     re.I,
 )
 
+# RUNNING_HEAD 的线性替代：先剥掉行首的引用/粗体/标题标记，再对剩余
+# 文本做无嵌套量词的等值或前缀判断。
+#
+# 为什么必须换掉上面那条正则：`(?:[>*_#]{0,3}\s*)*` 是嵌套量词，外层 `*`
+# 与内层 `{0,3}` + `\s*` 可以对同一串 `>` 产生组合级数的切分路径。
+# 实测 28 个 `>` 加一个字符（`">"*28 + "X"`）单行匹配超过 30 秒，26 个约
+# 2.7 秒。而输入完全由作者控制——PDF 正文里写一行 28 个 `>` 就能触发，
+# 且调用链是同步跑在事件循环上的（见 manuscript.py），一份特制稿件即可
+# 让整个 worker 卡死，所有租户的请求一起挂。
+#
+# 保留正则对象只为向后兼容外部引用；内部判定走 _is_running_head。
+_HEAD_MARKER_CHARS = ">*_#"
+_HEAD_PREFIXES = ("Where the absurd dwells",)
+_HEAD_EXACT = {
+    "Rubbish-于荒诞处见同路人",
+    "Rubbish—于荒诞处见同路人",
+    "于荒诞处见同路人",
+    "于荒诞处，见同路人",
+    "RUBBISH",
+    "Rubbish",
+}
+
+# 单行处理上限：超过这个长度的行不参与页眉判定（正常页眉不可能这么长），
+# 避免任何正则在大输入上退化成二次复杂度。
+MAX_HEAD_LINE_CHARS = 4096
+
 # 行首页脚：可带 blockquote 标记与粗体页码前缀（"**1** "）。
 VOLUME_FOOTER = re.compile(
     r"^[ \t]*(?:>[ \t]*)?(?:\*\*\d+\*\*[ \t]+)?[_*]*[ \t]*Rubbish[ \t]*[_*]*"
@@ -112,6 +138,44 @@ def _looks_like_running_head(line: str) -> bool:
     }
 
 
+def _is_running_head(line: str) -> bool:
+    """Linear-time replacement for ``RUNNING_HEAD.match``.
+
+    复杂度 O(len(line))，无嵌套量词，因此对任意恶意输入都不会回溯爆炸。
+    与旧正则的语义等价性由 ``tests/test_markdown_clean.py`` 的
+    ``test_running_head_matches_legacy_behaviour`` 与
+    ``test_pathological_input_is_linear`` 两条用例锁定。
+    """
+    if len(line) > MAX_HEAD_LINE_CHARS:
+        return False
+    # 1. 剥掉行首的引用/粗体/标题标记（对应旧正则的 [>*_#]{0,3} 与 #{1,6}）
+    text = line.lstrip()
+    while text and text[0] in _HEAD_MARKER_CHARS:
+        text = text[1:].lstrip()
+    # 2. 剥掉包裹的 ** 与尾部空白
+    text = text.strip()
+    if text.startswith("**"):
+        text = text[2:]
+    if text.endswith("**"):
+        text = text[:-2]
+    text = text.strip()
+    if not text:
+        return False
+    # 3. 等值 / 前缀 / 纯数字页码
+    if text in _HEAD_EXACT:
+        return True
+    if text.isdigit() and 1 <= len(text) <= 3:
+        return True
+    if any(text.startswith(prefix) for prefix in _HEAD_PREFIXES):
+        return True
+    # 4. "Rubbish" 或 "Rubbish | Volume ..." 形态
+    upper = text.upper().replace(" ", "")
+    if upper.startswith("RUBBISH"):
+        rest = text[len("Rubbish") :].lstrip() if text[:7].upper() == "RUBBISH" else ""
+        return rest == "" or rest.startswith("|") or rest.startswith("| Volume")
+    return False
+
+
 def strip_boilerplate(md: str) -> str:
     """Remove masthead fragments wherever they appear.
 
@@ -124,7 +188,7 @@ def strip_boilerplate(md: str) -> str:
         stripped = BOILER_FRAGMENTS.sub("", line).strip(" *_")
         if not stripped:
             continue
-        if _looks_like_running_head(stripped) or RUNNING_HEAD.match(stripped):
+        if _looks_like_running_head(stripped) or _is_running_head(stripped):
             continue
         out.append(stripped)
     return "\n".join(out)

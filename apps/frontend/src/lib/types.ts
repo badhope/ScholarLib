@@ -147,8 +147,23 @@ export interface CapabilitiesResponse {
 export type ResourceType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export type PublicationStatus = 'published' | 'in_review' | 'draft'
 
+/** 赛道：本刊唯一的产品分野。serious = 正经研究；absurd = 荒诞研究。 */
+export type Track = 'serious' | 'absurd'
+
+export const TRACK_LABELS: Record<Track, string> = {
+  serious: '正经研究',
+  absurd: '荒诞研究',
+}
+
+export const TRACK_SHORT: Record<Track, string> = {
+  serious: '正经',
+  absurd: '荒诞',
+}
+
 export interface ResourceBase {
   type: ResourceType
+  /** 赛道：决定评分画像与读者预期（详见 core/tracks.py） */
+  track: Track
   title: string
   authors: string[]
   year: number
@@ -254,6 +269,7 @@ export interface ResourceFacets {
 
 export interface ResourceListParams {
   type?: ResourceType
+  track?: Track
   discipline?: string
   year?: number
   volume?: string
@@ -283,6 +299,8 @@ export type SubmissionType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export interface SubmissionCreate {
   title: string
   type: SubmissionType
+  /** 赛道：投稿时必选（后端默认 serious 兼容旧客户端） */
+  track?: Track
   authors: string[]
   year: number
   venue?: string | null
@@ -320,6 +338,7 @@ export interface SubmissionResponse {
   id: number
   title: string
   type: string
+  track: Track
   authors: string[]
   year: number
   venue?: string | null
@@ -710,16 +729,23 @@ export interface JournalSettings {
 
 // --- Export ---
 
-// --- Gamification / 等级体系 ---
+// --- Gamification / 身份体系 ---
+/**
+ * 身份（3.0 口径）：四种真实身份，不再是九级 XP 阶梯。
+ * ``level`` 字段保留为身份序号 1–4，兼容旧调用方。
+ */
 export interface LevelCapability {
+  /** 身份序号 1–4（1=读者 … 4=编辑），兼容旧字段名 */
   level: number
+  slug: string
   code: string
   name: string
   title: string
-  track: 'merit' | 'staff'
+  /** 获得方式（"注册即得" / "编辑部授予"） */
+  granted_by?: string
+  /** 旧字段：保留兼容，新代码用 granted_by */
+  track?: 'merit' | 'staff'
   xp_floor?: number
-  // 2.0 起 L4 带投稿指标："accepted_papers" = XP 满之外还需录用 >= 1
-  metric?: string | null
   roles?: string[]
   capabilities: string[]
   description: string
@@ -727,9 +753,10 @@ export interface LevelCapability {
 
 export interface LevelSnapshot extends LevelCapability {
   xp: number
-  merit_level: number
-  next_level_xp: number | null
-  progress: number
+  /** 已确认当版投稿规范 = 可投稿（合规状态，不是等级） */
+  author_eligible?: boolean
+  /** 下一个可争取的身份与获取方式；已在顶阶时为 null */
+  next_identity?: { slug: string; name: string; how: string } | null
   roles: string[]
 }
 
@@ -764,6 +791,7 @@ export interface GamificationProfile {
 export interface LadderResponse {
   version: string
   levels: LevelCapability[]
+  identities: LevelCapability[]
 }
 
 // --- Announcements ---

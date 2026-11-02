@@ -5,9 +5,9 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { exportResources, useCatalogStats, useResources } from '@/hooks/api/use-modules'
-import type { ResourceType } from '@/lib/types'
+import type { ResourceType, Track } from '@/lib/types'
 import { extractError, formatAuthors, cn } from '@/lib/utils'
-import { absurdityLevel, qualityGrade, typeLabel } from '@/lib/resource-labels'
+import { absurdityLevel, qualityGrade, trackLabel, typeLabel } from '@/lib/resource-labels'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState, ErrorState } from '@/components/common/state'
 import { Pagination } from '@/components/common/pagination'
@@ -46,10 +46,18 @@ export const Route = createFileRoute('/catalog/')({
 interface CatalogSearch {
   q?: string
   type?: ResourceType
+  /** 赛道：serious 正经 / absurd 荒诞。目录页主导航维度之一。 */
+  track?: Track
   discipline?: string
   year?: number
   page?: number
 }
+
+const TRACK_OPTIONS: { value: Track | 'all'; label: string }[] = [
+  { value: 'all', label: '全部赛道' },
+  { value: 'serious', label: '正经研究' },
+  { value: 'absurd', label: '荒诞研究' },
+]
 
 const TYPE_OPTIONS: { value: ResourceType | 'all'; label: string }[] = [
   { value: 'all', label: '全部类型' },
@@ -70,6 +78,7 @@ function CatalogListPage() {
   const params = {
     q: search.q || undefined,
     type: search.type,
+    track: search.track,
     discipline: search.discipline || undefined,
     year: search.year,
     page: search.page || 1,
@@ -257,6 +266,18 @@ function CatalogListPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
+                          {/* 赛道徽章放在类型前：读者先问"这是什么性质的
+                              文章"，再问"什么载体"。 */}
+                          <Badge
+                            variant="outline"
+                            className={
+                              r.track === 'absurd'
+                                ? 'border-amber-300 bg-amber-500/10 text-amber-700'
+                                : 'border-sky-300 bg-sky-500/10 text-sky-700'
+                            }
+                          >
+                            {trackLabel(r.track)}
+                          </Badge>
                           <Badge variant="secondary">{typeLabel(r.type)}</Badge>
                           {(() => {
                             const grade = qualityGrade(r.quality_grade)
@@ -358,6 +379,26 @@ function CatalogFilterFields({
           </SelectTrigger>
           <SelectContent>
             {TYPE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">赛道</label>
+        <Select
+          value={search.track ?? 'all'}
+          onValueChange={(v) =>
+            updateSearch({ track: v === 'all' ? undefined : (v as Track), page: 1 })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TRACK_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>

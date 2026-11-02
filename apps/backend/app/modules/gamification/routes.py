@@ -19,7 +19,11 @@ from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
 from app.models import AuditLog, User, UserRole
 from app.modules.gamification import applications, service
-from app.modules.gamification.ladder import SCORING_VERSION, ladder_payload, level_payload
+from app.modules.gamification.ladder import (
+    SCORING_VERSION,
+    identities_payload,
+    identity_payload,
+)
 from app.modules.gamification.models import RoleApplication
 
 router = APIRouter(prefix="/gamification", tags=["gamification"])
@@ -72,9 +76,13 @@ class PublicUserLevel(BaseModel):
 
 @router.get("/ladder")
 async def get_ladder() -> dict[str, object]:
-    """The frozen 9-tier ladder. Public: readers should know what exists."""
-    # 口径版本跟 SCORING_VERSION 走（2.0 起含投稿指标），不再硬编码 1.0。
-    return {"version": SCORING_VERSION, "levels": ladder_payload()}
+    """四种身份与获取方式。公开：任何访客都该知道"怎么成为审稿人"。
+
+    路径保留 ``/ladder``（前端与外部脚本都在读），返回体从"九级阶梯"
+    变成"四层身份"，字段 ``levels`` 保留一版以兼容旧调用方。
+    """
+    identities = identities_payload()
+    return {"version": SCORING_VERSION, "identities": identities, "levels": identities}
 
 
 @router.get("/me")
@@ -243,9 +251,16 @@ async def grant_points(
 
 @router.get("/levels/{level}")
 async def get_level_detail(level: int) -> dict[str, object]:
-    if level < 1 or level > 9:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown level")
-    return level_payload(level)
+    """单条身份详情。参数是身份序号 1–4（1=读者 … 4=编辑）。
+
+    历史上这是 1–9 的九级阶梯。现在只认 1–4；>4 返回 404 而不是静默
+    落到编辑身份，避免旧客户端以为"L7 栏目编辑"还存在。
+    """
+    from app.modules.gamification.ladder import IDENTITIES
+
+    if level < 1 or level > len(IDENTITIES):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown identity")
+    return identity_payload(IDENTITIES[level - 1].slug)
 
 
 # ---------------------------------------------------------------------------

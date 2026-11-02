@@ -170,6 +170,10 @@ async def _publish_paper_with_file(client: AsyncClient, test_user: dict, admin_u
         headers={"Authorization": f"Bearer {token}"},
     )
     assert up.status_code == 200
+    # 录用要求至少一份已完成的审稿意见（no_completed_reviews）。
+    from conftest import complete_one_review
+
+    await complete_one_review(client, admin_user, sid)
     decision = await client.patch(
         f"/api/submissions/{sid}/decision",
         json={"decision": "accept"},

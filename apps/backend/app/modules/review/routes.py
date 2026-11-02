@@ -24,7 +24,7 @@ from app.core.db import get_db, paginate
 from app.core.time import utcnow
 from app.models import User
 from app.modules.notifications import services as notifications
-from app.modules.review.blinding import anonymize_submission_fields, get_review_mode
+from app.modules.review.blinding import get_review_mode, reviewer_facing_payload
 from app.modules.review.models import ReviewAssignment, ReviewReport
 from app.modules.review.schemas import (
     AssignmentListResponse,
@@ -181,6 +181,9 @@ async def get_assignment_submission(
         "id": s.id,
         "title": s.title,
         "type": s.type,
+        # 赛道：审稿人必须知道自己在按哪条赛道的标准评审——同一篇文字
+        # 按"正经研究"评可能结构不完整，按"荒诞研究"评则完全成立。
+        "track": s.track,
         "authors": s.authors,
         "year": s.year,
         "venue": s.venue,
@@ -211,8 +214,9 @@ async def get_assignment_submission(
     # admin 例外：平台管理员需要能复现问题，且其身份天然不受盲审约束。
     if not current_user.is_admin:
         mode = await get_review_mode(db, s.tenant_id)
-        if mode == "double_blind":
-            payload = anonymize_submission_fields(payload)
+        # 单盲与双盲都走字段裁剪：编辑的内部备注在两种模式下都不属于
+        # 审稿人可见信息（单盲只解除"作者是谁"，不解除编辑的私密评语）。
+        payload = reviewer_facing_payload(payload, double_blind=(mode == "double_blind"))
     return SubmissionResponse(**payload)
 
 

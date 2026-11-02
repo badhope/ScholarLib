@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
 from app.core.schemas import Authors, MessageResponse, PaginationMeta
+from app.core.tracks import Track
 
 # 完整 workflow 状态机：
 #   pending → under_review → (major_revision | minor_revision | accepted | rejected)
@@ -48,6 +49,10 @@ class SubmissionCreate(BaseModel):
 
     title: str = Field(min_length=1, max_length=1000)
     type: SubmissionType
+    # 赛道：决定评分画像、审稿人匹配与读者预期。作者必选而不是默认，
+    # 因为"我不知道投哪条"本身就是需要作者想清楚的问题（两份赛道的
+    # 写作语气完全不同）。历史客户端缺省时按 serious 处理，见 core/tracks。
+    track: Track = "serious"
     authors: Authors = Field(min_length=1, max_length=200)
     year: int = Field(ge=-3000, le=2100)
     venue: str | None = Field(default=None, max_length=500)
@@ -113,12 +118,25 @@ class AnonymizedFileUpdate(BaseModel):
     anonymized_file_url: AnyHttpUrl | None = None
 
 
+class WaiveReviewRequest(BaseModel):
+    """Body for POST /submissions/{id}/waive-review — desk accept 前置声明。
+
+    ``reason`` 强制非空且≥10 字：这条理由是「为什么这篇稿子没有走同行
+    评审」的唯一书面依据，会进审计日志并随录用通知发给作者。允许空理由
+    等于允许无声的例外。
+    """
+
+    reason: str = Field(min_length=10, max_length=2000)
+
+
 class SubmissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     title: str
     type: str
+    # 赛道：前端据此分组展示、编辑据此匹配审稿人。
+    track: Track = "serious"
     authors: list[str]
     year: int
     venue: str | None = None
@@ -179,6 +197,10 @@ class SubmissionUpdate(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     type: SubmissionType | None = None
+    # 赛道可在修改窗口内调整（作者改主意或编辑建议换道），一旦进入
+    # under_review 就锁死——审稿人按某条赛道的标准给出的意见不能被
+    # 中途换道作废。
+    track: Track | None = None
     authors: Authors | None = Field(default=None, min_length=1, max_length=200)
     year: int | None = Field(default=None, ge=-3000, le=2100)
     venue: str | None = Field(default=None, max_length=500)

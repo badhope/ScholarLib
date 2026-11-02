@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user
-from app.api.levels import require_level
+from app.api.levels import require_reader
 from app.core.db import get_db, paginate
 from app.models import User
 from app.modules.catalog.models import Resource
@@ -113,7 +113,7 @@ async def list_my_lists(
 )
 async def create_list(
     payload: ReadingListCreate,
-    current_user: User = Depends(require_level(2)),
+    current_user: User = Depends(require_reader),
     db: AsyncSession = Depends(get_db),
 ) -> ReadingListDetailResponse:
     """Create a new reading list owned by the current user (L2+)."""

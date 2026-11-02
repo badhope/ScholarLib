@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_tenant_id
 from app.core import search as fulltext
 from app.core.db import paginate
+from app.core.tracks import normalize_track
 from app.modules.catalog.models import Resource as ResourceORM
 from app.modules.submission.models import Submission, SubmissionVersion
 from app.modules.submission.schemas import SubmissionListResponse, SubmissionResponse
@@ -101,6 +102,9 @@ async def _materialize_resource_from_submission(
         publication_status=publication_status,
         type=submission.type,
         title=submission.title,
+        # 赛道随物化带过去。目录的公开面按 track 分组，丢失这一列等于
+        # 让读者无法区分"这是真研究"与"这是荒诞研究"——本刊的立身之本。
+        track=normalize_track(getattr(submission, "track", None)),
         authors=submission.authors,
         year=submission.year,
         venue=submission.venue,
@@ -135,6 +139,7 @@ def _to_response(entry: Submission) -> SubmissionResponse:
         id=entry.id,
         title=entry.title,
         type=entry.type,
+        track=normalize_track(getattr(entry, "track", None)),
         authors=entry.authors,
         year=entry.year,
         venue=entry.venue,
@@ -169,6 +174,9 @@ def _to_response(entry: Submission) -> SubmissionResponse:
 _VERSIONED_FIELDS = (
     "title",
     "type",
+    # 赛道进快照：作者从荒诞改成正经（或反之）是一次实质的内容变更，
+    # 版本 diff 必须能看出来，否则「我投的时候明明是正经的」无法追溯。
+    "track",
     "authors",
     "year",
     "venue",

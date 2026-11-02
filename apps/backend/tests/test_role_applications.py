@@ -26,6 +26,10 @@ async def _submit_and_accept(
     )
     assert r.status_code == 201, r.text
     sid = r.json()["id"]
+    # 录用要求至少一份已完成的审稿意见（no_completed_reviews）。
+    from conftest import complete_one_review
+
+    await complete_one_review(client, admin, sid)
     dec = await client.patch(
         f"/api/submissions/{sid}/decision",
         json={"decision": "accept"},

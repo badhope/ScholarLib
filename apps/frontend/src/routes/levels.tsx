@@ -158,49 +158,42 @@ function LevelsPage() {
       {/* 职责轨申请通道（L5/L6）：资格画像 + 提交 + 记录 */}
       <RoleApplicationsSection />
 
-      {/* 九级阶梯 */}
+      {/* 四种身份：与后端 require_* 门禁一一对应 */}
       <section>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <Layers className="h-4 w-4" /> 九级阶梯
+          <Layers className="h-4 w-4" /> 四种身份
         </h2>
         {ladder.isLoading ? (
           <Loading />
         ) : ladder.isError || !ladder.data ? (
-          <ErrorState message="加载等级体系失败" onRetry={() => ladder.refetch()} />
+          <ErrorState message="加载身份体系失败" onRetry={() => ladder.refetch()} />
         ) : (
           <div className="space-y-3">
-            {ladder.data.levels.map((item) => (
+            {ladder.data.identities.map((item) => (
               <div
-                key={item.level}
+                key={item.slug}
                 className={cn(
                   'rounded-xl border p-4 sm:p-5',
-                  item.track === 'staff' ? 'bg-muted/30' : 'bg-card',
+                  item.slug === 'reader' || item.slug === 'author' ? 'bg-card' : 'bg-muted/30',
                 )}
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
                       'inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold tabular-nums',
-                      item.level >= 5
+                      item.slug === 'reviewer' || item.slug === 'editor'
                         ? 'bg-primary/15 text-primary'
                         : 'bg-muted text-muted-foreground',
                     )}
                   >
-                    L{item.level}
+                    {item.name}
                   </span>
                   <h3 className="text-base font-semibold">{item.name}</h3>
                   <Badge variant="outline" className="text-[10px]">
-                    {item.track === 'merit'
-                      ? item.metric
-                        ? '投稿解锁'
-                        : '积分解锁'
-                      : '编辑部授予'}
+                    {/* 身份 3.0：granted_by 是唯一获得方式说明（XP 不再是
+                        任何身份的条件）。旧字段 track 保留兼容但不再展示。 */}
+                    {item.granted_by ?? '身份'}
                   </Badge>
-                  {item.track === 'merit' && item.xp_floor != null && (
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {item.metric ? `${item.xp_floor} XP + 录用` : `${item.xp_floor} XP 起`}
-                    </span>
-                  )}
                 </div>
                 <p className="mt-1.5 text-sm text-muted-foreground">{item.description}</p>
                 <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">

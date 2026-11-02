@@ -10,17 +10,21 @@ def _level(body: dict) -> int:
     return int(body["level"]["level"])
 
 
-async def test_ladder_is_public_and_has_nine_levels(client: AsyncClient) -> None:
+async def test_ladder_is_public_and_lists_four_identities(client: AsyncClient) -> None:
+    """身份体系 3.0：四种身份（读者/作者/审稿人/编辑），不再是九级 XP 阶梯。"""
     r = await client.get("/api/gamification/ladder")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"] == "2.0"
-    assert [item["level"] for item in body["levels"]] == list(range(1, 10))
-    levels = {item["level"]: item for item in body["levels"]}
-    assert levels[1]["track"] == "merit"
-    assert levels[9]["track"] == "staff"
-    assert "reviewer" in levels[5]["roles"]
-    assert "editor" in levels[8]["roles"]
+    assert body["version"] == "3.0"
+    identities = body["identities"]
+    assert [item["slug"] for item in identities] == ["reader", "author", "reviewer", "editor"]
+    by_slug = {item["slug"]: item for item in identities}
+    # 审稿人身份必须能对上后端角色，否则"授予"与"门禁"会脱节
+    assert "reviewer" in by_slug["reviewer"]["roles"]
+    assert "editor" in by_slug["editor"]["roles"]
+    # 读者与作者都不需要角色（注册/确认规范即得）
+    assert by_slug["reader"]["roles"] == []
+    assert by_slug["author"]["roles"] == []
 
 
 async def test_new_user_starts_at_level_one(client: AsyncClient) -> None:
@@ -59,39 +63,46 @@ async def test_level_one_can_submit_after_rules_ack(client: AsyncClient) -> None
     assert submitted.status_code == 201, submitted.text
 
 
-async def test_l4_requires_accepted_paper_not_just_xp(
+async def test_xp_does_not_grant_any_identity(
     client: AsyncClient, test_user: dict, admin_user: dict
 ) -> None:
-    """1.8.0 升级口径：XP 满 400 只是必要条件，录用 >= 1 才升 L4。"""
+    """身份体系 3.0 的核心承诺：积分不换权限。
+
+    旧体系里"XP 满 400 + 录用 1 篇 → L4"。现在录用与积分都只影响荣誉
+    统计，身份只由"确认规范（作者）"与"角色授予（审稿人/编辑）"决定。
+    这条用例锁定：给一个作者灌到 500 XP 并录用一篇，他的身份仍然是作者。
+    """
     from conftest import auth_headers as _ah
 
-    # onboarding 已把 test_user 送到 L3（160 XP）；再 grant 到 500 XP
     grant = await client.post(
         f"/api/gamification/admin/users/{test_user['user_id']}/grant",
-        json={"points": 340, "note": "xp floor for L4"},
+        json={"points": 340, "note": "xp should not grant identity"},
         headers=auth_headers(admin_user),
     )
     assert grant.status_code == 200, grant.text
 
     me = await client.get("/api/users/me", headers=_ah(test_user))
     assert me.json()["xp"] >= 400
-    assert me.json()["level"] == 3, "XP 满但无录用 → 不得升 L4"
+    # 已确认规范 → 作者身份（第 2 层），积分再多也不会变成审稿人
+    assert me.json()["level"] == 2
 
-    # 投稿 → admin 录用（物化资源）→ L4 指标达成
     sub = await client.post(
         "/api/submissions",
         json={
-            "title": "L4 metric paper",
+            "title": "identity paper",
             "type": "paper",
             "authors": ["A"],
             "year": 2026,
             "discipline": "计算机科学",
-            "abstract": "用于验证 L4 录用指标的占位摘要，长度足够校验。",
+            "abstract": "用于验证身份不被积分与录用改变。",
         },
         headers=auth_headers(test_user),
     )
     assert sub.status_code == 201, sub.text
     sid = sub.json()["id"]
+    from conftest import complete_one_review
+
+    await complete_one_review(client, admin_user, sid)
     dec = await client.patch(
         f"/api/submissions/{sid}/decision",
         json={"decision": "accept"},
@@ -100,7 +111,9 @@ async def test_l4_requires_accepted_paper_not_just_xp(
     assert dec.status_code == 200, dec.text
 
     me2 = await client.get("/api/users/me", headers=_ah(test_user))
-    assert me2.json()["level"] == 4, "录用达成 → 升 L4"
+    # 录用与 XP 都不改变身份：仍是作者
+    assert me2.json()["level"] == 2
+    assert me2.json()["xp"] >= 400
 
 
 async def test_level_one_can_comment(client: AsyncClient, admin_user: dict) -> None:
@@ -124,19 +137,25 @@ async def test_level_one_can_comment(client: AsyncClient, admin_user: dict) -> N
     assert posted.status_code == 201
 
 
-async def test_author_onboarding_unlocks_level_three(client: AsyncClient) -> None:
+async def test_author_onboarding_grants_author_identity(client: AsyncClient) -> None:
+    """确认规范后成为作者身份（第 2 层），而不是"升到 L3"。
+
+    身份体系不再用 XP 表达"能不能投稿"——确认规范这个动作本身就是作者
+    身份的定义。
+    """
     user = await register_user(client, email="onboard@example.com", username="onboard")
     headers = {"Authorization": f"Bearer {user['token']}"}
 
-    community = await client.post("/api/gamification/onboarding/community", headers=headers)
-    assert community.status_code == 200
-    assert _level(community.json()) == 2
+    # 未确认规范前是读者身份（1）
+    me_before = await client.get("/api/users/me", headers=headers)
+    assert me_before.json()["level"] == 1
 
     author = await client.post(
         "/api/gamification/onboarding/author", json={"accept_rules": True}, headers=headers
     )
     assert author.status_code == 200
-    assert _level(author.json()) == 3
+    assert _level(author.json()) == 2
+    assert author.json()["level"]["slug"] == "author"
 
     me = await client.get("/api/users/me", headers=headers)
     assert me.json()["rules_accepted"] is True
@@ -172,8 +191,9 @@ async def test_profile_returns_badges_and_progressive_reveal(client: AsyncClient
     assert profile.status_code == 200
     body = profile.json()
     assert body["level"]["level"] == 1
-    assert body["level"]["next_level_xp"] == 30
-    assert body["level"]["progress"] < 1
+    assert body["level"]["slug"] == "reader"
+    # 下一步是"成为作者"，靠确认规范而不是攒积分
+    assert body["level"]["next_identity"]["slug"] == "author"
     # 低等级只展示已解锁 + 最多 3 个待解锁，避免一次铺满整面墙
     assert len([b for b in body["badges"] if not b["unlocked"]]) <= 3
     assert all(not b["secret"] for b in body["badges"] if not b["unlocked"])
@@ -183,7 +203,9 @@ async def test_admin_sees_secret_badges(client: AsyncClient, admin_user: dict) -
     profile = await client.get("/api/gamification/me", headers=auth_headers(admin_user))
     assert profile.status_code == 200
     body = profile.json()
-    assert body["level"]["level"] == 9
+    # admin 视为编辑身份（第 4 层）
+    assert body["level"]["level"] == 4
+    assert body["level"]["slug"] == "editor"
     assert any(b["secret"] for b in body["badges"])
 
 

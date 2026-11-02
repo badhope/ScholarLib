@@ -18,11 +18,12 @@ from app.core.time import utcnow
 from app.models import Role, User, UserRole
 from app.modules.gamification.badges import BADGES, badge_payload
 from app.modules.gamification.ladder import (
-    LEVEL_BY_NUMBER,
-    effective_level,
-    ladder_payload,
-    level_payload,
-    merit_level_for_xp,
+    IDENTITIES,
+    IDENTITY_RANK,
+    identities_payload,
+    identity_for_roles,
+    identity_payload,
+    is_author_eligible,
 )
 from app.modules.gamification.models import UserAchievement, UserXpEvent
 from app.modules.gamification.xp import XP_RULES
@@ -319,42 +320,66 @@ async def evaluate_badges(db: AsyncSession, user: User) -> list[UserAchievement]
 
 
 async def level_snapshot(db: AsyncSession, user: User, roles: list[str]) -> dict[str, Any]:
-    xp = int(user.xp or 0)
-    # 2.0 口径：L4 由「XP 满 + 录用 >= 1」双条件驱动，需要录用数（applications 模块共用口径）。
-    from app.modules.gamification.applications import accepted_paper_count
+    """当前用户的身份快照。
 
-    accepted = await accepted_paper_count(db, user)
-    level = effective_level(xp, roles, bool(user.is_admin), accepted)
-    metric_gap = max(0, 1 - accepted) if (xp >= 400 and level < 4) else 0
-    spec = LEVEL_BY_NUMBER[level]
-    next_floor = None
-    for candidate in sorted(LEVEL_BY_NUMBER):
-        if LEVEL_BY_NUMBER[candidate].track == "merit" and candidate > level:
-            next_floor = LEVEL_BY_NUMBER[candidate].xp_floor
-            break
-    progress = 0.0
-    if level < 4:
-        current_floor = spec.xp_floor
-        target = LEVEL_BY_NUMBER[level + 1].xp_floor
-        span = max(target - current_floor, 1)
-        progress = min(1.0, max(0.0, (xp - current_floor) / span))
-    elif next_floor is not None:
-        progress = min(1.0, xp / max(next_floor, 1))
-    else:
-        progress = 1.0
-    payload = level_payload(level)
+    返回结构保留 ``level`` 键名（前端与外部调用方都在读），但语义已从
+    "九级游戏等级"变成"四层身份中的哪一层"。同时给出 ``xp``（纯荣誉
+    统计，不参与任何权限判定）与 ``author_eligible``（合规状态）。
+
+    为什么不再有 ``next_level_xp`` / ``progress``：旧体系把"再攒 86 XP
+    就能关注作者"当成进步感来源，而关注作者本来就不该有门槛。身份要么
+    有（编辑部授予），要么没有（去申请），不存在"攒积分换身份"的路径，
+    所以"进度条"这个概念本身就不成立。
+    """
+    from app.api.levels import CURRENT_RULES_VERSION
+
+    xp = int(user.xp or 0)
+    slug = identity_for_roles(roles, is_admin=bool(user.is_admin))
+    # 作者身份是合规状态而非角色：已确认当版规范 = 可投稿。
+    author_ok = is_author_eligible(user.rules_ack_version, CURRENT_RULES_VERSION)
+    # 有审稿/编辑角色的人天然也是作者（他们当然可以投稿）。
+    if IDENTITY_RANK[slug] >= IDENTITY_RANK["author"]:
+        author_ok = True
+    # 读者 + 已确认规范 = 作者身份。不提升 slug 的话，作者会永远显示为
+    # "读者"，而 next_identity 又会说"去确认规范"——明明已经确认过了。
+    if slug == "reader" and author_ok:
+        slug = "author"
+    payload = identity_payload(slug)
     payload.update(
         {
+            # 兼容旧字段名：外部读 level.level 的地方不用改。
+            "level": IDENTITY_RANK[slug] + 1,
             "xp": xp,
-            "merit_level": merit_level_for_xp(xp),
-            # 下一级还差多少录用稿（L4 指标闸门；0 = 不差或已达标）
-            "metric_remaining": metric_gap,
-            "next_level_xp": next_floor,
-            "progress": round(progress, 3),
             "roles": roles,
+            "author_eligible": author_ok,
+            # 下一个可争取的身份（读者→作者→审稿人），没有则 None。
+            "next_identity": _next_identity(slug, author_ok),
         }
     )
     return payload
+
+
+def _next_identity(slug: str, author_ok: bool) -> dict[str, str] | None:
+    """下一个可争取的身份 + 怎么拿到（前端展示"如何升级"的唯一来源）。"""
+    if slug == "reader" and not author_ok:
+        return {
+            "slug": "author",
+            "name": "作者",
+            "how": "阅读并确认《投稿与编辑规范》，即可投稿",
+        }
+    if slug in ("reader", "author"):
+        return {
+            "slug": "reviewer",
+            "name": "审稿人",
+            "how": "至少 1 篇稿件被本刊录用且最高 RQS ≥ 60 后，在「身份」页提交申请",
+        }
+    if slug == "reviewer":
+        return {
+            "slug": "editor",
+            "name": "编辑",
+            "how": "由编辑部按贡献提拔，不开放申请",
+        }
+    return None
 
 
 async def profile(db: AsyncSession, user: User, *, include_secret: bool) -> dict[str, Any]:
@@ -400,7 +425,9 @@ async def profile(db: AsyncSession, user: User, *, include_secret: bool) -> dict
         "username": user.username,
         "xp": user.xp or 0,
         "level": await level_snapshot(db, user, roles),
-        "ladder": ladder_payload(),
+        "identities": identities_payload(),
+        # 旧键名保留一版：前端/第三方按 ladder 读取的地方不立刻断。
+        "ladder": identities_payload(),
         "badges": badges,
         "unlocked_count": len(owned),
         "total_badges": len([b for b in BADGES if include_secret or not b.secret])

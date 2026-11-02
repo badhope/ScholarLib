@@ -38,14 +38,9 @@ async def get_me(
 ) -> UserResponse:
     resp = UserResponse.model_validate(current_user)
     resp.roles = await user_role_names(db, current_user)
-    from app.api.levels import CURRENT_RULES_VERSION
-    from app.modules.gamification.applications import accepted_paper_count
-    from app.modules.gamification.ladder import effective_level
+    from app.api.levels import CURRENT_RULES_VERSION, level_of
 
-    accepted = await accepted_paper_count(db, current_user)
-    resp.level = effective_level(
-        int(current_user.xp or 0), resp.roles, bool(current_user.is_admin), accepted
-    )
+    resp.level = await level_of(db, current_user)
     resp.rules_accepted = current_user.rules_ack_version == CURRENT_RULES_VERSION
     return resp
 

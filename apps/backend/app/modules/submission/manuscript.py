@@ -193,6 +193,51 @@ def convert_to_markdown(contents: bytes, filename: str) -> str | None:
         return None
 
 
+# 转换的硬超时（秒）。超过即放弃 Markdown、回退 PDF 视图。
+# 取值依据：正常稿件（<10MB）在 4 核上转换耗时 2–15 秒；60 秒足以覆盖
+# 大稿，又能把"恶意构造的慢输入"压到用户可感知的等待上限内。
+CONVERT_TIMEOUT_SECONDS = 60.0
+
+
+async def convert_to_markdown_async(
+    contents: bytes, filename: str, *, timeout: float = CONVERT_TIMEOUT_SECONDS
+) -> str | None:
+    """``convert_to_markdown`` 的异步安全版本（线程池 + 硬超时）。
+
+    **为什么必须有这个包装**：``convert_to_markdown`` 是同步 CPU 密集函数
+    （pymupdf4llm / mammoth 全量解析）。在 ``async def`` 路由里直接调用它，
+    会把整个事件循环占住——期间所有租户的所有请求（包括 ``/api/health``）
+    都无法被处理，一个用户上传一份特制 PDF 就能让整个进程假死。
+
+    两层保护：
+    1. ``anyio.to_thread.run_sync`` 把它挪到工作线程，事件循环继续服务；
+    2. ``asyncio.wait_for`` 硬超时，防止线程被单份稿件长期占用（线程池
+       满了一样会拖垮后续请求）。
+
+    超时/异常一律返回 None：调用方已经把 None 当作"回退 PDF 视图"。
+    """
+    import asyncio
+
+    import anyio
+
+    def _run() -> str | None:
+        return convert_to_markdown(contents, filename)
+
+    try:
+        return await asyncio.wait_for(anyio.to_thread.run_sync(_run), timeout=timeout)
+    except (TimeoutError, asyncio.TimeoutError):
+        logger.warning(
+            "manuscript_convert_timeout ext=%s bytes=%s timeout=%ss",
+            os.path.splitext(filename or "")[1].lower(),
+            len(contents),
+            timeout,
+        )
+        return None
+    except Exception:
+        logger.warning("manuscript_convert_async_failed", exc_info=True)
+        return None
+
+
 def _convert_to_markdown_inner(contents: bytes, ext: str) -> str | None:
     try:
         if ext == ".pdf":

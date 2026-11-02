@@ -128,6 +128,58 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
             yield ac
 
 
+async def register_reviewer(
+    client: AsyncClient, admin: dict, username: str, email: str
+) -> dict[str, str | int | bool]:
+    """Register a user and grant the ``reviewer`` role (via admin API)."""
+    user = await register_user(client, email=email, username=username)
+    grant = await client.post(
+        f"/api/admin/users/{user['user_id']}/roles",
+        json={"role": "reviewer"},
+        headers={"Authorization": f"Bearer {admin['token']}"},
+    )
+    grant.raise_for_status()
+    return user
+
+
+async def complete_one_review(
+    client: AsyncClient, admin: dict, submission_id: int, *, reviewer_name: str = "reviewer"
+) -> None:
+    """Drive a submission through one full review so it becomes decidable.
+
+    录用现在要求至少一份已完成的审稿意见（见
+    ``routes_editor.decide_submission`` 的 no_completed_reviews 分支）。
+    此前测试都用"投稿→直接 accept"两步走，靠的正是那个缺陷；现在需要
+    真正走一遍分配→接受→提交报告。
+
+    审稿人按 ``reviewer_name`` 区分，避免同一测试里多次调用撞
+    (submission_id, reviewer_id) 唯一约束。
+    """
+    reviewer = await register_reviewer(
+        client, admin, f"{reviewer_name}_{submission_id}", f"{reviewer_name}{submission_id}@example.com"
+    )
+    assign = await client.post(
+        f"/api/submissions/{submission_id}/assignments",
+        json={"reviewer_id": reviewer["user_id"]},
+        headers={"Authorization": f"Bearer {admin['token']}"},
+    )
+    assign.raise_for_status()
+    assignment_id = assign.json()["id"]
+    hdr = {"Authorization": f"Bearer {reviewer['token']}"}
+    accept = await client.post(f"/api/review/assignments/{assignment_id}/accept", headers=hdr)
+    accept.raise_for_status()
+    report = await client.post(
+        f"/api/review/assignments/{assignment_id}/submit",
+        json={
+            "recommendation": "accept",
+            "scores": {"originality": 4, "clarity": 4},
+            "comments_to_author": "Sound work, ready for publication.",
+        },
+        headers=hdr,
+    )
+    report.raise_for_status()
+
+
 async def register_user(
     client: AsyncClient,
     *,

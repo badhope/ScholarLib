@@ -15,7 +15,7 @@ Three groups:
 
 from __future__ import annotations
 
-from conftest import auth_headers, register_user
+from conftest import auth_headers, complete_one_review, register_user
 from httpx import AsyncClient
 
 _PAYLOAD = {
@@ -287,6 +287,8 @@ async def test_accept_hold_draft_gates_public_visibility(
     作者本人可刊前预览；admin 刊出后对公众开放——补齐录用→刊出之间的
     刊前整理环节。"""
     created = await _create_submission(client, test_user)
+    # 录用要求至少一份已完成的审稿意见：先走完一轮评审。
+    await complete_one_review(client, admin_user, created["id"])
     decision = await client.patch(
         f"/api/submissions/{created['id']}/decision",
         json={"decision": "accept", "publication_status": "draft"},
@@ -323,6 +325,7 @@ async def test_accept_default_publishes_immediately(
     """默认录用即刊（兼容旧行为）：不带 publication_status 时物化条目
     立即对公众可见。"""
     created = await _create_submission(client, test_user)
+    await complete_one_review(client, admin_user, created["id"])
     decision = await client.patch(
         f"/api/submissions/{created['id']}/decision",
         json={"decision": "accept"},

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from conftest import auth_headers, register_user
+from conftest import auth_headers, complete_one_review, register_user
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -383,6 +383,8 @@ async def test_editor_decision_accept_materializes_resource(
     client: AsyncClient, test_user: dict, admin_user: dict
 ) -> None:
     sub = await _create_submission(client, test_user)
+    # 录用要求至少一份已完成的审稿意见（见 no_completed_reviews）。
+    await complete_one_review(client, admin_user, sub["id"])
 
     response = await client.patch(
         f"/api/submissions/{sub['id']}/decision",
@@ -393,6 +395,60 @@ async def test_editor_decision_accept_materializes_resource(
     body = response.json()
     assert body["status"] == "accepted"
     assert body["resource_id"] is not None
+
+
+async def test_accept_without_any_review_is_blocked(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
+    """零审稿直接录用必须被拒：同行评审不能被前端按钮的显隐当成唯一防线。"""
+    sub = await _create_submission(client, test_user)
+
+    response = await client.patch(
+        f"/api/submissions/{sub['id']}/decision",
+        json={"decision": "accept"},
+        headers=auth_headers(admin_user),
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["code"] == "no_completed_reviews"
+    # 状态未被改动：拒绝要彻底，不能留下"半录用"
+    assert (await _get(client, sub["id"], test_user))["status"] == "pending"
+
+
+async def test_waive_review_unblocks_desk_accept_and_is_audited(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
+    """免评审录用要留理由：豁免是显式例外，不是沉默的默认路径。"""
+    sub = await _create_submission(client, test_user)
+
+    # 理由太短直接拒（10 字下限由 schema 层拦下 → 422）
+    too_short = await client.post(
+        f"/api/submissions/{sub['id']}/waive-review",
+        json={"reason": "约稿"},
+        headers=auth_headers(admin_user),
+    )
+    assert too_short.status_code == 422
+
+    waive = await client.post(
+        f"/api/submissions/{sub['id']}/waive-review",
+        json={"reason": "编委特稿：编辑部约稿，已在内部完成双人审读"},
+        headers=auth_headers(admin_user),
+    )
+    assert waive.status_code == 200
+
+    decision = await client.patch(
+        f"/api/submissions/{sub['id']}/decision",
+        json={"decision": "accept"},
+        headers=auth_headers(admin_user),
+    )
+    assert decision.status_code == 200
+    assert decision.json()["status"] == "accepted"
+
+    logs = await client.get("/api/admin/audit-logs", headers=auth_headers(admin_user))
+    assert logs.status_code == 200
+    # 审计列表端点直接返回数组（无分页包装）。
+    actions = [row["action"] for row in logs.json()]
+    assert "submission.review_waived" in actions
 
 
 async def test_editor_decision_requires_editor(client: AsyncClient, test_user: dict) -> None:

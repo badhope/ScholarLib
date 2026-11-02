@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from fastapi import Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -56,6 +56,7 @@ from app.modules.submission.schemas import (
     SubmissionListResponse,
     SubmissionResponse,
     SubmissionReview,
+    WaiveReviewRequest,
 )
 
 logger = get_logger("rubbish.submission.editor")
@@ -65,6 +66,9 @@ logger = get_logger("rubbish.submission.editor")
 async def list_pending_submissions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    # 编辑工作台按赛道分栏：正经稿与荒诞稿的审稿人池和判断标准都不同，
+    # 混在一个队列里会让编辑反复切换上下文。
+    track: str | None = Query(default=None, pattern=r"^(serious|absurd)$"),
     _: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> SubmissionListResponse:
@@ -77,6 +81,8 @@ async def list_pending_submissions(
         Submission.status.in_(("pending", "under_review")),
         Submission.tenant_id == tenant_id,
     )
+    if track is not None:
+        query = query.where(Submission.track == track)
     return await _list_submissions(db, query, page, page_size)
 
 
@@ -573,6 +579,42 @@ async def editor_decision(
     elif decision == "rejected":
         decision = "reject"
 
+    # 录用必须有至少一份已完成的审稿意见。
+    #
+    # 此前 pending（尚未分配任何审稿人）就在允许决断的状态集合里，于是
+    # "零审稿直接录用"是 API 的正常路径——只有前端按钮的显隐在拦。对一家
+    # 声称"同行评审"的期刊，这是流程完整性的根本缺口：任何拿到编辑权限的
+    # 账号（或被接管的账号）可以绕过整个评审环节直接发文。
+    #
+    # desk accept（编辑直接录用）在真实期刊里确实存在，但它是一个需要
+    # 明确声明的例外，而不是沉默的默认路径。确需直接录用时，先走
+    # POST /{id}/waive-review 记录理由与审计，再裁决。
+    if decision == "accept":
+        from app.modules.review.models import ReviewAssignment
+
+        completed_reviews = (
+            await db.execute(
+                select(func.count(ReviewAssignment.id)).where(
+                    ReviewAssignment.submission_id == entry.id,
+                    ReviewAssignment.tenant_id == entry.tenant_id,
+                    ReviewAssignment.status == "completed",
+                )
+            )
+        ).scalar_one()
+        if completed_reviews < 1 and not entry.review_waived_at:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "no_completed_reviews",
+                    "message": (
+                        "该稿件尚无已完成的审稿意见，不能直接录用。"
+                        "请先分配审稿人并等待意见返回；"
+                        "如确需免评审录用，请先调用 waive-review 记录理由。"
+                    ),
+                    "completed_reviews": int(completed_reviews),
+                },
+            )
+
     now = utcnow()
     entry.editor_note = body.editor_note
     entry.reviewed_by = current_user.id
@@ -612,19 +654,34 @@ async def editor_decision(
 
     # 积分结算：作者侧（录用 60 / 拒稿 5）+ 编辑侧（每次裁决 8）。
     # 与业务同一事务，决策失败不会留下孤立积分。
+    #
+    # 修回（major/minor）**不发任何终态积分**：它既不是终点，也不该被
+    # 记成"拒稿"。此前用 `"accepted" if accept else "rejected"` 的三元式，
+    # 导致修回被记成 submission.rejected（+5），而幂等键是
+    # (user, action, ref_id=submission_id)，于是后续真正的拒稿奖励会被
+    # 静默吞掉——账面上作者"因为被要求修改而拿到了拒稿分"。
     from app.modules.gamification import service as gamification
 
     author = (
         await db.execute(select(User).where(User.id == entry.submitted_by))
     ).scalar_one_or_none()
     if author is not None:
-        await gamification.award(
-            db,
-            author,
-            "submission.accepted" if decision == "accept" else "submission.rejected",
-            ref_type="submission",
-            ref_id=str(entry.id),
-        )
+        if decision == "accept":
+            await gamification.award(
+                db,
+                author,
+                "submission.accepted",
+                ref_type="submission",
+                ref_id=str(entry.id),
+            )
+        elif decision == "reject":
+            await gamification.award(
+                db,
+                author,
+                "submission.rejected",
+                ref_type="submission",
+                ref_id=str(entry.id),
+            )
     await gamification.award(
         db,
         current_user,
@@ -696,6 +753,61 @@ async def editor_decision(
             )
     except Exception:
         logger.warning("decision_email_dispatch_failed", submission_id=entry.id, exc_info=True)
+    return _to_response(entry)
+
+
+@router.post(
+    "/{submission_id}/waive-review",
+    response_model=SubmissionResponse,
+)
+async def waive_review(
+    submission_id: int,
+    body: WaiveReviewRequest,
+    current_user: User = Depends(require_chief_editor),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionResponse:
+    """声明该稿件免于同行评审（desk accept 的前置步骤）。
+
+    存在的理由：真实期刊确实有不需要外审的稿件（约稿、编委特稿、纪念
+    专辑、明确的重复发表撤稿复核）。但"可以不审"必须是一个**被记录、
+    有理由、可追责**的例外，而不是沉默的默认路径——否则任何拿到编辑
+    权限的账号都能绕过整个评审流程直接发文，而事后无从分辨"快"与"漏"。
+
+    权限与裁决同级（require_chief_editor）：能免审的人必须也能负责。
+
+    幂等：重复调用只更新理由并追加审计，不报错（编辑部可能在裁决前
+    多次斟酌措辞）。
+    """
+    if len(body.reason.strip()) < 10:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="免评审理由至少 10 个字，且会写入审计日志与作者通知。",
+        )
+    entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot waive review on own submission")
+    if entry.status in ("accepted", "approved", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot waive review in terminal status '{entry.status}'",
+        )
+
+    entry.review_waived_at = utcnow()
+    entry.review_waived_by = current_user.id
+    entry.review_waive_reason = body.reason.strip()
+    db.add(
+        AuditLog(
+            tenant_id=current_user.tenant_id,
+            actor_user_id=current_user.id,
+            action="submission.review_waived",
+            target_type="submission",
+            target_id=str(entry.id),
+            # 理由必须进审计：这是"为什么这篇没走同行评审"的唯一书面依据。
+            payload={"reason": entry.review_waive_reason},
+        )
+    )
+    await db.commit()
+    await db.refresh(entry)
     return _to_response(entry)
 
 

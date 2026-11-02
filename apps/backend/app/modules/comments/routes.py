@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_tenant_id
-from app.api.levels import require_level
+from app.api.levels import require_reader
 from app.core.db import get_db, paginate
 from app.models import AuditLog, User
 from app.modules.catalog.visibility import is_public
@@ -100,7 +100,7 @@ async def list_comments(
 async def create_comment(
     payload: CommentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_level(1)),
+    current_user: User = Depends(require_reader),
 ) -> CommentResponse:
     """Post a comment (L1+; published resources only)."""
     tenant_id = require_tenant_id()

@@ -39,10 +39,11 @@ import type {
   SubmissionResponse,
   SubmissionStatus,
   SubmissionType,
+  Track,
 } from '@/lib/types'
-import { typeLabel } from '@/lib/resource-labels'
+import { trackLabel, typeLabel } from '@/lib/resource-labels'
 import { useCapabilities } from '@/hooks/use-capabilities'
-import { extractError, parseListField } from '@/lib/utils'
+import { cn, extractError, parseListField } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
@@ -104,6 +105,19 @@ const TYPE_OPTIONS: { value: SubmissionType; label: string }[] = [
   { value: 'tutorial', label: '教程' },
 ]
 
+const TRACK_OPTIONS: { value: Track; label: string; hint: string }[] = [
+  {
+    value: 'serious',
+    label: '正经研究',
+    hint: '按学术惯例评审：结构、引用、论证都要经得起推敲。',
+  },
+  {
+    value: 'absurd',
+    label: '荒诞研究',
+    hint: '选题可以离谱，但格式、引用与论证标准与正经研究完全相同。',
+  },
+]
+
 const STATUS_TABS: { value: SubmissionStatus | 'all'; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'pending', label: '待审核' },
@@ -117,6 +131,8 @@ const STATUS_TABS: { value: SubmissionStatus | 'all'; label: string }[] = [
 interface FormState {
   title: string
   type: SubmissionType
+  /** 赛道：正经 / 荒诞。决定审稿标准与读者预期，投稿时必选。 */
+  track: Track
   authors: string
   year: string
   discipline: string
@@ -138,6 +154,7 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   title: '',
   type: 'paper',
+  track: 'serious',
   authors: '',
   year: String(new Date().getFullYear()),
   discipline: '',
@@ -163,6 +180,7 @@ function submissionToForm(s: SubmissionResponse): FormState {
     type: validTypes.includes(s.type as SubmissionType)
       ? (s.type as SubmissionType)
       : 'paper',
+    track: s.track ?? 'serious',
     authors: s.authors.join(', '),
     year: String(s.year),
     discipline: s.discipline,
@@ -194,6 +212,7 @@ function presetToForm(p: IngestResource): FormState {
     ...EMPTY_FORM,
     title: p.title,
     type,
+    track: 'serious',
     // BibTeX/RIS 常给出 "Last, First" 形式：直接 join(', ') 会被
     // parseListField 按逗号拆成多个作者，先规范成 "First Last"。
     authors: p.authors
@@ -358,6 +377,7 @@ function SubmissionsPage() {
     const body: SubmissionCreate = {
       title: form.title,
       type: form.type,
+      track: form.track,
       authors: parseListField(form.authors),
       year: Number(form.year),
       discipline: form.discipline,
@@ -459,6 +479,7 @@ function SubmissionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>标题</TableHead>
+                  <TableHead className="w-24">赛道</TableHead>
                   <TableHead className="w-20">类型</TableHead>
                   <TableHead>学科</TableHead>
                   <TableHead className="w-24">状态</TableHead>
@@ -476,6 +497,20 @@ function SubmissionsPage() {
                     {/* 同 catalog 表格：长文本列 max-w+truncate，保证状态/时间/操作列在 1280px 内可见 */}
                     <TableCell className="max-w-[320px] truncate font-medium">
                       {s.title}
+                    </TableCell>
+                    <TableCell>
+                      {/* 赛道徽章：荒诞稿用琥珀色区分——读者/编辑一眼
+                          分清"这篇按什么标准写的"。 */}
+                      <Badge
+                        variant="outline"
+                        className={
+                          s.track === 'absurd'
+                            ? 'border-amber-300 bg-amber-500/10 text-amber-700'
+                            : 'border-sky-300 bg-sky-500/10 text-sky-700'
+                        }
+                      >
+                        {trackLabel(s.track)}
+                      </Badge>
                     </TableCell>
                     <TableCell>{typeLabel(s.type)}</TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
@@ -886,6 +921,30 @@ function SubmissionsPage() {
                     未选择文件（可先提交，稍后在详情里补传）
                   </span>
                 )}
+              </div>
+            </div>
+            {/* 赛道：本刊最重要的一个选择。放在类型之前，因为读者
+                读到什么、编辑按什么标准审，都由它决定。 */}
+            <div className="space-y-2">
+              <Label>赛道</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {TRACK_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => set('track', o.value)}
+                    aria-pressed={form.track === o.value}
+                    className={cn(
+                      'rounded-lg border px-3 py-2 text-left transition-colors',
+                      form.track === o.value
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'border-input hover:bg-muted/40',
+                    )}
+                  >
+                    <span className="block text-sm font-medium">{o.label}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{o.hint}</span>
+                  </button>
+                ))}
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

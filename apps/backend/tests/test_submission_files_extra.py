@@ -66,9 +66,9 @@ async def test_upload_truncates_overlong_extension(client: AsyncClient, test_use
     )
     assert r.status_code == 200
     file_path = r.json().get("file_path") or ""
-    suffix = file_path.rsplit(".", 1)[1]
-    # ext is truncated to 20 chars including the leading dot.
-    assert len(suffix) == 19 and set(suffix) == {"a"}
+    # 新语义：不合规扩展名（超长）整体丢弃而不是截断——存储 key 里
+    # 不应出现半个控制字符序列，截断可能留下它。
+    assert "." not in file_path.rsplit("/", 1)[1]
 
 
 @pytest.mark.asyncio

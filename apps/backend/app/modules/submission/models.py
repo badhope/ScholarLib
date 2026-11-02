@@ -113,7 +113,25 @@ class Submission(Base, TenantScopedMixin):
     # status 兼容旧值 pending/approved/rejected，同时支持
     # under_review/major_revision/minor_revision/resubmitted/accepted。
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    # 赛道（serious / absurd）。投稿时由作者选定，决定 RQS 评分画像与
+    # 目录/首页的呈现分组；录用物化时原样带到 catalog.resources.track。
+    # 刻意允许作者自选而非编辑判定：赛道是写作意图的声明，不是质量评级。
+    track: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="serious", server_default="serious"
+    )
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 免评审录用（desk accept）的显式豁免记录。
+    # 正常情况下录用必须有至少一份已完成的审稿意见（见 routes_editor
+    # decide_submission）。真实期刊确实存在"编辑直接录用"的场景（约稿、
+    # 编委特稿、纪念专辑），但那必须是一个被明确声明、可审计的例外，
+    # 而不是沉默的默认路径。置位后才允许零审稿录用，且理由进审计日志。
+    review_waived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    review_waived_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    review_waive_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # 编辑 4 元决定（accept/minor_revision/major_revision/reject）的备注，
     # 区别于 admin_note（兼容旧 review 端点的备注字段）
     editor_note: Mapped[str | None] = mapped_column(Text, nullable=True)

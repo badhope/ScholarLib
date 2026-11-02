@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
 import { parseListField } from '@/lib/utils'
 import { useCreateResource } from '@/hooks/api/use-modules'
-import type { PublicationStatus, ResourceCreate, ResourceType } from '@/lib/types'
+import type { PublicationStatus, ResourceCreate, ResourceType, Track } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,6 +42,7 @@ const STATUS_OPTIONS: { value: PublicationStatus; label: string }[] = [
 
 interface FormState {
   type: ResourceType
+  track: Track
   title: string
   authors: string
   year: string
@@ -70,6 +71,7 @@ function NewResourcePage() {
 
   const [form, setForm] = useState<FormState>({
     type: 'paper',
+    track: 'serious',
     title: '',
     authors: '',
     year: String(new Date().getFullYear()),
@@ -100,6 +102,7 @@ function NewResourcePage() {
     e.preventDefault()
     const body: ResourceCreate = {
       type: form.type,
+      track: form.track,
       title: form.title,
       authors: parseListField(form.authors),
       year: Number(form.year),
@@ -146,6 +149,18 @@ function NewResourcePage() {
             {/* 必填区 */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">必填信息</h3>
+              <div className="space-y-2">
+                <Label>赛道</Label>
+                <Select value={form.track} onValueChange={(v) => set('track', v as Track)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="serious">正经研究</SelectItem>
+                    <SelectItem value="absurd">荒诞研究</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="type">类型</Label>

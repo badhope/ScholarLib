@@ -32,6 +32,7 @@ from app.core import search as fulltext
 from app.core.db import get_db, paginate
 from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
+from app.core.tracks import normalize_track
 from app.models import AuditLog, User
 from app.modules.catalog.engagement import compute_engagement, journal_metrics
 from app.modules.catalog.models import Resource
@@ -112,6 +113,7 @@ def _conflict_detail(exc: IntegrityError) -> str:
 @router.get("", response_model=ResourceListResponse)
 async def list_resources(
     type: str | None = None,
+    track: str | None = Query(default=None, pattern=r"^(serious|absurd)$"),
     discipline: str | None = None,
     year: int | None = None,
     volume: str | None = None,
@@ -142,6 +144,7 @@ async def list_resources(
             tenant_id=str(tenant_id),
             q=q,
             type_=type,
+            track=track,
             discipline=discipline,
             year=year,
             page=page,
@@ -162,6 +165,10 @@ async def list_resources(
                 for resource in fetched:
                     # 索引里没有可见性字段：命中结果回表后按公开面过滤，
                     # 否则排期中（publish_at 未来）或草稿会因搜索而泄漏。
+                    # 赛道同理——索引侧不保证按 track 过滤，回表补一次，
+                    # 否则「只看荒诞」的搜索会混进正经论文。
+                    if track is not None and resource.track != track:
+                        continue
                     if is_admin or is_public(resource):
                         rows_by_id[resource.id] = resource
                     else:
@@ -190,6 +197,9 @@ async def list_resources(
             stmt = stmt.where(condition)
     if type is not None:
         stmt = stmt.where(Resource.type == type)
+    if track is not None:
+        # 赛道筛选：本刊的主导航维度之一（正经 / 荒诞），与 type 同级。
+        stmt = stmt.where(Resource.track == track)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
@@ -270,6 +280,11 @@ async def get_stats(
         .where(base_filter)
         .group_by(Resource.discipline)
     )
+    # 赛道分布：两条赛道的规模必须分开报，合起来的总数没有信息量
+    # （读者关心"有多少荒诞研究可读"，编辑关心"正经稿源够不够"）。
+    by_track_rows = await db.execute(
+        select(Resource.track, func.count(Resource.id)).where(base_filter).group_by(Resource.track)
+    )
     downloads_total = (
         await db.execute(
             select(func.coalesce(func.sum(Resource.download_count), 0)).where(base_filter)
@@ -288,6 +303,7 @@ async def get_stats(
         total=total,
         by_type={t: c for t, c in by_type_rows.all()},
         by_discipline={d: c for d, c in by_discipline_rows.all()},
+        by_track={normalize_track(t): c for t, c in by_track_rows.all()},
         downloads_total=int(downloads_total or 0),
         reads_total=int(reads_total or 0),
     )
@@ -881,6 +897,7 @@ async def create_resource(
         tenant_id=tenant_id,
         slug=payload.slug,
         type=payload.type,
+        track=payload.track,
         title=payload.title,
         authors=payload.authors,
         year=payload.year,

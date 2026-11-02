@@ -33,7 +33,7 @@ _init_failed = False
 # search result only needs ids (rows are re-fetched from the DB, which
 # remains the source of truth and applies RLS).
 _SEARCHABLE = ["title", "abstract", "authors", "keywords", "tags"]
-_FILTERABLE = ["tenant_id", "type", "discipline", "year"]
+_FILTERABLE = ["tenant_id", "type", "track", "discipline", "year"]
 
 
 def search_enabled() -> bool:
@@ -89,6 +89,9 @@ def _to_document(resource: Any) -> dict[str, Any]:
         "keywords": resource.keywords or [],
         "tags": resource.tags or [],
         "type": resource.type,
+        # track 进索引：目录的「正经/荒诞」筛选是主维度之一，若只在回表
+        # 阶段过滤，搜索分页总数会与实际可见条数对不上。
+        "track": getattr(resource, "track", "serious"),
         "discipline": resource.discipline,
         "year": resource.year,
     }
@@ -121,6 +124,7 @@ async def search_resource_ids(
     tenant_id: str,
     q: str,
     type_: str | None = None,
+    track: str | None = None,
     discipline: str | None = None,
     year: int | None = None,
     page: int = 1,
@@ -137,6 +141,8 @@ async def search_resource_ids(
     filters = [f"tenant_id = {_quote(str(tenant_id))}"]
     if type_ is not None:
         filters.append(f"type = {_quote(type_)}")
+    if track is not None:
+        filters.append(f"track = {_quote(track)}")
     if discipline is not None:
         filters.append(f"discipline = {_quote(discipline)}")
     if year is not None:

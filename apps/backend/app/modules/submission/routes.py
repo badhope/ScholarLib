@@ -91,6 +91,7 @@ async def create_submission(
         status="pending",
         title=body.title,
         type=body.type,
+        track=body.track,
         authors=body.authors,
         year=body.year,
         venue=body.venue,

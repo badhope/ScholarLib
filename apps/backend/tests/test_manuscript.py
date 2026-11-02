@@ -377,6 +377,9 @@ async def test_manuscript_public_after_publish(
     client: AsyncClient, test_user: dict, admin_user: dict
 ) -> None:
     sid = await _author_submit_with_docx(client, test_user)
+    from conftest import complete_one_review
+
+    await complete_one_review(client, admin_user, sid)
     d = await client.patch(
         f"/api/submissions/{sid}/decision",
         json={"decision": "accept"},
@@ -431,6 +434,9 @@ async def test_list_has_markdown_flag(
     client: AsyncClient, test_user: dict, admin_user: dict
 ) -> None:
     sid = await _author_submit_with_docx(client, test_user)
+    from conftest import complete_one_review
+
+    await complete_one_review(client, admin_user, sid)
     d = await client.patch(
         f"/api/submissions/{sid}/decision",
         json={"decision": "accept"},
