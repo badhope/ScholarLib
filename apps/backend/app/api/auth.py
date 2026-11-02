@@ -831,7 +831,7 @@ async def request_email_login_code(
         sender = get_email_sender()
         await sender.send(to=email, subject=subject, text=text, html=html)
         await allow_email_to(email)
-    except Exception:
+    except Exception as exc:
         logger.warning("email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
