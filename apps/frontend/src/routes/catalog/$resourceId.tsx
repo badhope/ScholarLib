@@ -40,6 +40,7 @@ import {
   languageLabel,
   qualityGrade,
   statusLabel,
+  trackLabel,
   typeLabel,
 } from '@/lib/resource-labels'
 import { Badge } from '@/components/ui/badge'
@@ -147,6 +148,17 @@ function CatalogDetailPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
+            {/* 赛道徽章：读者在读正文前先知道"这是按什么标准写的东西"。 */}
+            <Badge
+              variant="outline"
+              className={
+                data.track === 'absurd'
+                  ? 'border-amber-300 bg-amber-500/10 text-amber-700'
+                  : 'border-sky-300 bg-sky-500/10 text-sky-700'
+              }
+            >
+              {trackLabel(data.track)}
+            </Badge>
             <Badge variant="secondary">{typeLabel(data.type)}</Badge>
             {(() => {
               const level = absurdityLevel(data.absurdity_index)
