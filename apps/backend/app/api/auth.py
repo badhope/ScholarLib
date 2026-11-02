@@ -830,7 +830,7 @@ async def request_email_login_code(
     try:
         sender = get_email_sender()
         await sender.send(to=email, subject=subject, body=body, html=html)
-        await allow_email_to(email)
+        allow_email_to(email)
     except Exception as exc:
         logger.warning("email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True)
         raise HTTPException(
