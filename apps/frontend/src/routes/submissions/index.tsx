@@ -313,6 +313,17 @@ function SubmissionsPage() {
       const updated = await uploadMut.mutateAsync({ id: detail.id, file })
       setDetail(updated)
       toast.success('文件已上传')
+      // 结构报告：作者上传后立刻知道"离《投稿规范》还差什么"。
+      const report = updated.format_report
+      if (report && !report.ok) {
+        const missing = report.items.filter((i) => !i.ok).map((i) => i.label).join('、')
+        toast.warning(`已上传，但结构检查提示缺少：${missing}`, {
+          description: '点击稿件详情查看各项修正建议；不影响编辑部接收。',
+          duration: 8000,
+        })
+      } else if (report?.ok) {
+        toast.success('结构检查通过：摘要、关键词、章节与参考文献齐全')
+      }
     } catch (err) {
       toast.error(extractError(err, '上传失败'))
     }

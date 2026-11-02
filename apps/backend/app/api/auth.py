@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import json
 
+from datetime import timedelta, UTC
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,12 +33,24 @@ from app.core.captcha import verify_captcha_token
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.email import get_email_sender
+from app.core.email_code import (
+    CODE_TTL_MINUTES,
+    DAILY_SEND_LIMIT,
+    MAX_VERIFY_ATTEMPTS,
+    SEND_INTERVAL_SECONDS,
+    codes_match,
+    generate_code,
+    hash_code,
+)
+from app.core.email_templates import email_login_code as _email_login_code_template
 from app.core.email_templates import (
     duplicate_registration,
 )
+from app.core.email_templates import email_login_code as _email_login_code_template
 from app.core.email_templates import (
     reset_password as reset_password_tpl,
 )
+from app.core.email_templates import email_login_code as _email_login_code_template
 from app.core.email_templates import (
     verify_email as verify_email_tpl,
 )
@@ -52,6 +66,7 @@ from app.core.security import (
     token_version_matches,
     verify_password,
 )
+from app.core.time import utcnow
 from app.core.token_denylist import get_denylist
 from app.core.tokens import (
     RESET_PASSWORD_TOKEN_TYPE,
@@ -69,8 +84,10 @@ from app.core.totp import (
     normalize_backup_code,
     verify_totp,
 )
-from app.models import User
+from app.models import EmailLoginCode, User
 from app.schemas import (
+    EmailCodeRequest,
+    EmailCodeVerify,
     ForgotPasswordRequest,
     ORCIDUpdateRequest,
     RefreshTokenRequest,
@@ -714,6 +731,187 @@ async def resend_verification(
     response_model=MessageResponse,
     status_code=status.HTTP_200_OK,
 )
+def _as_aware(dt: datetime) -> datetime:
+    """SQLite 读回 naive datetime（无时区），PG 读回 aware——统一到 aware 再比。
+
+    测试跑在 SQLite 上；生产 PostgreSQL 不受影响。放 auth.py 顶部附近
+    是因为 request/verify 两个端点都要处理同一问题。
+    """
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+@router.post(
+    "/email-code/request",
+    response_model=MessageResponse,
+)
+async def request_email_login_code(
+    payload: EmailCodeRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """请求邮箱登录验证码。无论邮箱是否注册都返回 200（反枚举）。
+
+    节流（应用层，IP 层由 RateLimitMiddleware 兜底）：
+    - 同邮箱 60 秒内 1 条——防止输错一次就连发；
+    - 同邮箱 24 小时最多 10 条——防邮件轰炸/骚扰；
+    console 邮件后端（本地开发）把码写进日志而非返回体，不破坏反枚举。
+    """
+    tenant_id = require_tenant_id()
+    email = payload.email.strip().lower()
+    now = utcnow()
+
+    if settings.email_backend != "smtp":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="邮箱验证码登录未启用：站点尚未配置 SMTP 发信。",
+        )
+
+    # 60 秒窗口
+    recent = (
+        await db.execute(
+            select(func.count(EmailLoginCode.id)).where(
+                EmailLoginCode.tenant_id == tenant_id,
+                EmailLoginCode.email == email,
+                EmailLoginCode.created_at >= now - timedelta(seconds=SEND_INTERVAL_SECONDS),
+            )
+        )
+    ).scalar_one()
+    if recent >= 1:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="验证码发送过于频繁，请 1 分钟后再试。",
+        )
+    # 24h 窗口
+    today = (
+        await db.execute(
+            select(func.count(EmailLoginCode.id)).where(
+                EmailLoginCode.tenant_id == tenant_id,
+                EmailLoginCode.email == email,
+                EmailLoginCode.created_at >= now - timedelta(hours=24),
+            )
+        )
+    ).scalar_one()
+    if today >= DAILY_SEND_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="今日验证码请求次数已达上限，请明天再试或使用密码登录。",
+        )
+
+    # 重新请求即作废旧码（同邮箱未消费的行直接删，配合唯一约束不冲突）
+    await db.execute(
+        delete(EmailLoginCode).where(
+            EmailLoginCode.tenant_id == tenant_id,
+            EmailLoginCode.email == email,
+            EmailLoginCode.consumed_at.is_(None),
+        )
+    )
+    code = generate_code()
+    row = EmailLoginCode(
+        tenant_id=tenant_id,
+        email=email,
+        code_hash=hash_code(email, code),
+        expires_at=now + timedelta(minutes=CODE_TTL_MINUTES),
+    )
+    db.add(row)
+    await db.commit()
+
+    # 发信：查用户拿称呼（查不到 = 未注册邮箱，仍走同一响应）
+    result = await db.execute(
+        select(User).where(
+            User.tenant_id == tenant_id,
+            func.lower(User.email) == email,
+        )
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        # 反枚举：不确认存在性，也不发信（未注册邮箱发了也没意义）
+        return MessageResponse(message="如果该邮箱已注册，验证码已发送，请查收（含垃圾邮件箱）")
+
+    subject, text, html = _email_login_code_template(code, CODE_TTL_MINUTES)
+    try:
+        sender = get_email_sender()
+        await sender.send(to=email, subject=subject, text=text, html=html)
+        await allow_email_to(email)
+    except Exception:
+        logger.warning("email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="验证码邮件发送失败，请稍后再试或使用密码登录。",
+        ) from exc
+    return MessageResponse(message="验证码已发送，请查收（10 分钟内有效，含垃圾邮件箱）")
+
+
+@router.post(
+    "/email-code/verify",
+    response_model=TokenResponse | TwoFactorRequiredResponse,
+)
+async def verify_email_login_code(
+    payload: EmailCodeVerify,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse | TwoFactorRequiredResponse:
+    """用邮箱 + 6 位验证码换取登录凭据。
+
+    校验顺序刻意为：找码 → 比对 → 尝试计数 → 找用户。找码失败与码错误
+    都返回 401 "Invalid or expired code"，不区分（未注册邮箱不发码，
+    攻击者本来就无码可试，不需要额外混淆）。
+    """
+    tenant_id = require_tenant_id()
+    email = payload.email.strip().lower()
+    now = utcnow()
+
+    row = (
+        await db.execute(
+            select(EmailLoginCode)
+            .where(
+                EmailLoginCode.tenant_id == tenant_id,
+                EmailLoginCode.email == email,
+                EmailLoginCode.consumed_at.is_(None),
+            )
+            # 取最新一条：request 端点已保证生产路径同邮箱只有一条未消费码，
+            # 这里再兜一层（历史遗留行/手工插行），避免 scalar_one 直接炸。
+            .order_by(EmailLoginCode.created_at.desc(), EmailLoginCode.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is None or _as_aware(row.expires_at) < now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="验证码无效或已过期，请重新获取。",
+        )
+    if not codes_match(email, payload.code, row.code_hash):
+        row.attempts += 1
+        if row.attempts >= MAX_VERIFY_ATTEMPTS:
+            await db.delete(row)
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="验证码无效或已过期，请重新获取。",
+        )
+    row.consumed_at = now
+    await db.commit()
+
+    result = await db.execute(
+        select(User).where(
+            User.tenant_id == tenant_id,
+            func.lower(User.email) == email,
+        )
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="验证码无效或已过期，请重新获取。",
+        )
+
+    # 2FA 账户照常走 pending token：邮箱验证码只是第一因子替代，
+    # 不能绕过第二因子。
+    if user.totp_enabled_at is not None:
+        return TwoFactorRequiredResponse(
+            pending_token=create_two_factor_pending_token(user.id, user.token_version)
+        )
+    return await _issue_tokens(user, response, db)
+
+
 async def forgot_password(
     payload: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db),

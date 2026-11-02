@@ -323,8 +323,34 @@ class AuditLog(Base):
             )
 
 
+class EmailLoginCode(Base, TenantScopedMixin):
+    """一次性邮箱登录验证码（哈希存储，10 分钟有效）。
+
+    为什么做：读者记不住密码，「输邮箱收个码就进」是内容站的标准期待。
+    码只存 SHA-256 哈希；同邮箱重新请求即作废旧码；每码最多 5 次校验
+    尝试，防 6 位数字空间被在线爆破。
+    """
+
+    __tablename__ = "email_login_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # SHA-256(email:code:server_secret) 的 hex——库里泄露也不可回用
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    # 每码最多 5 次尝试；超过即作废（校验时删除）
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+
+
 __all__ = [
     "AuditLog",
+    "EmailLoginCode",
     "Base",
     "Role",
     "Tenant",

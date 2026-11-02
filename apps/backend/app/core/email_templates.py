@@ -40,8 +40,11 @@ def _shell(title: str, body_html: str, footer_note: str = "") -> str:
     </td></tr>
     <tr><td style="padding:18px 26px 22px;">
       <div style="border-top:1px solid {LINE};padding-top:14px;font-size:12px;color:{MUTED};line-height:1.7;">
-        {footer_note or "本邮件由系统自动发送，请勿直接回复。"}<br>
+        {footer_note or "本邮件由 Rubbish 编辑部系统自动发送，请勿直接回复。"}<br>
         <a href="{escape(base)}" style="color:{ACCENT};text-decoration:none;">{escape(base or site)}</a>
+        · 官方读者一群：1084870548<br>
+        <span style="color:{MUTED};">防钓鱼提示：本刊官方域名只有一个（rubbish.argjiemi.cn），
+        其他域名发来的"Rubbish"邮件均非官方；官方邮件不会索要你的密码。</span>
       </div>
     </td></tr>
   </table>
@@ -94,6 +97,34 @@ def reset_password(username: str, link: str, expire_minutes: int) -> tuple[str, 
         "你的密码不会改变。</p>",
     )
     return subject, text, html
+
+
+def email_login_code(code: str, expire_minutes: int) -> tuple[str, str, str]:
+    """邮箱验证码登录邮件。
+
+    正文只放码不放链接：码登录的用户场景往往是"手边没有密码管理器"，
+    直接可读可输入比"点链接回调 App"更符合预期。文案刻意说明"不是你
+    请求的可以忽略"，与防钓鱼页脚呼应。
+    """
+    subject = f"【{settings.site_name}】登录验证码 {code}（{expire_minutes} 分钟内有效）"
+    text = (
+        f"你的登录验证码是：{code}\n"
+        "\n"
+        f"{expire_minutes} 分钟内有效，仅可使用一次。\n"
+        "如果不是你在请求登录，请忽略本邮件——验证码作废不会影响你的账号。\n"
+        "本邮件由 Rubbish 编辑部系统发送（rubbish.argjiemi.cn）。"
+    )
+    body_html = (
+        f'<p style="margin:0 0 14px;">你正在登录 <strong>{escape(settings.site_name)}</strong>。'
+        f"本次登录验证码为：</p>"
+        f'<div style="margin:0 0 16px;padding:14px 20px;background:{PAPER};border:1px dashed {ACCENT};'
+        f'border-radius:8px;font-size:28px;font-weight:700;letter-spacing:8px;color:{INK};'
+        f'text-align:center;">{escape(code)}</div>'
+        f'<p style="margin:0 0 8px;font-size:13px;color:{MUTED};">'
+        f"{expire_minutes} 分钟内有效，仅可使用一次。请勿把验证码告诉任何人——"
+        f"编辑部工作人员不会向你索要验证码。</p>"
+    )
+    return subject, text, _shell(title="登录验证码", body_html=body_html)
 
 
 def duplicate_registration(username: str) -> tuple[str, str, str]:

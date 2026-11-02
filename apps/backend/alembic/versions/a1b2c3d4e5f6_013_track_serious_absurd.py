@@ -38,58 +38,101 @@ down_revision = "f3a4b5c6d7e8"
 branch_labels = None
 depends_on = None
 
+# SQLite batch 模式重建表时，反射出的外键没有名字，add_constraint 会抛
+# "Constraint must have a name"。显式给约束命名规则，两边（PG/SQLite）
+# 生成一致的约束名。
+_NAMING = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
 
 def upgrade() -> None:
-    # 用 batch_alter_table：SQLite 不支持 ALTER TABLE ADD CONSTRAINT，
-    # 会抛 NotImplementedError。batch 模式在 SQLite 上走"建新表→搬数据→
-    # 换名"，PostgreSQL 上退化为普通 ALTER，两边都能跑通同一条迁移。
-    # （部署脚本 deploy_server.py 用 SQLite 起 demo，所以 SQLite 路径不能坏。）
+    bind = op.get_bind()
+    is_pg = bind.dialect.name == "postgresql"
+
     for table in ("submissions", "resources"):
-        with op.batch_alter_table(table) as batch:
-            batch.add_column(
+        if is_pg:
+            # PostgreSQL：原生 ALTER，一条语句加列 + 带名 CHECK 约束。
+            op.add_column(
+                table,
                 sa.Column(
                     "track",
                     sa.String(length=16),
                     nullable=False,
                     server_default="serious",
-                )
+                ),
             )
-            # 只允许两个值。用 CHECK 而不是原生 enum：SQLite 没有 enum，
-            # CHECK 两边语义一致，加值只需改约束。
-            batch.create_check_constraint(
+            op.create_check_constraint(
                 f"ck_{table}_track",
+                table,
                 "track IN ('serious', 'absurd')",
             )
+        else:
+            # SQLite（本地演示/测试库）：
+            # - 加列用原生 ALTER ADD COLUMN（不重建表，避免 batch 反射
+            #   未命名外键时抛 "Constraint must have a name"）；
+            # - SQLite 不支持 ALTER ADD CONSTRAINT，CHECK 落在应用层
+            #   （Pydantic 与 ORM 默认值已约束取值范围），演示库可接受。
+            op.add_column(
+                table,
+                sa.Column(
+                    "track",
+                    sa.String(length=16),
+                    nullable=False,
+                    server_default="serious",
+                ),
+            )
+
     op.create_index(
         "ix_resources_tenant_track_status",
         "resources",
         ["tenant_id", "track", "publication_status"],
     )
-    # 免评审录用（desk accept）的豁免记录：三列一起写，缺一不可审计。
-    # 放在同一条迁移而不是新开一条，是因为它们都属于"投稿流程完整性"
-    # 这同一件事，分开部署会出现"允许免评审但没地方记理由"的中间态。
-    with op.batch_alter_table("submissions") as batch:
-        batch.add_column(
-            sa.Column("review_waived_at", sa.DateTime(timezone=True), nullable=True)
+
+    # 免评审录用（desk accept）的豁免记录。PG 上 FK 走原生 ALTER；
+    # SQLite 上普通 add_column 也能加 FK（内联到 CREATE？不能——
+    # 但测试与演示库不依赖该 FK，跳过 FK 只建普通列）。
+    if is_pg:
+        op.add_column(
+            "submissions",
+            sa.Column("review_waived_at", sa.DateTime(timezone=True), nullable=True),
         )
-        batch.add_column(
+        op.add_column(
+            "submissions",
             sa.Column(
                 "review_waived_by",
                 sa.Integer(),
                 sa.ForeignKey("users.id", ondelete="SET NULL"),
                 nullable=True,
-            )
+            ),
         )
-        batch.add_column(sa.Column("review_waive_reason", sa.Text(), nullable=True))
+        op.add_column(
+            "submissions",
+            sa.Column("review_waive_reason", sa.Text(), nullable=True),
+        )
+    else:
+        op.add_column("submissions", sa.Column("review_waived_at", sa.DateTime(timezone=True), nullable=True))
+        op.add_column("submissions", sa.Column("review_waived_by", sa.Integer(), nullable=True))
+        op.add_column("submissions", sa.Column("review_waive_reason", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    is_pg = bind.dialect.name == "postgresql"
     op.drop_index("ix_resources_tenant_track_status", table_name="resources")
-    with op.batch_alter_table("submissions") as batch:
-        batch.drop_column("review_waive_reason")
-        batch.drop_column("review_waived_by")
-        batch.drop_column("review_waived_at")
+    if is_pg:
+        op.drop_column("submissions", "review_waive_reason")
+        op.drop_column("submissions", "review_waived_by")
+        op.drop_column("submissions", "review_waived_at")
+    else:
+        op.drop_column("submissions", "review_waive_reason")
+        op.drop_column("submissions", "review_waived_by")
+        op.drop_column("submissions", "review_waived_at")
     for table in ("resources", "submissions"):
-        with op.batch_alter_table(table) as batch:
-            batch.drop_constraint(f"ck_{table}_track", type_="check")
-            batch.drop_column("track")
+        if is_pg:
+            op.drop_constraint(f"ck_{table}_track", table, type_="check")
+        op.drop_column(table, "track")

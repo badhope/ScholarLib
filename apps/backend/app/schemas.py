@@ -157,6 +157,19 @@ class ResendVerificationRequest(BaseModel):
         return value.strip().lower()
 
 
+class EmailCodeRequest(BaseModel):
+    """请求邮箱登录验证码。"""
+
+    email: EmailStr
+
+
+class EmailCodeVerify(BaseModel):
+    """邮箱 + 验证码登录。code 刻意用 str：前导 0（如 012345）是合法码。"""
+
+    email: EmailStr
+    code: str = Field(min_length=6, max_length=8, pattern=r"^\d{6}$")
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

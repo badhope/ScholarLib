@@ -555,3 +555,86 @@ def reflow_paragraphs(md: str) -> str:
 
 
 __all__ = ["clean", "reflow_paragraphs"]
+
+
+# ---------------------------------------------------------------------------
+# 稿件结构检测（格式自动识别）—— 给作者"离规范还差什么"的即时反馈
+# ---------------------------------------------------------------------------
+
+# 结构锚点：与 docs/editorial-standards.md「必须有的节」对应。
+_STRUCTURAL_HEADINGS = {
+    "引言": "introduction",
+    "绪论": "introduction",
+    "相关工作": "related_work",
+    "文献综述": "related_work",
+    "方法": "method",
+    "材料与方法": "method",
+    "论证框架": "method",
+    "结果": "results",
+    "讨论": "discussion",
+    "结论": "conclusion",
+    "参考文献": "references",
+    "references": "references",
+}
+
+_ABSTRACT_MARK = re.compile(r"^\s*#{1,6}\s*(摘\s*要|Abstract)\b", re.I | re.M)
+_KEYWORDS_MARK = re.compile(r"关键词|Keywords?\s*[:：]", re.I)
+
+# 篇幅分档下限（正文字符，粗估； editorial-standards 的字数档按汉字计，
+# 这里用字符数近似，宁松勿严——报告是提醒不是拒绝）。
+MIN_BODY_CHARS = 1500
+
+
+def analyze_structure(md: str | None) -> dict[str, object]:
+    """检测稿件是否满足《投稿规范》的结构要求，返回逐项报告。
+
+    这不是拒稿器：报告随上传响应返回给作者，让作者在编辑部初审之前
+    就知道"缺摘要/没有参考文献/篇幅不够"，而不是等一周等来一封退修信。
+    结构锚点与 editorial-standards.md 一一对应；标题匹配忽略编号
+    （"3 方法" 与 "### 方法" 都算命中）。
+    """
+    if not md or not md.strip():
+        return {"ok": False, "items": [], "word_count": 0}
+
+    headings = re.findall(r"^#{1,6}\s+(.+)$", md, re.M)
+    heading_norm = [re.sub(r"^[\d.、\s]+", "", h).strip().lower() for h in headings]
+    found: dict[str, bool] = {}
+    for label, slug in _STRUCTURAL_HEADINGS.items():
+        # 同一 slug 有多个锚点（引言/绪论、方法/材料与方法…），必须累积
+        # （|=）而不是覆盖：后一个锚点不命中不能抹掉前一个命中的结果。
+        hit = any(h == label.lower() or h.startswith(label.lower()) for h in heading_norm)
+        found[slug] = found.get(slug, False) or hit
+
+    has_abstract = bool(_ABSTRACT_MARK.search(md))
+    has_keywords = bool(_KEYWORDS_MARK.search(md))
+    body = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", md)  # 图片不占字数
+    body = re.sub(r"[#>*\-\|\s`]", "", body)
+    word_count = len(body)
+
+    # 必查节：引言/方法/结果/讨论/结论 + 摘要 + 参考文献
+    required = ["introduction", "method", "results", "discussion", "conclusion", "references"]
+    missing = [s for s in required if not found.get(s)]
+
+    items: list[dict[str, object]] = [
+        {"key": "abstract", "label": "摘要", "ok": has_abstract,
+         "hint": "正文开头加一段「## 摘要」"},
+        {"key": "keywords", "label": "关键词", "ok": has_keywords,
+         "hint": "摘要后加一行「关键词：a；b；c」"},
+        {"key": "references", "label": "参考文献", "ok": found.get("references", False),
+         "hint": "文末加「## 参考文献」小节（≥4 条，GB/T 7714）"},
+        {"key": "word_count", "label": "篇幅（字符）", "ok": word_count >= MIN_BODY_CHARS,
+         "hint": f"短篇 ≥2500 字（当前约 {word_count} 字符）"},
+    ]
+    for slug, zh in [
+        ("introduction", "引言"),
+        ("method", "方法"),
+        ("results", "结果"),
+        ("discussion", "讨论"),
+        ("conclusion", "结论"),
+    ]:
+        items.append({
+            "key": slug, "label": zh, "ok": bool(found.get(slug)),
+            "hint": f"缺「{zh}」一级节——对应规范 §3.1",
+        })
+
+    return {"ok": all(i["ok"] for i in items), "items": items, "word_count": word_count}

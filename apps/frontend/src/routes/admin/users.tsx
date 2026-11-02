@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { MoreHorizontal, Search } from 'lucide-react'
 import { toast } from 'sonner'
@@ -62,9 +62,19 @@ export const Route = createFileRoute('/admin/users')({
 function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [query, setQuery] = useState('')
+  // 300ms 防抖：输入每个字母都打一次 /admin/users 会造成请求风暴，
+  // 且乱序返回可能让列表"倒退"。防抖后 keystroke 只更新输入框值。
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setDebouncedQuery(query.trim())
+      setPage(1)
+    }, 300)
+    return () => window.clearTimeout(t)
+  }, [query])
   const offset = (page - 1) * PAGE_SIZE
   // 服务端过滤：本地过滤只能看到当前这一页，用户超过 50 个后搜不到老账号。
-  const { data, isLoading, isError, refetch } = useAdminUsers(PAGE_SIZE, offset, query)
+  const { data, isLoading, isError, refetch } = useAdminUsers(PAGE_SIZE, offset, debouncedQuery)
   const setActiveMut = useSetUserActive()
   const assignRoleMut = useAssignRole()
   const revokeRoleMut = useRevokeRole()

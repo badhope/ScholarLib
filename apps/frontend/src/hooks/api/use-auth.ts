@@ -153,3 +153,37 @@ export function useUpdateBio() {
     },
   })
 }
+
+// --- 邮箱验证码登录 ---
+
+export interface EmailCodeRequestResponse {
+  message: string
+}
+
+/** 请求 6 位邮箱登录验证码（60 秒节流由后端强制，前端只做倒计时 UX）。 */
+export function useRequestEmailCode() {
+  return useMutation<EmailCodeRequestResponse, Error, string>({
+    mutationFn: async (email) =>
+      (await api.post<EmailCodeRequestResponse>('/auth/email-code/request', { email })).data,
+  })
+}
+
+/** 邮箱 + 验证码换取登录凭据；2FA 账户返回 pending_token 走第二步。 */
+export function useVerifyEmailCode() {
+  const setAuth = useAuthStore((s) => s.setAuth)
+  const qc = useQueryClient()
+  return useMutation<LoginResponse, Error, { email: string; code: string }>({
+    mutationFn: async ({ email, code }) =>
+      (await api.post<LoginResponse>('/auth/email-code/verify', { email, code })).data,
+    onSuccess: (data) => {
+      if (isTwoFactorRequired(data)) return
+      setAuth(data.access_token, {
+        id: data.user_id,
+        username: data.username,
+        is_admin: data.is_admin,
+        roles: data.roles ?? [],
+      })
+      void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })
+    },
+  })
+}

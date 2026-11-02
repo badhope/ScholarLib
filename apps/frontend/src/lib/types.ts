@@ -334,6 +334,20 @@ export interface SubmissionDecision {
   publication_status?: 'published' | 'draft'
 }
 
+/** 结构报告单项（上传文件端点返回） */
+export interface FormatCheckItem {
+  key: string
+  label: string
+  ok: boolean
+  hint: string
+}
+
+export interface FormatReport {
+  ok: boolean
+  word_count: number
+  items: FormatCheckItem[]
+}
+
 export interface SubmissionResponse {
   id: number
   title: string
@@ -371,6 +385,8 @@ export interface SubmissionResponse {
   submitted_at: string
   reviewed_by?: number | null
   reviewed_at?: string | null
+  /** 结构报告：仅上传文件端点返回 */
+  format_report?: FormatReport | null
 }
 
 export interface SubmissionListResponse {

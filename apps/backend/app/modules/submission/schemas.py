@@ -129,6 +129,23 @@ class WaiveReviewRequest(BaseModel):
     reason: str = Field(min_length=10, max_length=2000)
 
 
+class FormatCheckItem(BaseModel):
+    """结构报告的单项检查结果（给作者的"离规范还差什么"）。"""
+
+    key: str
+    label: str
+    ok: bool
+    hint: str = ""
+
+
+class FormatReport(BaseModel):
+    """稿件结构报告：上传后即时生成，随响应返回。"""
+
+    ok: bool
+    word_count: int = 0
+    items: list[FormatCheckItem] = []
+
+
 class SubmissionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -168,6 +185,8 @@ class SubmissionResponse(BaseModel):
     submitted_at: datetime
     reviewed_by: int | None = None
     reviewed_at: datetime | None = None
+    # 结构报告：仅上传文件端点返回（详情/列表不返回，避免重复计算）
+    format_report: FormatReport | None = None
 
 
 class SubmissionListResponse(BaseModel):

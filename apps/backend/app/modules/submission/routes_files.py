@@ -233,7 +233,15 @@ async def upload_submission_file(
     # 替换式上传会覆盖 file_path，被替换的旧文件（及旧 md）若不清会变成孤儿对象。
     await _try_delete_storage(old_path)
     await _try_delete_storage(old_md)
-    return _to_response(entry)
+
+    resp = _to_response(entry)
+    # 结构报告：作者上传后立刻知道"离《投稿规范》还差什么"，而不是等
+    # 编辑部初审退修。转换失败（无 md）就不报——没有内容可分析。
+    if md_text:
+        from app.modules.submission.markdown_clean import analyze_structure
+
+        resp.format_report = analyze_structure(md_text)
+    return resp
 
 
 @router.get("/{submission_id}/files")

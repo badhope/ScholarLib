@@ -11,7 +11,7 @@ import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markd
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { ListTree } from 'lucide-react'
+import { ListTree, ALargeSmall, Baseline } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -23,6 +23,48 @@ import { EmptyState, Loading } from '@/components/common/state'
 // - 渲染：react-markdown（默认转义原始 HTML，XSS 面为零）+ GFM 表格
 //   + KaTeX 公式；图片为 data URI 自包含（urlTransform 白名单放行）。
 // - 阅读体验：桌面端目录侧栏（点击跳转）、参考文献折叠、滚动进度。
+/** 阅读偏好：字号/行距/衬线，localStorage 持久化（跨篇生效）。 */
+interface ReadingPrefs {
+  fontScale: number
+  lineHeight: number
+  serif: boolean
+}
+
+const READING_PREFS_KEY = 'rubbish.reading-prefs'
+
+function loadReadingPrefs(): ReadingPrefs {
+  try {
+    const raw = localStorage.getItem(READING_PREFS_KEY)
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<ReadingPrefs>
+      return {
+        fontScale: Math.min(1.5, Math.max(0.85, p.fontScale ?? 1)),
+        lineHeight: Math.min(2.4, Math.max(1.5, p.lineHeight ?? 1.95)),
+        serif: p.serif ?? true,
+      }
+    }
+  } catch {
+    /* 忽略损坏数据 */
+  }
+  return { fontScale: 1, lineHeight: 1.95, serif: true }
+}
+
+function useReadingPrefs() {
+  const [prefs, setPrefs] = useState<ReadingPrefs>(loadReadingPrefs)
+  const update = (patch: Partial<ReadingPrefs>) => {
+    setPrefs((prev) => {
+      const next = { ...prev, ...patch }
+      try {
+        localStorage.setItem(READING_PREFS_KEY, JSON.stringify(next))
+      } catch {
+        /* 私密模式忽略 */
+      }
+      return next
+    })
+  }
+  return { prefs, update }
+}
+
 interface TocEntry {
   id: string
   level: 2 | 3
@@ -212,6 +254,8 @@ export function ManuscriptView({
   const [scrollHost, setScrollHost] = useState<HTMLDivElement | null>(null)
   const [refsOpen, setRefsOpen] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
+  // 阅读偏好：字号/行距/衬线。toolbar 折叠收纳，不与目录按钮抢位。
+  const { prefs, update: updatePrefs } = useReadingPrefs()
 
   // 底部操作栏的「目录」按钮通过 window 事件唤出抽屉：目录条目是在
   // 本组件里从 Markdown 解析出来的，把状态提上去反而要重解析一遍。
@@ -434,7 +478,59 @@ export function ManuscriptView({
           </nav>
         )}
 
-        <article ref={articleRef} className="markdown-body min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+        {/* 阅读控制条：字号 / 行距 / 衬线切换。绝对定位右上，随正文滚动
+            消失不影响阅读；移动端同样可用（触点 ≥36px）。 */}
+        <div className="sticky top-2 z-10 -mb-2 flex justify-end">
+          <div className="flex items-center gap-1 rounded-full border bg-background/90 px-2 py-1 shadow-sm backdrop-blur">
+            <button
+              aria-label="减小字号"
+              className="grid h-7 w-7 place-items-center rounded-full text-xs hover:bg-muted"
+              onClick={() => updatePrefs({ fontScale: Math.max(0.85, prefs.fontScale - 0.08) })}
+            >
+              <ALargeSmall className="h-4 w-4" />
+            </button>
+            <button
+              aria-label="增大字号"
+              className="grid h-7 w-7 place-items-center rounded-full text-base hover:bg-muted"
+              onClick={() => updatePrefs({ fontScale: Math.min(1.5, prefs.fontScale + 0.08) })}
+            >
+              <ALargeSmall className="h-5 w-5" />
+            </button>
+            <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+            <button
+              aria-label="切换行距"
+              className="grid h-7 w-7 place-items-center rounded-full hover:bg-muted"
+              title={`行距 ${prefs.lineHeight.toFixed(2)}（点击在 1.6/1.95/2.3 间切换）`}
+              onClick={() => {
+                const steps = [1.6, 1.95, 2.3]
+                const idx = steps.findIndex((v) => Math.abs(v - prefs.lineHeight) < 0.01)
+                updatePrefs({ lineHeight: steps[(idx + 1) % steps.length] })
+              }}
+            >
+              <Baseline className="h-4 w-4" />
+            </button>
+            <span className="mx-0.5 h-4 w-px bg-border" aria-hidden="true" />
+            <button
+              className="rounded-full px-2 py-0.5 text-xs hover:bg-muted"
+              title="切换正文字体（衬线/无衬线）"
+              onClick={() => updatePrefs({ serif: !prefs.serif })}
+            >
+              {prefs.serif ? '宋' : '黑'}
+            </button>
+          </div>
+        </div>
+        <article
+          ref={articleRef}
+          className="markdown-body min-w-0 flex-1"
+          style={{
+            fontSize: `${prefs.fontScale}em`,
+            lineHeight: prefs.lineHeight,
+            fontFamily: prefs.serif
+              ? undefined
+              : "ui-sans-serif, system-ui, 'Noto Sans SC', sans-serif",
+          }}
+        >
           {sections.abstract ? (
             <>
               {sections.before && <ManuscriptMarkdown>{sections.before}</ManuscriptMarkdown>}
@@ -474,6 +570,7 @@ export function ManuscriptView({
             </details>
           )}
         </article>
+        </div>
       </div>
     </div>
   )
