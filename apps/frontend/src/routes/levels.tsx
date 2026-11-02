@@ -127,27 +127,27 @@ function LevelsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6">
       <PageHeader
-        title="等级体系与质量规范"
-        description="Rubbish 的权限阶梯、成就体系与论文质量评分口径。全部公开、全部冻结，改版需升版本号。"
+        title="身份体系与质量规范"
+        description="四种身份、贡献积分与论文质量评分口径。全部公开、全部冻结，改版需升版本号。"
       />
 
-      {/* 为什么有等级 */}
+      {/* 身份 vs 积分：两者的区别是这一页最重要的一句话 */}
       <Card className="border-primary/25 bg-primary/[0.03]">
         <CardContent className="space-y-3 py-5 text-sm leading-relaxed">
           <p className="flex items-center gap-2 font-medium">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            两条轨道，一套阶梯
+            身份管权限，积分只是荣誉
           </p>
           <p className="text-muted-foreground">
-            <strong className="text-foreground">投稿轨（L1–L4）</strong>
-            L1 可阅读、评论，确认投稿规范后即可投稿；L2、L3 按积分解锁，L4 必须有稿件被本刊录用——积分满 400 也只是必要条件，
-            <strong className="text-foreground">投稿并录用才是升级的重磅</strong>；
-            <strong className="text-foreground">职责轨（L5–L9）</strong>
-            L5/L6 按下方冻结标准开放申请、编辑部审批，L7 以上由编辑部按贡献直接提拔。
+            本刊有<strong className="text-foreground">四种身份</strong>：读者、作者、审稿人、编辑。
+            能做什么由身份决定——读者注册即得，作者确认《投稿规范》即得，
+            审稿人与编辑由编辑部授予。<strong className="text-foreground">积分（XP）
+            不再决定任何权限</strong>，它只回答"这个人参与了多少"：谁在持续读、
+            持续写、持续审。把参与度当成权限，只会让新读者在"还差 28 积分"
+            的提示里失去兴趣。
           </p>
           <p className="text-muted-foreground">
-            每位用户只看到自己已达到的等级与最近三个待解锁成就：等级是慢慢长出来的，
-            不是一次性铺开的权限清单。
+            申请审稿人走「申请 → 编辑部审批」；编辑由编辑部按贡献提拔，不开放申请。
           </p>
         </CardContent>
       </Card>
