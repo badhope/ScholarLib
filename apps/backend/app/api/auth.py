@@ -826,10 +826,10 @@ async def request_email_login_code(
         # 反枚举：不确认存在性，也不发信（未注册邮箱发了也没意义）
         return MessageResponse(message="如果该邮箱已注册，验证码已发送，请查收（含垃圾邮件箱）")
 
-    subject, text, html = _email_login_code_template(code, CODE_TTL_MINUTES)
+    subject, body, html = _email_login_code_template(code, CODE_TTL_MINUTES)
     try:
         sender = get_email_sender()
-        await sender.send(to=email, subject=subject, text=text, html=html)
+        await sender.send(to=email, subject=subject, body=body, html=html)
         await allow_email_to(email)
     except Exception as exc:
         logger.warning("email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True)
