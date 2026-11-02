@@ -413,6 +413,20 @@ function SubmissionsPage() {
       setEditingId(null)
       setForm(EMPTY_FORM)
     } catch (err) {
+      // 投稿 403 rules_ack_required：作者没确认当版《投稿规范》。
+      // 只报"提交失败"会让作者以为站点坏了（线上实测的高频困惑），
+      // 必须直接引导去确认，确认后本页可重试。
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data
+        ?.detail as { code?: string } | string | undefined
+      const code = typeof detail === 'object' && detail !== null ? detail.code : undefined
+      if (code === 'rules_ack_required') {
+        toast.error('投稿前需要先阅读并确认《投稿与编辑规范》', {
+          description: '正在为你打开确认页…',
+          duration: 6000,
+        })
+        void navigate({ to: '/authors' })
+        return
+      }
       toast.error(extractError(err, editingId !== null ? '更新失败' : '提交失败'))
     }
   }
