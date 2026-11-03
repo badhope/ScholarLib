@@ -14,6 +14,7 @@ import {
 import type { AssignmentStatus, Recommendation, ReviewSubmit } from '@/lib/types'
 import { typeLabel } from '@/lib/resource-labels'
 import { extractError } from '@/lib/utils'
+import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
@@ -583,9 +584,16 @@ function SubmissionDetailDialog({
                 <div className="col-span-2">
                   <span className="text-muted-foreground">外部链接：</span>
                   <a
-                    href={data.external_url}
+                    // H1：作者可控外链走协议白名单，javascript: 等一律降级。
+                    href={safeHref(data.external_url)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    title={
+                      isSafeExternalUrl(data.external_url)
+                        ? data.external_url
+                        : '该链接协议不安全，已禁用'
+                    }
+                    aria-disabled={!isSafeExternalUrl(data.external_url)}
                     className="text-blue-600 hover:underline"
                   >
                     {data.external_url}
@@ -596,9 +604,16 @@ function SubmissionDetailDialog({
                 <div className="col-span-2">
                   <span className="text-muted-foreground">下载链接：</span>
                   <a
-                    href={data.download_url}
+                    // H1：作者可控外链走协议白名单，javascript: 等一律降级。
+                    href={safeHref(data.download_url)}
                     target="_blank"
                     rel="noopener noreferrer"
+                    title={
+                      isSafeExternalUrl(data.download_url)
+                        ? data.download_url
+                        : '该链接协议不安全，已禁用'
+                    }
+                    aria-disabled={!isSafeExternalUrl(data.download_url)}
                     className="text-blue-600 hover:underline"
                   >
                     {data.download_url}

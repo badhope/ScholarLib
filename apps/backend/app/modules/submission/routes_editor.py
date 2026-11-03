@@ -67,9 +67,8 @@ logger = get_logger("rubbish.submission.editor")
 async def list_pending_submissions(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    # 编辑工作台按赛道分栏：正经稿与荒诞稿的审稿人池和判断标准都不同，
-    # 混在一个队列里会让编辑反复切换上下文。
-    track: str | None = Query(default=None, pattern=r"^(serious|absurd)$"),
+    # 赛道分栏已随赛道下线移除（见 core/tracks.py）：编辑队列不再按
+    # track 分组，文章气质由 absurdity_index 表达。
     _: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> SubmissionListResponse:
@@ -82,8 +81,6 @@ async def list_pending_submissions(
         Submission.status.in_(("pending", "under_review")),
         Submission.tenant_id == tenant_id,
     )
-    if track is not None:
-        query = query.where(Submission.track == track)
     return await _list_submissions(db, query, page, page_size)
 
 

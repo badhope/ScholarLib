@@ -22,9 +22,11 @@ import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import PdfViewer from '@/components/pdf-viewer'
 import { ManuscriptView, TOC_OPEN_EVENT } from '@/components/common/manuscript-view'
+import { isSafeExternalUrl } from '@/lib/url-safety'
 
 // Restrict reader iframe to http(s) scheme so data:/blob:/javascript:
 // URLs cannot execute content inside the PDF viewer frame.
+// 白名单实现在 src/lib/url-safety.ts（isSafeExternalUrl），此处复用；
 // http: 放行是为了同源部署（如本地 /uploads 托管的稿件文件）。
 // 游客本地进度：登录用户进度走服务端同步；未登录时进度保存在本设备
 // localStorage，同设备同浏览器下次打开续读。键随资源 id 隔离。
@@ -59,15 +61,6 @@ function writeGuestProgress(resourceId: number, value: GuestProgress): void {
     localStorage.setItem(guestProgressKey(resourceId), JSON.stringify(value))
   } catch {
     // 隐私模式等场景 localStorage 不可用：静默放弃，不影响阅读
-  }
-}
-
-function isSafeDownloadUrl(url: string): boolean {
-  try {
-    const u = new URL(url, window.location.origin)
-    return u.protocol === 'https:' || u.protocol === 'http:'
-  } catch {
-    return false
   }
 }
 
@@ -356,7 +349,7 @@ function ReaderPage() {
             />
 ) : isAuthenticated && !hasSynced ? (
  <Loading />
- ) : data.download_url && isSafeDownloadUrl(data.download_url) ? (
+ ) : data.download_url && isSafeExternalUrl(data.download_url) ? (
  <PdfViewer
               url={data.download_url}
               initialPage={page}

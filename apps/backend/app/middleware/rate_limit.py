@@ -39,7 +39,14 @@ STRICT_PATHS: dict[str, int] = {
     # 2FA 码只有 6 位数字：code 交换端点要比 /login 更紧，否则第二因子
     # 会在 pending token 的 5 分钟窗口内被暴力穷举。10 次/分 × 5 分 = 50 次
     # 尝试 vs 100 万组合，风险可接受。
+    # M1 补齐：认证链路上的其余验证码端点此前漏配，只吃全局默认阈值。
+    # - /api/auth/2fa/authenticate：与 /api/auth/login/2fa 同级（code 交换，
+    #   6 位数字，pending token 5 分钟窗口内可穷举）；
+    # - /api/auth/email-code/request：发信类从紧（对齐 resend-verification /
+    #   forgot-password 的 8 次/分），发信轰炸另有 mail_guard 按收件人兜底；
+    # - /api/auth/email-code/verify：验证码核对，对齐 reset-password 的 10 次/分。
     "/api/comments": 20,
+    "/api/auth/2fa/authenticate": 10,
     "/api/auth/login/2fa": 10,
     "/api/auth/login": 10,
     "/api/auth/register": 10,
@@ -47,6 +54,8 @@ STRICT_PATHS: dict[str, int] = {
     "/api/auth/resend-verification": 8,
     "/api/auth/forgot-password": 8,
     "/api/auth/reset-password": 10,
+    "/api/auth/email-code/request": 8,
+    "/api/auth/email-code/verify": 10,
     "/api/auth/refresh": 30,
 }
 

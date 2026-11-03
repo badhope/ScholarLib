@@ -33,24 +33,8 @@ export function typeLabel(type: string | null | undefined): string {
   return TYPE_LABELS[type] ?? type
 }
 
-// 赛道标签：正经 / 荒诞。展示口径与后端 core/tracks.py 保持一致。
-const TRACK_LABELS: Record<string, string> = {
-  serious: '正经研究',
-  absurd: '荒诞研究',
-}
-
-const TRACK_SHORT_LABELS: Record<string, string> = {
-  serious: '正经',
-  absurd: '荒诞',
-}
-
-export function trackLabel(track: string | null | undefined): string {
-  return TRACK_LABELS[track ?? 'serious'] ?? TRACK_LABELS.serious
-}
-
-export function trackShortLabel(track: string | null | undefined): string {
-  return TRACK_SHORT_LABELS[track ?? 'serious'] ?? TRACK_SHORT_LABELS.serious
-}
+// 赛道标签已随赛道下线移除（后端 core/tracks.py）：文章气质由下面的
+// 荒诞指数（absurdityLevel）表达，不再按正经/荒诞分组展示。
 
 const STATUS_LABELS: Record<string, string> = {
   published: '已发表',

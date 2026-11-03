@@ -35,12 +35,12 @@ import {
 } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceUpdate } from '@/lib/types'
 import { extractError, formatDateTime, parseListField } from '@/lib/utils'
+import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import {
   absurdityLevel,
   languageLabel,
   qualityGrade,
   statusLabel,
-  trackLabel,
   typeLabel,
 } from '@/lib/resource-labels'
 import { Badge } from '@/components/ui/badge'
@@ -148,17 +148,7 @@ function CatalogDetailPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            {/* 赛道徽章：读者在读正文前先知道"这是按什么标准写的东西"。 */}
-            <Badge
-              variant="outline"
-              className={
-                data.track === 'absurd'
-                  ? 'border-amber-300 bg-amber-500/10 text-amber-700'
-                  : 'border-sky-300 bg-sky-500/10 text-sky-700'
-              }
-            >
-              {trackLabel(data.track)}
-            </Badge>
+            {/* 赛道徽章已随赛道下线移除：文章气质由荒诞指数徽章表达。 */}
             <Badge variant="secondary">{typeLabel(data.type)}</Badge>
             {(() => {
               const level = absurdityLevel(data.absurdity_index)
@@ -381,9 +371,16 @@ function CatalogDetailPage() {
                 {data.external_url && (
                   <Button asChild variant="outline" className="w-full">
                     <a
-                      href={data.external_url}
+                      // H1：作者可控外链走协议白名单，javascript: 等一律降级。
+                      href={safeHref(data.external_url)}
                       target="_blank"
                       rel="noopener noreferrer"
+                      title={
+                        isSafeExternalUrl(data.external_url)
+                          ? data.external_url
+                          : '该链接协议不安全，已禁用'
+                      }
+                      aria-disabled={!isSafeExternalUrl(data.external_url)}
                     >
                       <ExternalLink className="h-4 w-4" />
                       外部链接
@@ -1018,10 +1015,17 @@ function MobileDetailActions({
           </button>
           {externalUrl && (
             <a
-              href={externalUrl}
+              // H1：作者可控外链走协议白名单，javascript: 等一律降级。
+              href={safeHref(externalUrl)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setMoreOpen(false)}
+              title={
+                isSafeExternalUrl(externalUrl)
+                  ? externalUrl
+                  : '该链接协议不安全，已禁用'
+              }
+              aria-disabled={!isSafeExternalUrl(externalUrl)}
               className="flex min-h-[48px] items-center gap-3 rounded-md px-2 text-left text-sm hover:bg-accent"
             >
               <ExternalLink className="h-5 w-5 shrink-0 text-muted-foreground" />

@@ -96,7 +96,12 @@ class Settings(BaseSettings):
     previous_secret_keys: str = Field(default="")
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
-    algorithm: str = "HS256"
+    # M3 加固：JWT 签名算法收窄为枚举。项目签名/验签全部经由
+    # app.core.tokens / app.core.key_rotation / app.api.oidc，实际只支持
+    # HMAC（HS*，配合 secret_key）与 RS256/ES256（非对称密钥部署）。
+    # pydantic Literal 校验在启动时生效：配置了枚举之外的算法（如
+    # "none" 或拼写错误）直接拒绝启动，而不是带病运行到运行时才炸。
+    algorithm: Literal["HS256", "HS384", "HS512", "RS256", "ES256"] = "HS256"
     refresh_token_cookie_name: str = "rubbish_refresh"
     # Symmetric key for at-rest encryption of secrets we cannot hash (i.e.
     # TOTP seeds, where we need to recover the cleartext to compute the

@@ -480,7 +480,7 @@ function DiscoverTabs({
                 },
                 {
                   title: '投稿开放',
-                  body: '注册即可投稿，正经与荒诞两个赛道，无需申请、无需介绍信。',
+                  body: '注册即可投稿，统一评审标准、每篇标注荒诞指数（0–10），无需申请、无需介绍信。',
                 },
                 {
                   title: '读者活动',
@@ -584,9 +584,9 @@ function HomePage() {
   const resources = data?.data ?? []
   const total = stats?.total ?? 0
   const disciplines = stats ? Object.keys(stats.by_discipline).length : 0
-  // 双赛道分布：首页第二张卡直接展示"正经/荒诞"的规模对比，
-  // 这是本刊与其他期刊最不同的一点，必须第一屏可见。
-  const tracks = stats?.by_track ?? {}
+  // 荒诞指数均值：赛道下线后，首页第二张卡改用荒诞指数均值回答
+  // "这本刊物有多正经"，口径见 /api/catalog/journal-metrics。
+  const absurdityMedian = metrics?.absurdity_index_median
 
   // 滚动入场：motion 14.5.0 的 whileInView 在本项目不触发（线上同样复现），
   // 改由原生 IntersectionObserver 驱动 animate；容器保留原本的 stagger variants。
@@ -752,19 +752,18 @@ function HomePage() {
             >
               {[
                 // 四项都必须回答读者/作者真正关心的问题：
-                // 有多少可读、覆盖多广、两条赛道各多少、审稿要多久。
+                // 有多少可读、覆盖多广、内容气质如何、审稿要多久。
                 // 「累计阅读」这种虚荣指标留给后台看，不放在期刊门面。
                 { label: '已刊文章', node: <CountUpNumber target={total} /> },
                 { label: '覆盖学科', node: <CountUpNumber target={disciplines} /> },
                 {
-                  label: '正经 / 荒诞',
-                  node: (
-                    <span className="tabular-nums">
-                      {tracks.serious ?? 0}
-                      <span className="mx-1 text-2xl opacity-40">/</span>
-                      {tracks.absurd ?? 0}
-                    </span>
-                  ),
+                  label: '荒诞指数均值',
+                  node:
+                    absurdityMedian != null ? (
+                      <span className="tabular-nums">{absurdityMedian.toFixed(1)} / 10</span>
+                    ) : (
+                      <span className="text-2xl text-muted-foreground">—</span>
+                    ),
                 },
                 {
                   label: '平均审稿天数',

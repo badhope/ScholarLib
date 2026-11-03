@@ -38,20 +38,20 @@ const ACCEPT_CRITERIA: Array<{ title: string; body: string }> = [
   },
   {
     title: '清晰的写作',
-    body: '无论正经还是荒诞，行文要完整：摘要、引言、方法（或论证）、结论缺一不可。荒诞研究的论证同样要像模像样。',
+    body: '行文要完整：摘要、引言、方法（或论证）、结论缺一不可。荒诞选题的论证同样要像模像样。',
   },
 ]
 
-const BOTH_TRACKS = [
+const ACCEPTED_KINDS = [
   {
     icon: BookOpenCheck,
-    title: '正经研究（Serious Track）',
+    title: '正经研究',
     body: '标准学术论文：实证研究、综述、方法论、案例分析。按通行学术规范评审，双盲评审照常执行。',
   },
   {
     icon: Sparkles,
-    title: '荒诞研究（Absurd Track）',
-    body: '我们正式承认荒诞题材的学术价值：从「奶蛙形象与传统文化叙事」到「食堂窗口拥挤度预测」，只要论证自洽、格式规范、有趣而不伤人，编辑部照单全收。传统刊物嫌它荒诞，我们嫌它不够荒诞。',
+    title: '荒诞研究',
+    body: '我们正式承认荒诞题材的学术价值：从「奶蛙形象与传统文化叙事」到「食堂窗口拥挤度预测」，只要论证自洽、格式规范、有趣而不伤人，编辑部照单全收。传统刊物嫌它荒诞，我们嫌它不够荒诞。稿件不再分赛道投稿——统一评审标准，发表时按荒诞指数（0–10）标注离谱程度。',
   },
 ]
 
@@ -86,13 +86,13 @@ function AuthorsPage() {
 
       <div className="space-y-10">
         <RevealSection>
-          <h2 className="text-xl font-medium">双轨收录</h2>
+          <h2 className="text-xl font-medium">收录范围</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Rubbish 是一家正经与荒诞兼容的开放获取期刊。两个赛道共用同一套格式与伦理标准，
-            稿件会在目录中标注所属气质。
+            Rubbish 是一家正经与荒诞兼容的开放获取期刊。全部稿件共用同一套格式与伦理标准，
+            同一条评审流水线，文章的离谱程度由编辑部评定的荒诞指数（0–10）标注。
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            {BOTH_TRACKS.map(({ icon: Icon, title, body }) => (
+            {ACCEPTED_KINDS.map(({ icon: Icon, title, body }) => (
               <Card key={title} className="h-full">
                 <CardContent className="p-5">
                   <p className="flex items-center gap-2 font-medium">
@@ -188,7 +188,7 @@ function AuthorsPage() {
           <h2 className="text-xl font-medium">结构规范</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             本刊采用「结构化写作」：每一节都有明确的功能，不按功能写的稿件会在初审被退回补全，
-            而不是直接拒稿。以下规范对两个赛道同等适用——荒诞研究的论证同样要经得起结构审查。
+            而不是直接拒稿。以下规范对全部稿件同等适用——荒诞选题的论证同样要经得起结构审查。
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
@@ -198,7 +198,7 @@ function AuthorsPage() {
               },
               {
                 title: '摘要四要素',
-                body: '200–350 字，写清「问题 / 方法 / 结果 / 结论」。不写「本文具有重要意义」这类空转句；荒诞研究也要让读者读完摘要就知道你严肃地荒诞什么。',
+                body: '200–350 字，写清「问题 / 方法 / 结果 / 结论」。不写「本文具有重要意义」这类空转句；荒诞选题也要让读者读完摘要就知道你严肃地荒诞什么。',
               },
               {
                 title: '图表三原则',
@@ -206,7 +206,7 @@ function AuthorsPage() {
               },
               {
                 title: '引用纪律',
-                body: 'GB/T 7714-2015 顺序编码制，≥ 8 条，全部可在 DOI 或公开数据库核实。编造引用一经发现即退稿并记入作者信用记录——这条没有例外，包括荒诞赛道。',
+                body: 'GB/T 7714-2015 顺序编码制，≥ 8 条，全部可在 DOI 或公开数据库核实。编造引用一经发现即退稿并记入作者信用记录——这条没有例外，荒诞选题也一样。',
               },
               {
                 title: '三段声明',

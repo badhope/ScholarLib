@@ -241,6 +241,15 @@ async def authenticate_2fa(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired 2FA token",
         )
+    # M2 加固：pending token 携带签发时的 token_version。若签发后发生过
+    # 登出全部设备 / 改密 / 关闭 2FA 等 token_version 自增事件，旧 pending
+    # token 必须作废——否则一个已失效的 pending token 仍可在 5 分钟窗口内
+    # 完成第二因子验证。
+    if claims.get("token_version") is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired 2FA token",
+        )
     if (payload.code is None) == (payload.backup_code is None):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -259,6 +268,13 @@ async def authenticate_2fa(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="2FA is not enabled on this account",
+        )
+    # token_version 校验放在 user 加载之后：需要与用户当前版本比对。
+    # 与 /auth/login/2fa（auth.py）的既有口径一致。
+    if int(claims.get("token_version", -1)) != int(user.token_version):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired 2FA token",
         )
     if not user.totp_secret_encrypted:
         raise HTTPException(
@@ -352,7 +368,18 @@ async def disable_2fa(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="2FA secret cannot be decrypted",
             ) from exc
-        ok = verify_totp(secret, payload.code) is not None
+        # M2 加固：与 /auth/2fa/authenticate 相同的重放保护——同一（或更早）
+        # time-step 的码只允许使用一次。此前 disable 端点直接 verify_totp
+        # 不带 last_counter，一条被钓鱼/截获的验证码在 30 秒窗口内既能登录
+        # 也能关 2FA。通过校验后立即记录 counter。
+        counter = verify_totp(
+            secret,
+            payload.code,
+            last_counter=current_user.totp_last_used_counter or -1,
+        )
+        ok = counter is not None
+        if counter is not None:
+            current_user.totp_last_used_counter = counter
     else:
         # Explicit check (not `assert`): assertions are stripped under
         # `python -O`, and this is an authentication path.

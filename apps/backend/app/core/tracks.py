@@ -1,16 +1,17 @@
-"""赛道（track）——本刊唯一的产品分野，口径唯一真源。
+"""赛道（track）——历史遗留字段，已下线，仅保留荒诞指数。
 
-Rubbish 不是"一个正经期刊 + 一个玩笑栏目"，而是**两本共用同一套形式规范的
-期刊合订在一处**：
+历史背景：本刊曾有 serious / absurd 双赛道（正经研究 / 荒诞研究），但每篇
+论文同时带有编辑部评定的荒诞指数（absurdity_index 0–10），后者已完整覆盖
+"这篇有多荒诞"的信息维度，赛道成了冗余口径，现已下线。
 
-- ``serious``（正经研究）：按学术惯例评审，读者预期是"这是真研究"。
-- ``absurd``（荒诞研究）：选题可以离谱，但**格式、引用、论证与伦理标准
-  完全相同**——荒诞靠选题本身成立，不靠放松要求。
+兼容策略（不做 DB 破坏性迁移）：
 
-这个区分必须进数据，而不是只活在文案里：
-- 评审时编辑要据此匹配评审人（荒诞稿常需要能接住玩笑的审稿人）；
-- 阅读时读者要据此选择预期（把荒诞稿当正经研究引用会闹笑话）；
-- 统计时要分赛道报（合起来的接收率没有意义）。
+- ``serious`` / ``absurd`` 两列（resources.track / submissions.track）原样
+  保留，历史数据不清洗；
+- 本模块把合法取值收敛为 ``"serious"``：``normalize_track`` 把任何非
+  serious 输入（含旧客户端传的 ``"absurd"``）归一为 serious，保证旧客户端
+  不会被 422 拒掉；
+- 展示层不再呈现赛道，读者以荒诞指数（absurdityLevel）区分文章气质。
 
 放在 core 而不是任一模块里：submission 与 catalog 都要用，且二者默认
 不互相 import（见 docs/ARCHITECTURE.md「模块之间默认不互相 import」）。
@@ -20,37 +21,34 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-Track = Literal["serious", "absurd"]
+Track = Literal["serious"]
 
 DEFAULT_TRACK: Final[Track] = "serious"
-ALL_TRACKS: Final[tuple[Track, ...]] = ("serious", "absurd")
+ALL_TRACKS: Final[tuple[Track, ...]] = ("serious",)
 
-# 展示口径：数据库存 slug，前端/邮件/导出取这里的文案。
-# 刻意不叫"正经/不正经"或"严肃/搞笑"——后者暗示荒诞赛道不用认真写。
+# 展示口径：数据库存 slug。赛道下线后仅剩 serious 一项，保留映射是为了
+# 导出/邮件等历史消费方不至于 KeyError。
 TRACK_LABELS: Final[dict[str, str]] = {
     "serious": "正经研究",
-    "absurd": "荒诞研究",
 }
 
 TRACK_SHORT_LABELS: Final[dict[str, str]] = {
     "serious": "正经",
-    "absurd": "荒诞",
 }
 
 TRACK_DESCRIPTIONS: Final[dict[str, str]] = {
-    "serious": "提出可被反驳的研究问题，按学术惯例组织论证与引用。",
-    "absurd": "选题可以离谱，但格式、引用与论证标准与正经研究完全相同。",
+    "serious": "统一评审标准：格式、引用与论证要求对全部稿件一致，"
+    "文章气质由每篇论文的荒诞指数（0–10）标注。",
 }
 
 
 def normalize_track(value: str | None) -> Track:
     """Coerce an arbitrary string to a valid track, defaulting conservatively.
 
-    历史数据没有 track 列时全部落到 ``serious``：把正经论文误标成荒诞的
-    伤害（读者以为是玩笑、编辑按玩笑标准审）远大于反过来。
+    赛道已下线：任何非 ``serious`` 的输入（含历史 ``absurd``、None、
+    任意脏数据）一律归一为 ``serious``。归一而非拒绝，保证旧客户端
+    传 ``absurd`` 不会被 422 拒掉，历史数据也无需清洗。
     """
-    if value in ALL_TRACKS:
-        return value  # type: ignore[return-value]
     return DEFAULT_TRACK
 
 
