@@ -10,7 +10,7 @@
 #       ...
 #   }
 
-rubbish.example.com {
+rubbish.argjiemi.cn {
 	# API — reverse proxy to the backend service.
 	handle_path /api/* {
 		reverse_proxy backend:8000 {
