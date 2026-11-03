@@ -68,4 +68,26 @@ describe('ManuscriptView', () => {
  expect(dialog.textContent).not.toContain('假标题')
  expect(dialog.textContent?.match(/方法/g)).toHaveLength(2)
  })
+
+ it('渲染前剥离 Word 转换残留的 HTML 注释', async () => {
+  renderView('# 标题\n\n<!-- Start of picture text -->\n\n正文第一段。\n\n<!--\n多行注释\n也应被剥掉\n-->\n\n正文第二段。')
+  expect(await screen.findByText('正文第一段。')).toBeInTheDocument()
+  expect(screen.queryByText(/Start of picture text/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/End of picture text/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/多行注释/)).not.toBeInTheDocument()
+  expect(screen.getByText('正文第二段。')).toBeInTheDocument()
+ })
+
+ it('图片 404 时显示占位元素而不是把 alt 长文本当正文渲染', async () => {
+  const longAlt = 'E=mc^2 整段 LaTeX 公式回退内容，原图 404 时不应以正文形式出现'
+  renderView(`## 1 引言\n\n正文。\n\n![${longAlt}](data:image/png;base64,AAAABBBB)`)
+  const img = await screen.findByAltText(longAlt)
+  // 模拟原图加载失败（404）
+  fireEvent.error(img)
+  const placeholder = await screen.findByText('插图缺失（原图未上传）')
+  expect(placeholder).toBeInTheDocument()
+  // alt 长文本不作为可见文字渲染（只保留在 aria-label 里）
+  expect(screen.queryByText(/LaTeX 公式回退内容/)).not.toBeInTheDocument()
+  expect(placeholder).toHaveAttribute('aria-label', longAlt)
+ })
 })
