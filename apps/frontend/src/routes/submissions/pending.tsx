@@ -36,6 +36,7 @@ import { typeLabel } from '@/lib/resource-labels'
 import { extractError, formatDateTime } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
+import { useRequestRework } from '@/hooks/api/use-modules'
 import { Pagination } from '@/components/common/pagination'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
@@ -195,6 +196,10 @@ function PendingSubmissionsPage() {
   const [assignTarget, setAssignTarget] = useState<SubmissionResponse | null>(null)
   const [assignmentsTarget, setAssignmentsTarget] = useState<SubmissionResponse | null>(null)
   const [decisionTarget, setDecisionTarget] = useState<SubmissionResponse | null>(null)
+  // D 级打回：展开/收起 + 逐行填写的修改要求
+  const [reworkOpen, setReworkOpen] = useState(false)
+  const [reworkRequirements, setReworkRequirements] = useState('')
+  const reworkMut = useRequestRework()
   // 拒稿是终态决定，二次确认后才真正执行
   const [rejectConfirm, setRejectConfirm] = useState(false)
   const [reportsTarget, setReportsTarget] = useState<SubmissionResponse | null>(null)
@@ -510,6 +515,70 @@ function PendingSubmissionsPage() {
               />
             </div>
           </div>
+
+          {/* D 级打回：评分不达标时不直接拒稿，而是要求审稿人补审/作者修改。
+              与"做决定"并列而不是藏在菜单里——它是与录用/拒稿同级的处置。 */}
+          <div className="space-y-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-destructive">打回补审（D 级处置）</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setReworkOpen((v) => !v)}
+                type="button"
+              >
+                {reworkOpen ? '收起' : '发起打回'}
+              </Button>
+            </div>
+            {reworkOpen && (
+              <div className="space-y-2">
+                <p className="text-[11px] text-muted-foreground">
+                  打回会同时通知审稿人（补审或说明理由）与作者（逐条修改要求）。
+                  至少填 3 条具体问题——只说"不合格"对作者没有帮助。
+                </p>
+                {(decisionTarget?.quality_grade === 'D' || decisionTarget?.quality_score != null && decisionTarget.quality_score < 60) && (
+                  <p className="rounded bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+                    当前评分 {decisionTarget?.quality_score ?? '—'} 分（D 级），按规范不能直接录用。
+                  </p>
+                )}
+                <Textarea
+                  placeholder="每行一条修改要求，至少 3 行（例如：补充样本量的说明）"
+                  value={reworkRequirements}
+                  onChange={(e) => setReworkRequirements(e.target.value)}
+                  rows={4}
+                  className="text-xs"
+                />
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={reworkMut.isPending}
+                  onClick={async () => {
+                    const reqs = reworkRequirements
+                      .split(String.fromCharCode(10))
+                      .map((x) => x.trim())
+                      .filter(Boolean)
+                    if (reqs.length < 3) {
+                      toast.error('请至少填写 3 条具体修改要求')
+                      return
+                    }
+                    if (!decisionTarget) return
+                    try {
+                      await reworkMut.mutateAsync({ id: decisionTarget.id, requirements: reqs })
+                      toast.success('已打回：审稿人与作者都已收到通知')
+                      setReworkOpen(false)
+                      setReworkRequirements('')
+                      setDecisionTarget(null)
+                    } catch (err) {
+                      toast.error(extractError(err, '打回失败'))
+                    }
+                  }}
+                >
+                  {reworkMut.isPending ? '提交中…' : '确认打回'}
+                </Button>
+              </div>
+            )}
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDecisionTarget(null)}>
               取消

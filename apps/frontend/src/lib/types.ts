@@ -389,6 +389,9 @@ export interface SubmissionResponse {
   reviewed_at?: string | null
   /** 结构报告：仅上传文件端点返回 */
   format_report?: FormatReport | null
+  /** 质量评分（物化后的资源上读取；投稿阶段可能为空） */
+  quality_score?: number | null
+  quality_grade?: string | null
 }
 
 export interface SubmissionListResponse {
@@ -825,9 +828,17 @@ export interface Announcement {
 }
 
 // --- Quality rubric ---
+export interface QualityDimension {
+  key: string
+  label: string
+  /** 这一维到底在问什么（v2.0 起提供） */
+  hint?: string
+  max_score?: number
+}
+
 export interface QualityRubric {
   version: string
-  dimensions: { key: string; label: string }[]
+  dimensions: QualityDimension[]
   profiles: Record<string, { label: string; weights: Record<string, number> }>
   grades: { code: string; label: string; min: number; max: number }[]
   required_sections: string[]
@@ -836,6 +847,65 @@ export interface QualityRubric {
   length_tiers: Record<string, { short: number; medium: number; long: number }>
   abstract_band: [number, number]
   coefficient_formula: string
+  /** 0–5 分锚点（v2.0 起） */
+  score_anchors?: { score: number; meaning: string }[]
+  /** 学术诚信一票否决的说明 */
+  integrity_veto?: string
+  /** D 级处置说明 */
+  grade_d_action?: string
+}
+
+/** 一个维度的评分（审稿人提交） */
+export interface DimensionScoreInput {
+  key: string
+  score: number
+  reason: string
+}
+
+export interface QualityScoreResult {
+  rubric_version: string
+  article_type: string
+  article_type_label: string
+  score: number
+  grade: string
+  grade_label: string
+  coefficient: number
+  breakdown: Record<
+    string,
+    {
+      label: string
+      score: number
+      max_score: number
+      points: number
+      max_points: number
+      ratio: number
+      reason: string
+    }
+  >
+  integrity_veto: boolean
+  overridden: boolean
+  requires_rework: boolean
+  auto_precheck?: { level: string; dimension: string; message: string }[]
+}
+
+/** 审稿评分表单里的一个检查项 */
+export interface QualityCheckItem {
+  key: string
+  question: string
+  weight: number
+}
+
+export interface QualityFormDimension {
+  key: string
+  label: string
+  hint: string
+  items: QualityCheckItem[]
+}
+
+export interface QualityForm {
+  dimensions: QualityFormDimension[]
+  answers: { value: string; label: string }[]
+  score_anchors: { score: number; meaning: string }[]
 }
 
 // --- Issue plan（发布日历）---

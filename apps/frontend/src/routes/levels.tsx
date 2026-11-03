@@ -239,7 +239,7 @@ function LevelsPage() {
       {/* 质量评分 */}
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          <BookOpen className="h-4 w-4" /> 论文质量评分（RQS v1.0）
+          <BookOpen className="h-4 w-4" /> 论文质量评分（RQS v2.0）
         </h2>
         {rubric.isLoading ? (
           <Loading />
@@ -247,6 +247,25 @@ function LevelsPage() {
           <ErrorState message="加载评分规范失败" onRetry={() => rubric.refetch()} />
         ) : (
           <div className="space-y-4">
+            {/* 维度说明：v2.0 的核心变化是「评价值」而非「评形式」，
+                必须让读者看懂每一维到底在问什么。 */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">评价维度（每一维都要求评分者写理由）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {rubric.data.dimensions.map((d) => (
+                    <li key={d.key} className="rounded-md border bg-muted/30 px-3 py-2">
+                      <p className="text-[13px] font-medium">{d.label}</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                        {(d as { hint?: string }).hint}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {Object.entries(rubric.data.profiles).map(([key, profile]) => (
                 <Card key={key} className="bg-card/60">
@@ -289,9 +308,17 @@ function LevelsPage() {
                   ))}
                 </div>
                 <p className="text-muted-foreground">
-                  评分七维加权满分 100；纯度系数（QC）＝ RQS ÷ 50，范围 0.00–2.00，
-                  仅作展示用，不构成任何影响因子。评分口径按稿件类型（研究论文 / 综述 / 随笔 / 研究简报）
-                  分别加权，权重冻结在代码里，保证不同月份入库的文章可比较。
+                  七个学术价值维度加权满分 100；纯度系数（QC）＝ RQS ÷ 50，范围 0.00–2.00，
+                  仅作展示用，不构成任何影响因子。权重按稿件类型（研究论文 / 综述 / 随笔 / 研究简报）
+                  分别设定，冻结在代码里，保证不同月份入库的文章可比较。
+                </p>
+                <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <strong>D 级（&lt;60）不直接拒稿，而是打回</strong>：通知审稿人补审或说明理由，
+                  同时把逐条修改要求发给作者。最常见的 D 级成因是「审稿人没细看」，直接拒稿会冤枉作者。
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  学术诚信维度为<strong>一票否决</strong>：发现编造数据或引用，该维度记 0 分，
+                  全篇直接判 D——无论其他维度多高。
                 </p>
                 <p className="text-xs text-muted-foreground">
                   结构要求（研究论文）：{rubric.data.profile_sections.research?.join('、')}；

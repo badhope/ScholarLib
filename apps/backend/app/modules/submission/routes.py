@@ -126,7 +126,7 @@ async def list_my_submissions(
     status_filter: str = Query(
         default=None,
         alias="status",
-        pattern=r"^(pending|under_review|major_revision|minor_revision|resubmitted|accepted|approved|rejected)$",
+        pattern=r"^(pending|under_review|major_revision|minor_revision|resubmitted|rework_requested|accepted|approved|rejected)$",
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -201,7 +201,7 @@ async def update_submission(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only the submitter can edit the submission",
         )
-    if entry.status not in ("pending", "major_revision", "minor_revision"):
+    if entry.status not in ("pending", "major_revision", "minor_revision", "rework_requested"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot edit submission in status '{entry.status}'",

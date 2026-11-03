@@ -57,6 +57,9 @@ import type {
   UnreadCountResponse,
   UserResponse,
   VolumeInfo,
+  QualityForm,
+  DimensionScoreInput,
+  QualityScoreResult,
 } from '@/lib/types'
 
 // query key 工厂，避免散落字符串
@@ -1174,6 +1177,64 @@ export function usePublishIssue() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['catalog'] })
       void qc.invalidateQueries({ queryKey: keys.issuePlan() })
+    },
+  })
+}
+
+// --- 质量评分 v2.0（审稿表单 / 算分 / 改分 / 打回） ---
+
+export function useQualityForm() {
+  return useQuery<QualityForm>({
+    queryKey: [...keys.quality.rubric(), 'form'],
+    queryFn: async () => (await api.get<QualityForm>('/quality/form')).data,
+    staleTime: 30 * 60_000,
+  })
+}
+
+/** 按检查项答案折算建议分（无需登录，作者自查也能用）。 */
+export function useSuggestScores() {
+  return useMutation<
+    { dimensions: Record<string, { label: string; suggested_score: number; items: unknown[] }> },
+    Error,
+    Record<string, string>
+  >({
+    mutationFn: async (answers) => (await api.post('/quality/suggest', { answers })).data,
+  })
+}
+
+/** 服务端算分（审稿人）：返回总分、等级、逐维明细。 */
+export function useComputeQualityScore() {
+  return useMutation<
+    QualityScoreResult,
+    Error,
+    { article_type: string; dimensions: DimensionScoreInput[] }
+  >({
+    mutationFn: async (body) => (await api.post('/quality/score', body)).data,
+  })
+}
+
+/** 管理员改分（必须写理由）。 */
+export function useOverrideQualityScore() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, { score: number; reason: string }>({
+    mutationFn: async (body) => (await api.post('/quality/override', body)).data,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.quality.rubric() }),
+  })
+}
+
+/** D 级打回：通知审稿人补审 + 作者修改。 */
+export function useRequestRework() {
+  const qc = useQueryClient()
+  return useMutation<
+    SubmissionResponse,
+    Error,
+    { id: number; requirements: string[]; note?: string }
+  >({
+    mutationFn: async ({ id, ...body }) =>
+      (await api.post<SubmissionResponse>(`/submissions/${id}/rework`, body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

@@ -69,12 +69,18 @@ const RECOMMENDATION_OPTIONS: { value: Recommendation; label: string }[] = [
   { value: 'reject', label: '拒稿（Reject）' },
 ]
 
-// 4 个通用评分维度（1-5），其他维度可走 scores 自由结构
+// 与后端 RQS v2.0 的七个学术价值维度一一对应（rubric.py）。
+// 旧的 originality/methodology/clarity/significance 四个临时维度已废弃——
+// 它们与公开的评分口径对不上，导致"审稿人打分"与"文章页展示的 RQS"是
+// 两套互不相干的数字。
 const SCORE_DIMENSIONS = [
-  { key: 'originality', label: '原创性' },
-  { key: 'methodology', label: '方法学' },
-  { key: 'clarity', label: '清晰度' },
-  { key: 'significance', label: '重要性' },
+  { key: 'problem', label: '问题价值' },
+  { key: 'argument', label: '论证链' },
+  { key: 'method', label: '方法透明度' },
+  { key: 'evidence', label: '证据强度' },
+  { key: 'novelty', label: '创新与定位' },
+  { key: 'integrity', label: '学术诚信' },
+  { key: 'presentation', label: '表达与结构' },
 ]
 
 function statusBadge(status: AssignmentStatus) {
@@ -103,7 +109,15 @@ interface ReviewFormState {
 
 const EMPTY_REVIEW: ReviewFormState = {
   recommendation: 'minor_revision',
-  scores: { originality: 3, methodology: 3, clarity: 3, significance: 3 },
+  scores: {
+    problem: 3,
+    argument: 3,
+    method: 3,
+    evidence: 3,
+    novelty: 3,
+    integrity: 5,
+    presentation: 3,
+  },
   comments_to_editor: '',
   comments_to_author: '',
 }
@@ -333,8 +347,12 @@ function ReviewWorkbenchPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>评分（1-5）</Label>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <Label>评分（1–5）· 对应公开的 RQS v2.0 七个维度</Label>
+              <p className="text-[11px] text-muted-foreground">
+                学术诚信为 0 分即全篇判 D（一票否决）。完整检查项与 0–5 锚点见
+                「等级与规范」页。
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {SCORE_DIMENSIONS.map((dim) => (
                   <div key={dim.key} className="space-y-1">
                     <Label htmlFor={`score-${dim.key}`} className="text-xs">

@@ -54,6 +54,7 @@ from app.modules.submission.schemas import (
     ReviewerCandidateListResponse,
     SubmissionDecision,
     SubmissionListResponse,
+    ReworkRequest,
     SubmissionResponse,
     SubmissionReview,
     WaiveReviewRequest,
@@ -126,7 +127,7 @@ async def list_submissions(
     status_filter: str = Query(
         default=None,
         alias="status",
-        pattern=r"^(pending|under_review|major_revision|minor_revision|resubmitted|accepted|approved|rejected)$",
+        pattern=r"^(pending|under_review|major_revision|minor_revision|resubmitted|rework_requested|accepted|approved|rejected)$",
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -641,6 +642,35 @@ async def editor_decision(
                 db, entry, publication_status=body.publication_status
             )
             entry.resource_id = new_resource.id
+        # D 级不能直接录用：评分低于 60 意味着"当前形态不能发表"。
+        # 这不是提示而是硬约束——否则评分体系对最终处置没有任何约束力，
+        # 编辑部可以一边给 D 一边照发，分数就成了装饰。
+        target_resource = (
+            await db.execute(
+                select(Resource).where(
+                    Resource.id == entry.resource_id,
+                    Resource.tenant_id == entry.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if (
+            target_resource is not None
+            and target_resource.quality_grade == "D"
+            and not body.force_accept_d_grade
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "grade_d_requires_rework",
+                    "grade": "D",
+                    "score": float(target_resource.quality_score or 0),
+                    "message": (
+                        "该稿件质量评分为 D 级（<60），按规范不能直接录用。"
+                        "请先调用 rework 端点打回审稿人补审或要求作者修改；"
+                        "如确需破例，请传 force_accept_d_grade=true 并在备注中写明理由。"
+                    ),
+                },
+            )
         entry.status = "accepted"
     elif decision in ("major_revision", "minor_revision"):
         entry.status = decision
@@ -753,6 +783,115 @@ async def editor_decision(
             )
     except Exception:
         logger.warning("decision_email_dispatch_failed", submission_id=entry.id, exc_info=True)
+    return _to_response(entry)
+
+
+@router.post(
+    "/{submission_id}/rework",
+    response_model=SubmissionResponse,
+)
+async def request_rework(
+    submission_id: int,
+    body: ReworkRequest,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionResponse:
+    """把稿件打回：通知审稿人补审 / 通知作者修改。
+
+    D 级（<60 分）的标准处置。D 不是"拒绝"，是"当前不合格"——最常见的
+    成因是审稿人没细看，而不是稿子真的无救。直接拒稿会冤枉作者，直接
+    录用会放进垃圾，打回是最诚实的处置。
+
+    两条通知同时发出，因为两件事都要有人做：
+
+    1. **给审稿人**：附上具体缺陷清单，要求补审或说明为何应拒。
+       审稿人可以选择"我漏看了，补意见"或"我看清了，就是该拒"——
+       这个选择权必须留给审稿人，不能由编辑代劳。
+    2. **给作者**：列出逐条修改要求，让作者知道该改什么，而不是
+       只收到一句"不合格"。
+
+    状态置为 ``rework_requested``（新增状态），编辑在队列里能看到
+    「待处理」，直到审稿人补交意见或作者提交修改。
+    """
+    if len(body.requirements) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="打回必须列出至少 3 条具体修改要求——只说'不合格'对作者没有帮助。",
+        )
+    entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by == current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot request rework on own submission")
+    if entry.status in ("accepted", "approved", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot request rework in terminal status '{entry.status}'",
+        )
+
+    entry.status = "rework_requested"
+    entry.editor_note = body.note
+    requirements_text = "\n".join(f"{i + 1}. {r}" for i, r in enumerate(body.requirements))
+
+    # 1) 通知审稿人：该稿被打回，需要补审或说明
+    from app.modules.review.models import ReviewAssignment
+
+    reviewers = (
+        await db.execute(
+            select(ReviewAssignment.reviewer_id).where(
+                ReviewAssignment.submission_id == entry.id,
+                ReviewAssignment.tenant_id == entry.tenant_id,
+                ReviewAssignment.status.in_(("pending", "accepted", "completed")),
+            )
+        )
+    ).scalars().all()
+    for reviewer_id in set(reviewers):
+        await notifications.create(
+            db,
+            tenant_id=entry.tenant_id,
+            user_id=reviewer_id,
+            type_="review.rework_requested",
+            title=f"审稿被打回，请补审：{entry.title}",
+            body=(
+                f"稿件 #{entry.id} 的质量评分为 D 级（<60），编辑部要求补审。\n"
+                "请二选一：\n"
+                "（a）补充/修正审稿意见，特别是以下方面；\n"
+                "（b）说明为何该稿确实应当拒稿。\n\n"
+                f"需要补审的方面：\n{requirements_text}"
+            ),
+            related_type="submission",
+            related_id=str(entry.id),
+        )
+
+    # 2) 通知作者：逐条修改要求
+    await notifications.create(
+        db,
+        tenant_id=entry.tenant_id,
+        user_id=entry.submitted_by,
+        type_="submission.rework_requested",
+        title=f"稿件需要修改：{entry.title}",
+        body=(
+            f"您的稿件 #{entry.id} 经评审后被要求修改。\n"
+            f"请逐条处理后重新提交：\n{requirements_text}"
+            + (f"\n\n编辑备注：{body.note}" if body.note else "")
+        ),
+        related_type="submission",
+        related_id=str(entry.id),
+    )
+
+    db.add(
+        AuditLog(
+            tenant_id=current_user.tenant_id,
+            actor_user_id=current_user.id,
+            action="submission.rework_requested",
+            target_type="submission",
+            target_id=str(entry.id),
+            payload={
+                "requirements": body.requirements,
+                "reviewers_notified": len(set(reviewers)),
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(entry)
     return _to_response(entry)
 
 

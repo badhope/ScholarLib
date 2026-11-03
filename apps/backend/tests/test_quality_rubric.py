@@ -1,109 +1,204 @@
-"""RQS v1.0 rubric tests — the score must be deterministic and banded."""
+"""RQS v2.0 评分口径测试。
+
+三条核心承诺必须被这些用例锁死：
+1. 权重每套合计 100；
+2. 分数确定（同样的维度分 → 同样的总分）；
+3. 学术诚信一票否决（integrity=0 → 全篇 D）。
+"""
 
 from __future__ import annotations
 
+from app.modules.quality.review_form import (
+    CHECK_ITEMS,
+    CHECK_ITEMS_BY_DIMENSION,
+    form_payload,
+    prompt_payload,
+    score_answers,
+    suggest_dimension_score,
+)
 from app.modules.quality.rubric import (
+    DIMENSIONS,
     PROFILES,
+    DimensionScore,
     PaperMetrics,
+    auto_precheck,
     evaluate,
     grade_for,
-    ratio_length,
-    ratio_references,
     rubric_payload,
 )
 
-
-def _full_paper(article_type: str = "research") -> PaperMetrics:
-    return PaperMetrics(
-        article_type=article_type,
-        cjk_chars=9000,
-        total_chars=12000,
-        pages=10,
-        paragraphs=30,
-        paragraph_cv=0.5,
-        section_hits={s: True for s in ("引言", "相关工作", "方法", "结果", "讨论", "结论")},
-        abstract_chars=300,
-        has_problem=True,
-        has_method=True,
-        has_result=True,
-        has_conclusion=True,
-        keywords=5,
-        references=20,
-        reference_style="bracket",
-        reference_dois=20,
-        doi_resolved=20,
-        figure_numbers=4,
-        figure_citations=4,
-        table_numbers=2,
-        table_citations=2,
-        fonts=["SimSun"],
-        title_chars=30,
-        has_a4=True,
-        has_affiliation_block=True,
-    )
+_ALL_KEYS = tuple(k for k, _, _ in DIMENSIONS)
 
 
-def test_full_paper_scores_a_plus() -> None:
-    result = evaluate(_full_paper())
-    assert result["score"] >= 90
-    assert result["grade"] == "A+"
-    assert result["coefficient"] == round(result["score"] / 50, 2)
-
-
-def test_empty_paper_scores_zero() -> None:
-    result = evaluate(PaperMetrics())
-    assert result["score"] == 0
-    assert result["grade"] == "D"
-
-
-def test_grade_bands_are_fixed() -> None:
-    assert grade_for(95) == ("A+", "卓越")
-    assert grade_for(85) == ("A", "优秀")
-    assert grade_for(72) == ("B", "良好")
-    assert grade_for(65) == ("C", "合格")
-    assert grade_for(20) == ("D", "待改进")
-
-
-def test_fractional_scores_do_not_fall_through_bands() -> None:
-    """79.5 必须落在 B，而不是因为没有闭区间命中掉进 D。"""
-    assert grade_for(79.5) == ("B", "良好")
-    assert grade_for(69.9) == ("C", "合格")
-    assert grade_for(89.5) == ("A", "优秀")
-    assert grade_for(0.0) == ("D", "待改进")
-
-
-def test_length_tiers_per_profile() -> None:
-    assert ratio_length(PaperMetrics(cjk_chars=1000)) == 0.18
-    assert ratio_length(PaperMetrics(cjk_chars=2600)) == 0.66
-    assert ratio_length(PaperMetrics(cjk_chars=6000)) == 0.82
-    assert ratio_length(PaperMetrics(cjk_chars=9000)) == 1.0
-    # 随笔画像的门槛更低：3000 字即中篇
-    assert ratio_length(PaperMetrics(cjk_chars=3200, article_type="essay")) == 0.82
-
-
-def test_references_reward_doi_verifiability() -> None:
-    base = PaperMetrics(references=10, reference_style="bracket", reference_dois=10)
-    unverified = ratio_references(base)
-    verified = ratio_references(
-        PaperMetrics(references=10, reference_style="bracket", reference_dois=10, doi_resolved=10)
-    )
-    assert verified > unverified
-    assert verified <= 1.0
+def _scores(value: int = 4) -> list[DimensionScore]:
+    return [DimensionScore(k, value, "理由：正文第 3 节可核") for k in _ALL_KEYS]
 
 
 def test_profile_weights_all_sum_to_100() -> None:
     for name, weights in PROFILES.items():
         assert sum(weights.values()) == 100, name
+        # 每个画像都必须覆盖全部七个维度
+        assert set(weights) == set(_ALL_KEYS), name
 
 
-def test_essay_profile_weights_language_heavier() -> None:
-    assert PROFILES["essay"]["language"] > PROFILES["research"]["language"]
-    assert PROFILES["essay"]["references"] < PROFILES["research"]["references"]
+def test_argument_carries_most_weight_in_research() -> None:
+    """论证链是学术写作的核心失败点，权重必须最高。"""
+    w = PROFILES["research"]
+    assert w["argument"] == max(w.values())
+    # 形式类维度必须被压低，否则评分又会退化成"格式体检"
+    assert w["presentation"] < w["argument"]
+    assert w["presentation"] <= 10
 
 
-def test_rubric_payload_exposes_profiles() -> None:
+def test_essay_profile_weights_argument_not_method() -> None:
+    """随笔不靠数据取胜，方法权重应显著低于论证。"""
+    assert PROFILES["essay"]["argument"] > PROFILES["essay"]["method"]
+    assert PROFILES["essay"]["method"] < PROFILES["research"]["method"]
+
+
+def test_full_marks_scores_100() -> None:
+    result = evaluate(_scores(5))
+    assert result["score"] == 100.0
+    assert result["grade"] == "A+"
+
+
+def test_all_zero_scores_zero() -> None:
+    result = evaluate(_scores(0))
+    assert result["score"] == 0.0
+    assert result["grade"] == "D"
+    assert result["requires_rework"] is True
+
+
+def test_integrity_veto_forces_d() -> None:
+    """integrity=0 时，即使其他维度满分也必须判 D。"""
+    scores = [DimensionScore(k, 5, "其余维度满分") for k in _ALL_KEYS if k != "integrity"]
+    scores.append(DimensionScore("integrity", 0, "发现引用编造"))
+    result = evaluate(scores)
+    assert result["integrity_veto"] is True
+    assert result["score"] == 0.0
+    assert result["grade"] == "D"
+    assert result["requires_rework"] is True
+
+
+def test_missing_dimension_raises() -> None:
+    """漏填维度必须报错，不能当成 0 分。"""
+    import pytest
+
+    partial = _scores(4)[:-1]
+    with pytest.raises(ValueError, match="Missing dimension"):
+        evaluate(partial)
+
+
+def test_reason_is_required() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="reason is required"):
+        DimensionScore("problem", 4, "   ")
+
+
+def test_score_out_of_range_rejected() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="score must be 0–5"):
+        DimensionScore("problem", 6, "越界")
+
+
+def test_grade_bands_tolerate_fractions() -> None:
+    assert grade_for(95) == ("A+", "卓越")
+    assert grade_for(79.5) == ("B", "良好")
+    assert grade_for(69.9) == ("C", "合格")
+    assert grade_for(59.9) == ("D", "待改进")
+
+
+def test_same_scores_same_total_deterministic() -> None:
+    """确定性：同样的输入必须得到同样的总分（评分可复算）。"""
+    a = evaluate(_scores(4))["score"]
+    b = evaluate(_scores(4))["score"]
+    assert a == b
+
+
+def test_override_records_flag() -> None:
+    result = evaluate(_scores(4), override_total=88.0)
+    assert result["score"] == 88.0
+    assert result["overridden"] is True
+
+
+def test_auto_precheck_flags_missing_references() -> None:
+    issues = auto_precheck(PaperMetrics(article_type="research", references=0, abstract_chars=300))
+    assert any(i["level"] == "blocker" and "参考文献" in i["message"] for i in issues)
+
+
+def test_auto_precheck_flags_missing_abstract() -> None:
+    issues = auto_precheck(PaperMetrics(abstract_chars=0, references=20))
+    assert any("摘要" in i["message"] for i in issues)
+
+
+def test_rubric_payload_shape() -> None:
     payload = rubric_payload()
-    assert payload["version"] == "1.0"
+    assert payload["version"] == "2.0"
+    assert len(payload["dimensions"]) == 7
     assert set(payload["profiles"]) == set(PROFILES)
-    assert payload["coefficient_formula"] == "RQS / 50"
     assert [g["code"] for g in payload["grades"]] == ["A+", "A", "B", "C", "D"]
+    assert "integrity_veto" in payload
+    assert len(payload["score_anchors"]) == 6
+
+
+# --- 审稿表单 -------------------------------------------------------------
+
+
+def test_every_dimension_has_check_items() -> None:
+    """每个维度都必须有可勾的检查项，否则该维度无法被一致地评。"""
+    for key in _ALL_KEYS:
+        assert CHECK_ITEMS_BY_DIMENSION[key], f"{key} 没有检查项"
+
+
+def test_all_yes_suggests_full_marks() -> None:
+    answers = {item.key: "yes" for item in CHECK_ITEMS}
+    for key in _ALL_KEYS:
+        assert suggest_dimension_score(answers, key) == 5.0
+
+
+def test_all_no_suggests_zero() -> None:
+    answers = {item.key: "no" for item in CHECK_ITEMS}
+    for key in _ALL_KEYS:
+        assert suggest_dimension_score(answers, key) == 0.0
+
+
+def test_na_excluded_from_denominator() -> None:
+    """全部不适用 → 中间分，而不是 0（不能把"不适用"当"很差"）。"""
+    items = CHECK_ITEMS_BY_DIMENSION["method"]
+    answers = {item.key: "na" for item in items}
+    assert suggest_dimension_score(answers, "method") == 3.0
+
+
+def test_missing_answer_counts_as_unchecked() -> None:
+    """漏答按 0 计入分母：漏答就是没检查。"""
+    items = CHECK_ITEMS_BY_DIMENSION["integrity"]
+    answers = {items[0].key: "yes"}  # 只答第一项
+    score = suggest_dimension_score(answers, "integrity")
+    assert score < 5.0
+
+
+def test_form_payload_covers_all_dimensions() -> None:
+    payload = form_payload()
+    assert len(payload["dimensions"]) == 7
+    for dim in payload["dimensions"]:
+        assert dim["items"], dim["key"]
+
+
+def test_prompt_payload_has_output_schema_and_rules() -> None:
+    payload = prompt_payload("research")
+    assert payload["rubric_version"] == "2.0"
+    assert "output_schema" in payload
+    assert len(payload["rules"]) >= 4
+    assert payload["weights"] == PROFILES["research"]
+
+
+def test_prompt_stability_same_answers_same_scores() -> None:
+    """同一组答案折算出的维度分必须完全一致（AI 可复现的前提）。"""
+    answers = {item.key: "partial" for item in CHECK_ITEMS}
+    a = score_answers(answers)
+    b = score_answers(answers)
+    assert {k: v["suggested_score"] for k, v in a.items()} == {
+        k: v["suggested_score"] for k, v in b.items()
+    }

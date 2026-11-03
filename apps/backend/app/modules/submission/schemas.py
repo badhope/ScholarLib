@@ -27,6 +27,10 @@ SubmissionStatus = Literal[
     "major_revision",
     "minor_revision",
     "resubmitted",
+    # 打回：评分 D 级时编辑发起的「补审/修改」状态（1.9.2 起）。
+    # 与 major_revision 的区别：后者是审稿意见驱动的修回，前者是
+    # 质量评分不达标驱动的打回，审稿人与作者都要有动作。
+    "rework_requested",
     "accepted",
     "rejected",
     # 向后兼容别名（review 端点允许 approved 作为 accepted 的同义词写入）
@@ -106,6 +110,10 @@ class SubmissionDecision(BaseModel):
     # draft（暂存草稿——刊前整理阶段，之后由 admin PATCH /catalog/{id} 刊出）。
     # 指定现有 resource_id 时不改动该条目的刊出状态。
     publication_status: Literal["published", "draft"] = "published"
+    # D 级（<60 分）默认不能录用：必须先打回审稿人补审或要求作者修改。
+    # 确需破例时置 true，且必须在 editor_note 里写明理由——破例本身要
+    # 可追溯，否则"D 级硬发"会变成常规操作。
+    force_accept_d_grade: bool = False
 
 
 class AnonymizedFileUpdate(BaseModel):
@@ -116,6 +124,18 @@ class AnonymizedFileUpdate(BaseModel):
     """
 
     anonymized_file_url: AnyHttpUrl | None = None
+
+
+class ReworkRequest(BaseModel):
+    """打回稿件：必须列出具体修改要求。
+
+    ``requirements`` 下限 3 条是刻意的：一句"不合格"对作者没有行动指引，
+    对审稿人也没有可补的方向。打回的成本应该落在"说清楚问题"上，而不是
+    落在作者反复猜测上。
+    """
+
+    requirements: list[str] = Field(min_length=3, max_length=20)
+    note: str | None = Field(default=None, max_length=5000)
 
 
 class WaiveReviewRequest(BaseModel):

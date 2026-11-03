@@ -1,6 +1,6 @@
 [project]
 name = "rubbish-backend"
-version = "1.9.1"
+version = "1.9.2"
 description = "Rubbish backend — modular multi-tenant academic platform base"
 # Python 版本锁定在 3.12 系列：与 .python-version、Dockerfile、CI 完全一致
 requires-python = ">=3.12,<3.13"

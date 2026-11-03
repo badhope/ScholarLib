@@ -45,9 +45,11 @@ function readStoredTheme(): Theme {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
   } catch {
-    // 隐私模式下 localStorage 抛错：退回 system
+    // 隐私模式下 localStorage 抛错：退回默认值
   }
-  return 'system'
+  // 默认亮色：这是学术期刊站点，读者多在白天/办公室阅读，白底黑字更接近
+  // 纸质期刊的阅读预期。用户仍可在右上角切换到暗色或「跟随系统」。
+  return 'light'
 }
 
 // 与 public/theme-bootstrap.js 保持同一套类切换逻辑（attribute="class"）

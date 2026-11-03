@@ -267,15 +267,31 @@ async def test_announcement_requires_admin(client: AsyncClient, test_user: dict)
 
 
 async def test_quality_rubric_is_public_and_frozen(client: AsyncClient) -> None:
+    """评分口径必须公开且冻结：作者能自查，外部 AI 能复现。"""
     r = await client.get("/api/quality/rubric")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"] == "1.0"
+    assert body["version"] == "2.0"
     assert set(body["profiles"]) == {"research", "review", "essay", "note"}
     for profile in body["profiles"].values():
         assert sum(profile["weights"].values()) == 100
     assert [g["code"] for g in body["grades"]] == ["A+", "A", "B", "C", "D"]
     assert body["min_references"]["research"] == 8
+    # 2.0 的关键承诺：学术价值维度 + 诚信一票否决 + D 级必须打回
+    keys = {d["key"] for d in body["dimensions"]}
+    assert {"problem", "argument", "method", "evidence", "novelty", "integrity"} <= keys
+    assert "integrity_veto" in body
+    assert "grade_d_action" in body
+
+
+async def test_quality_form_and_prompt_are_public(client: AsyncClient) -> None:
+    """审稿表单与 AI 判分规格也必须公开——口径不公开就无法自证公正。"""
+    form = await client.get("/api/quality/form")
+    assert form.status_code == 200
+    assert len(form.json()["dimensions"]) == 7
+    prompt = await client.get("/api/quality/prompt?article_type=research")
+    assert prompt.status_code == 200
+    assert "output_schema" in prompt.json()
 
 
 async def test_daily_checkin_idempotent_and_streak(client: AsyncClient, test_user: dict) -> None:
