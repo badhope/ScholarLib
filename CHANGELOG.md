@@ -7,6 +7,42 @@
 `apps/backend/pyproject.toml`、`apps/frontend/package.json`、`apps/backend/app/__init__.py`
 四处完全一致，由 `scripts/check-version.sh` 守门。
 
+## [Unreleased]
+
+### Added
+
+- **学科设置接入官方学科目录**：新增 `src/lib/disciplines.ts`（106 个一级学科、
+  13 个门类分组，依据国务院学位委员会《研究生教育一级学科和专业学位类别下设
+  二级学科和专业领域指导性目录（2026 年）》）。资源录入与投稿表单的
+  学科/子学科字段改为带选项提示的选择器（input + datalist），保留自由输入
+  兜底——本刊允许自创学科。后端字段仍为自由文本，无数据库改动。
+
+### Changed
+
+- **下线"荒诞赛道"**：serious/absurd 双赛道维度冗余（每篇论文已有编辑部评定
+  的荒诞指数 0–10），全站收敛为单一评审标准。旧客户端提交 `absurd` 自动归一
+  为 `serious`（不报 422）；数据库列保留以兼容历史数据；浏览/目录/投稿全部
+  赛道 UI 与筛选移除，about/policies 文案同步更新。
+
+### Fixed
+
+- **外链协议白名单（存储型 XSS）**：作者可控的 `external_url` / `download_url`
+  此前在资源详情页与审稿分配页共 4 处直接渲染进 `href`，`javascript:` 伪协议
+  可在读者点击时执行。新增 `src/lib/url-safety.ts`（`isSafeExternalUrl`）统一
+  白名单（仅放行 http/https），不安全链接一律降级为不可点击。
+- **限流补齐认证端点**：`/api/auth/2fa/authenticate`、`/api/auth/email-code/request`、
+  `/api/auth/email-code/verify` 补入严格限流路径（此前仅全局限流，2FA 六位码
+  与邮箱验证码存在爆破窗口）。
+- **2FA 加固**：`/auth/2fa/disable` 的 TOTP 校验接入防重放（同一 30 秒窗口的
+  码一次性使用）；`/auth/2fa/authenticate` 的 pending token 现校验
+  `token_version`，改密/吊销后旧 pending token 立即失效。
+- **JWT 算法枚举约束**：`RUBBISH_ALGORITHM` 从自由字符串收窄为
+  Literal（HS256/HS384/HS512/RS256/ES256），误配 `none` 等值将在启动时被
+  pydantic 校验拒绝，杜绝未签名令牌。
+- **投稿版本表补列**：迁移 `f1a2b3c4d5e6`（017）为 `submission_versions` 补齐
+  `cover_image` 列——016 只给 `submissions` 加了该列，模型声明的版本封面查询
+  在生产触发 `UndefinedColumnError`。
+
 ## [1.9.2] — 2026-11-03
 
 ### Changed
