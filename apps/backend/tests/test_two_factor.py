@@ -332,16 +332,21 @@ async def test_disable_requires_password(client: AsyncClient, test_user: dict) -
 
 
 async def test_disable_with_password_restores_plain_login(
-    client: AsyncClient, test_user: dict
+    client: AsyncClient, test_user: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """关闭 2FA 后登录回到一步式，且恢复码被清空。"""
     secret, _ = await _enable(client, test_user)
+    # disable 端点同样带重放保护（verify-setup 已消费当前 time-step 的码）。
+    # 与 login/2fa 测试同口径：把服务端时间拨到下一个窗口，用该窗口的码。
+    real_time = time.time()
+    monkeypatch.setattr(time, "time", lambda: real_time + 35)
     resp = await client.post(
         "/api/auth/2fa/disable",
-        json={"password": test_user["password"], "code": _code(secret)},
+        json={"password": test_user["password"], "code": pyotp.TOTP(secret).at(real_time + 30)},
         headers=auth_headers(test_user),
     )
     assert resp.status_code == 200
+    monkeypatch.undo()
 
     # 关闭 2FA 会吊销既有会话（token_version 提升），所以先重新登录：
     # 关掉之后登录回到一步式，直接发 access_token。
