@@ -100,7 +100,10 @@ export function absurdityLabel(index: number | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// 质量评分（RQS v1.0）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
+// 质量评分（RQS v3.0）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
+// v3.0 是 14 档带加减号的严厉客观制：A+（95–100）是典范水准、刻意极少
+// 达到，多数稿子落在 C/D；F（40–54）= 合格、仍可发表；只有总分 <40 才
+// 不合格（不予发表）。
 // ---------------------------------------------------------------------------
 
 export interface QualityGrade {
@@ -111,33 +114,83 @@ export interface QualityGrade {
 
 const QUALITY_GRADES: Record<string, QualityGrade> = {
   'A+': {
-    label: 'A+ 卓越',
-    description: '结构、引用与图表均达期刊级；可直接作为范例',
-    className: 'bg-primary text-primary-foreground border-transparent',
+    label: 'A+ 极佳',
+    description: '典范水准（95–100），编辑部范例级，极少达到',
+    className: 'bg-amber-300 text-amber-950 border-amber-400/70',
   },
   A: {
-    label: 'A 优秀',
-    description: '规范完整，个别维度仍有提升空间',
-    className: 'bg-primary/85 text-primary-foreground border-transparent',
+    label: 'A 极佳',
+    description: '极佳水准（90–94），可直接发表',
+    className: 'bg-amber-200/80 text-amber-950 border-amber-300/60',
+  },
+  'A-': {
+    label: 'A- 优秀',
+    description: '优秀（85–89），小修即可',
+    className: 'bg-amber-100 text-amber-900 border-amber-200',
+  },
+  'B+': {
+    label: 'B+ 良好',
+    description: '良好（82–84），有发表价值',
+    className: 'bg-primary/15 text-primary border-primary/30',
   },
   B: {
     label: 'B 良好',
-    description: '达到发表门槛，格式或引用存在可修正的缺口',
-    className: 'bg-primary/15 text-primary border-primary/30',
+    description: '良好（78–81），个别维度有可修正的缺口',
+    className: 'bg-primary/10 text-primary border-primary/20',
   },
-  C: {
-    label: 'C 合格',
-    description: '内容成立，但格式、引用或图表需要编辑加工',
+  'B-': {
+    label: 'B- 良好',
+    description: '良好偏弱（75–77），建议小修',
+    className: 'bg-primary/10 text-primary border-primary/20',
+  },
+  'C+': {
+    label: 'C+ 中等',
+    description: '中等（72–74），内容成立但需编辑加工',
     className: 'bg-muted text-foreground border-border',
   },
-  D: {
-    label: 'D 待改进',
-    description: '结构或引用不完整，排版需重做后重评',
-    className: 'bg-destructive/10 text-destructive border-destructive/30',
+  C: {
+    label: 'C 中等',
+    description: '中等（68–71），引用或表达需要编辑加工',
+    className: 'bg-muted text-foreground border-border',
   },
+  'C-': {
+    label: 'C- 中等',
+    description: '中等偏弱（65–67），多处需修订',
+    className: 'bg-muted text-foreground border-border',
+  },
+  'D+': {
+    label: 'D+ 较弱',
+    description: '较弱（62–64），结构或论证有明显缺口',
+    className: 'bg-muted text-muted-foreground border-border',
+  },
+  D: {
+    label: 'D 较弱',
+    description: '较弱（58–61），仍可发表但需较大修改',
+    className: 'bg-muted text-muted-foreground border-border',
+  },
+  'D-': {
+    label: 'D- 较弱（边缘）',
+    description: '边缘稿（55–57）：可发表，编辑部处理时请谨慎',
+    className: 'bg-muted text-muted-foreground border-border',
+  },
+  F: {
+    label: 'F 合格',
+    description: '合格（40–54）：可以阅读，仍可发表',
+    className: 'bg-muted text-foreground border-border',
+  },
+}
+
+// 兜底：未知/历史档位（含 <40 的"不合格"记录，字母仍记为 F）不崩徽章——
+// 显示原始代号 + 中性样式，绝不让 switch/字典缺键变成空白或报错。
+const GRADE_FALLBACK: QualityGrade = {
+  label: '',
+  description: '',
+  className: 'bg-muted text-foreground border-border',
 }
 
 export function qualityGrade(grade: string | null | undefined): QualityGrade | null {
   if (!grade) return null
-  return QUALITY_GRADES[grade] ?? null
+  const known = QUALITY_GRADES[grade]
+  if (known) return known
+  return { ...GRADE_FALLBACK, label: grade, description: `评级 ${grade}` }
 }

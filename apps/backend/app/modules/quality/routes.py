@@ -5,7 +5,7 @@
 - 公开：``/rubric``、``/form``、``/prompt`` —— 口径必须公开，作者才能自查，
   外部 AI 才能复现。
 - 审稿人：``/score`` —— 提交维度评分，系统按权重算出总分与等级。
-- 编辑：``/rework-queue`` —— 查看 D 级待打回稿件。
+- 编辑：``/rework-queue`` —— 查看不合格（<40 分）待打回稿件。
 - 管理员：``/override`` —— 直接改分（必须写理由，写审计）。
 
 为什么把"算分"做成服务端端点而不是前端计算：前端算分意味着口径在
@@ -166,10 +166,11 @@ async def rework_queue(
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    """D 级打回队列：等待审稿人补审或作者修改的稿件。
+    """不合格稿件打回队列：等待审稿人补审或作者修改的稿件。
 
-    读未刊出且 quality_grade='D' 的条目。编辑部在通知栏看到的「待处理」
-    就是这一批——D 级不是终点，是"必须有人推进"的状态。
+    读未刊出且总分低于 40（不合格，rubric v3.0 的 ``rejected`` 语义）的
+    条目。编辑部在通知栏看到的「待处理」就是这一批——不合格不是终点，
+    是"必须有人推进"的状态。
     """
     from app.modules.catalog.models import Resource
 
@@ -178,7 +179,7 @@ async def rework_queue(
             select(Resource.id, Resource.title, Resource.quality_score, Resource.quality_grade)
             .where(
                 Resource.tenant_id == current_user.tenant_id,
-                Resource.quality_grade == "D",
+                Resource.quality_score < 40,
                 Resource.publication_status != "published",
             )
             .order_by(Resource.updated_at.desc())

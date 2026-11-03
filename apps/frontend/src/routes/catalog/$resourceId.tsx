@@ -231,9 +231,6 @@ function CatalogDetailPage() {
                         {data.quality_score?.toFixed(1)}
                         <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span>
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        纯度系数 {((data.quality_score ?? 0) / 50).toFixed(2)}
-                      </span>
                     </>
                   )
                 })()}

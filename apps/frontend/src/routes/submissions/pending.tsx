@@ -536,9 +536,10 @@ function PendingSubmissionsPage() {
                   打回会同时通知审稿人（补审或说明理由）与作者（逐条修改要求）。
                   至少填 3 条具体问题——只说"不合格"对作者没有帮助。
                 </p>
-                {(decisionTarget?.quality_grade === 'D' || decisionTarget?.quality_score != null && decisionTarget.quality_score < 60) && (
+                {decisionTarget?.quality_score != null && decisionTarget.quality_score < 40 && (
                   <p className="rounded bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
-                    当前评分 {decisionTarget?.quality_score ?? '—'} 分（D 级），按规范不能直接录用。
+                    当前评分 {decisionTarget?.quality_score ?? '—'} 分（不合格，低于 40），
+                    按规范不能直接录用。
                   </p>
                 )}
                 <Textarea

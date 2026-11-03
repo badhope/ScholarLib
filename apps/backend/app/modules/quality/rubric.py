@@ -1,58 +1,57 @@
-"""学术价值评分口径 v2.0（RQS v2.0）——从"格式体检"到"学术判断"。
+"""学术价值评分口径 v3.0（RQS v3.0）——ABCDF± 严厉客观制。
 
-为什么重写
-----------
-v1.0 的七个维度全部是**表层统计**：有没有引言、字数够不够、参考文献几条、
-有没有图、排版是否 A4。这些指标机器一测就有，但它们回答的是"这篇稿子
-看起来像不像论文"，不是"这篇稿子值不值得读"。
+演进动机
+--------
+v1.0 的七个维度全部是**表层统计**（有没有引言、字数够不够、参考文献几条），
+机器一测就有，也最容易被伪造；v2.0 把权重挪到需要判断力的维度（问题价值、
+论证链、方法透明度、证据强度），但五档等级带（A/B/C/D）颗粒太粗：79.5 与
+71 同样只差一档，编辑部无法据此区分"可直接发表"与"边缘可发表"。
 
-真实后果：一篇 8000 字、八节齐全、20 条参考文献、四张图、排版规整的
-空洞综述，v1.0 能给到 A；而一篇 4000 字、只有三节、但提出了一个真问题
-并用可复现方法给出反直觉结论的短文，只能拿 B。这是**指标与目标背离**
-——评分器奖励了最容易伪造的东西（形式），惩罚了最难伪造的东西（洞察）。
+v3.0 在保持七维学术价值体系不变的前提下，改为 **14 档带加减号的等级制**
+（ABCDF±），并把判分标准调得**严厉而客观**：
 
-v2.0 把权重挪到真正需要判断力的地方，并把"能不能自动算"和"该不该算"
-分开：能自动测的仍然自动测，但只作为**证据输入**；真正决定分数的维度
-需要审稿人/编辑给出结构化判断，并且必须附理由。
+- A+（95–100）是典范水准，刻意极少达到——多数正常稿子应落在 C/D；
+- 分数带连续无缝隙，按「下限」降序匹配（见 ``grade_for``）；
+- 只有总分 **低于 40 分**才算不合格（``rejected``），必须打回；
+- F（40–54）是"合格"：可以阅读、仍可发表——字母 F 在这里不是"不及格"，
+  而是"基础合格但无亮点"（这是本刊的刻意语义，别用常识去套）。
 
 七个维度（合计 100）
 --------------------
-1. **问题价值 problem**（18）— 研究问题是否真实、具体、未被充分回答。
-   不是"有没有研究问题"（那太容易），而是"这个问题值得回答吗"。
-2. **论证链 argument**（20）— 从前提走到结论的链条是否完整、有无跳跃。
+1. **问题价值 problem**（研究 18）— 研究问题是否真实、具体、未被充分回答。
+2. **论证链 argument**（研究 21）— 从前提走到结论的链条是否完整、有无跳跃。
    权重最高：学术写作的核心失败不是数据少，是推论断。
-3. **方法透明度 method**（16）— 别人能否照着复现：数据来源、样本、
-   参数、随机性处理、失败案例是否交代。
-4. **证据强度 evidence**（16）— 结论被证据支持的程度：相关性是否被
-   当因果、样本是否支撑结论强度、有无反例讨论。
-5. **创新与定位 novelty**（12）— 相对已有工作站在哪、增量是什么。
-   不要求"首次"，要求"说清自己补了哪块"。
-6. **学术诚信 integrity**（10）— 引用真实可核、数据可追、贡献声明完整、
-   利益冲突与伦理审批。这一维**一票否决**：0 分即整篇 D。
-7. **表达与结构 presentation**（8）— 读者能否顺畅读完。
-   权重刻意压低——它是最容易修饰的维度，不该主导评价。
+3. **方法透明度 method**（研究 16）— 别人能否照着复现。
+4. **证据强度 evidence**（研究 17）— 结论被证据支持的程度。
+5. **创新与定位 novelty**（研究 12）— 相对已有工作补了哪一块。
+6. **学术诚信 integrity**（研究 10）— 引用真实可核、数据可追。
+   这一维**一票否决**：0 分即总分归零（不予发表）。
+7. **表达清晰度 presentation**（研究 6）— 结构与语言是否让读者读得下去。
+   权重刻意压低：图表格式等机器可测项已移出（图表相关问题只保留在
+   ``auto_precheck`` 的 warning 里），此维只评结构与语言。
 
 自动可测项（保留，但降级为证据）
 --------------------------------
 ``PaperMetrics`` 仍然计算结构/篇幅/引用数/图数，但不再直接换成分数，
-而是作为 ``auto_precheck`` 的硬伤检查输入（缺参考文献、无摘要、引用
-不可核、图表未引用）。机器做机器擅长的（查漏），人做人擅长的（判断）。
+而是作为 ``auto_precheck`` 的硬伤检查输入。机器做机器擅长的（查漏），
+人做人擅长的（判断）。
 
 等级与处置
 ----------
-A+ ≥90 卓越 · A ≥80 优秀 · B ≥70 良好 · C ≥60 合格 · D <60 待改进
+A+ 95–100 · A 90–94 · A- 85–89 · B±/B 75–84 · C±/C 65–74 ·
+D±/D 55–64（较弱，D- 为边缘稿）· F 40–54（合格，可发表）· <40 不合格。
 
-**D 级不是终点，是打回**：D 意味着"当前形态不能发表"，必须退回审稿人
-补审或要求作者修改，并把缺陷逐条写清。见
-``app/modules/quality/review_form.py`` 与
-``submission/routes_editor.py`` 的 ``request_rescore`` 端点。
+**<40 才是打回**：不合格稿件（``rejected``）必须退回审稿人补审或要求作者
+修改，并把缺陷逐条写清。55–57 的 D- 可发表但标记 ``borderline``，提示编辑
+谨慎。见 ``app/modules/quality/review_form.py`` 与
+``submission/routes_editor.py`` 的录用门禁与 ``request_rescore`` 端点。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-RUBRIC_VERSION = "2.0"
+RUBRIC_VERSION = "3.0"
 
 # --- 维度定义 -------------------------------------------------------------
 
@@ -63,13 +62,15 @@ DIMENSIONS: tuple[tuple[str, str, str], ...] = (
     ("evidence", "证据强度", "结论是否被证据支撑；相关是否被当因果"),
     ("novelty", "创新与定位", "相对已有工作补了哪一块，增量是什么"),
     ("integrity", "学术诚信", "引用真实可核、数据可追、声明完整（一票否决）"),
-    ("presentation", "表达与结构", "结构、图表、语言是否让读者读得下去"),
+    ("presentation", "表达清晰度", "结构与语言是否让读者读得下去（图表格式走 auto_precheck）"),
 )
 
 DIMENSION_LABELS: dict[str, str] = {k: label for k, label, _ in DIMENSIONS}
 DIMENSION_HINTS: dict[str, str] = {k: hint for k, _, hint in DIMENSIONS}
 
 # 每类稿件一套权重；每套必须合计 100（test_quality_rubric 守住）。
+# v3.0：presentation 检查项从 3 条减到 2 条（p_figures 移除，图表格式不是
+# 学术质量），省出的 2 分挪给 argument / evidence 各 1 分。
 # 差异体现在"这类写作里哪一维更该被问责"：
 # - research：论证与证据是命门
 # - review：问题价值与论证链（综述的失败是"文献堆砌没有立场"）
@@ -78,39 +79,39 @@ DIMENSION_HINTS: dict[str, str] = {k: hint for k, _, hint in DIMENSIONS}
 PROFILES: dict[str, dict[str, int]] = {
     "research": {
         "problem": 18,
-        "argument": 20,
+        "argument": 21,
         "method": 16,
-        "evidence": 16,
+        "evidence": 17,
         "novelty": 12,
         "integrity": 10,
-        "presentation": 8,
+        "presentation": 6,
     },
     "review": {
         "problem": 20,
-        "argument": 22,
+        "argument": 23,
         "method": 10,
-        "evidence": 12,
+        "evidence": 13,
         "novelty": 16,
         "integrity": 10,
-        "presentation": 10,
+        "presentation": 8,
     },
     "essay": {
         "problem": 22,
-        "argument": 26,
+        "argument": 27,
         "method": 6,
-        "evidence": 12,
+        "evidence": 13,
         "novelty": 14,
         "integrity": 10,
-        "presentation": 10,
+        "presentation": 8,
     },
     "note": {
         "problem": 14,
-        "argument": 16,
+        "argument": 17,
         "method": 24,
-        "evidence": 20,
+        "evidence": 21,
         "novelty": 8,
         "integrity": 10,
-        "presentation": 8,
+        "presentation": 6,
     },
 }
 
@@ -121,12 +122,23 @@ PROFILE_LABELS = {
     "note": "研究简报",
 }
 
+# 14 档等级带（v3.0）：分数带必须连续无缝隙，区间按「下限」降序排列。
+# 注意本刊语义：F（40–54）= 合格、可发表；只有 <40 才是不合格（见
+# evaluate 的 rejected 字段）。A+ 刻意只留 95–100，是典范水准，极少达到。
 GRADE_BANDS: tuple[tuple[str, str, int, int], ...] = (
-    ("A+", "卓越", 90, 100),
-    ("A", "优秀", 80, 89),
-    ("B", "良好", 70, 79),
-    ("C", "合格", 60, 69),
-    ("D", "待改进", 0, 59),
+    ("A+", "极佳", 95, 100),
+    ("A", "极佳", 90, 94),
+    ("A-", "优秀", 85, 89),
+    ("B+", "良好", 82, 84),
+    ("B", "良好", 78, 81),
+    ("B-", "良好", 75, 77),
+    ("C+", "中等", 72, 74),
+    ("C", "中等", 68, 71),
+    ("C-", "中等", 65, 67),
+    ("D+", "较弱", 62, 64),
+    ("D", "较弱", 58, 61),
+    ("D-", "较弱", 55, 57),
+    ("F", "合格", 40, 54),
 )
 
 # 0–5 分锚点：每个维度都用同一把尺子，避免"这位审稿人手松"。
@@ -235,13 +247,16 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
 def grade_for(score: float) -> tuple[str, str]:
     """Band lookup that tolerates fractional scores.
 
-    区间必须按「下限」降序比较：79.5 既不落在 [70,79] 也不在 [80,89]，
-    写成闭区间会直接掉进 D——一个 79.5 分的稿子被判「待改进」是硬 bug。
+    区间必须按「下限」降序比较：79.5 既不落在 [78,81] 也不在 [82,84]，
+    写成闭区间会直接掉到最低档——一个 79.5 分的稿子被判最差档是硬 bug
+    （v2.x 历史事故，不得复现）。低于 40 分不落在任何带内，返回
+    ``("F", "不合格")``——字母仍是 F，但 label 与 40–54 的「合格」区分，
+    真正的处置标记看 ``evaluate`` 的 ``rejected`` 字段。
     """
     for code, label, low, _high in GRADE_BANDS:
         if score >= low:
             return code, label
-    return "D", "待改进"
+    return "F", "不合格"
 
 
 def auto_precheck(m: PaperMetrics) -> list[dict[str, str]]:
@@ -336,13 +351,21 @@ def evaluate(
     metrics: PaperMetrics | None = None,
     override_total: float | None = None,
 ) -> dict[str, object]:
-    """按维度评分计算 RQS v2.0。
+    """按维度评分计算 RQS v3.0。
 
     ``dimension_scores`` 必须覆盖全部七个维度——缺一个就拒绝计算，
     而不是按缺失维度给 0 分：那会让"审稿人漏填"看起来像"这篇很差"。
 
     ``override_total`` 供管理员在有理据时直接指定总分（记录在
     ``overridden`` 字段里，可追溯）。
+
+    处置语义（v3.0）：
+
+    - ``rejected``：总分 < 40，不合格，不予发表，必须打回（
+      ``requires_rework`` 与之等价）；
+    - ``borderline``：总分落在 55–57（D-），可发表但属边缘稿，
+      payload 标记出来提示编辑谨慎；
+    - F（40–54）= 合格，可阅读、可发表。
     """
     profile_type = article_type if article_type in PROFILES else "research"
     profile = PROFILES[profile_type]
@@ -371,7 +394,7 @@ def evaluate(
             "reason": d.reason,
         }
 
-    # 学术诚信一票否决：integrity = 0 直接判 D，无论其他维度多高。
+    # 学术诚信一票否决：integrity = 0 总分直接归零，无论其他维度多高。
     integrity = by_key["integrity"].score
     veto = integrity == 0
     if veto:
@@ -384,6 +407,10 @@ def evaluate(
         overridden = True
 
     grade, grade_label = grade_for(total)
+    # <40 才是不合格：必须打回，不得发表。F（40–54）是合格可发表，
+    # 55–57 的 D- 可发表但提示编辑谨慎（边缘稿）。
+    rejected = total < 40
+    borderline = 55 <= total <= 57
     payload: dict[str, object] = {
         "rubric_version": RUBRIC_VERSION,
         "article_type": profile_type,
@@ -391,12 +418,13 @@ def evaluate(
         "score": total,
         "grade": grade,
         "grade_label": grade_label,
-        "coefficient": round(total / 50, 2),
         "breakdown": breakdown,
         "integrity_veto": veto,
         "overridden": overridden,
-        # D 级必须打回：这不是提示，是流程约束（见 routes_editor）。
-        "requires_rework": grade == "D",
+        "rejected": rejected,
+        "borderline": borderline,
+        # 不合格必须打回：这不是提示，是流程约束（见 routes_editor）。
+        "requires_rework": rejected,
     }
     if metrics is not None:
         payload["auto_precheck"] = auto_precheck(metrics)
@@ -427,9 +455,11 @@ def rubric_payload() -> dict[str, object]:
             k: {"short": v[0], "medium": v[1], "long": v[2]} for k, v in LENGTH_TIERS.items()
         },
         "abstract_band": [ABSTRACT_MIN, ABSTRACT_MAX],
-        "coefficient_formula": "RQS / 50",
-        "integrity_veto": "integrity 维度 0 分 → 全篇 D（学术不端一票否决）",
-        "grade_d_action": "D 级必须打回审稿人补审或要求作者修改，不得直接发表",
+        "integrity_veto": "integrity 维度 0 分 → 总分归零（学术不端一票否决，不予发表）",
+        "rejected_below": 40,
+        "rejected_action": "总分低于 40 分为不合格，不予发表，必须打回审稿人补审或要求作者修改",
+        "borderline_band": [55, 57],
+        "borderline_action": "D-（55–57 分）可发表，但属边缘稿，payload 标记 borderline 提示编辑谨慎",
     }
 
 

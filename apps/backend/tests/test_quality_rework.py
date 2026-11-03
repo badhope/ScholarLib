@@ -1,8 +1,8 @@
-"""评分 v2.0 端点与 D 级打回流程的集成测试。
+"""评分 v3.0 端点与不合格稿打回流程的集成测试。
 
 覆盖用户的核心诉求：
 1. 审稿人评分端点按权重算分（服务端算，不可前端篡改）；
-2. D 级稿件不能直接录用（409）；
+2. 不合格（<40 分）稿件不能直接录用（409）；
 3. 打回会同时通知审稿人与作者（消息栏目是唯一入口）；
 4. 管理员可改分但必须写理由且留审计。
 """
@@ -57,7 +57,7 @@ async def test_score_endpoint_computes_weighted_total(
     body = r.json()
     assert body["score"] == 100.0
     assert body["grade"] == "A+"
-    assert body["rubric_version"] == "2.0"
+    assert body["rubric_version"] == "3.0"
 
 
 @pytest.mark.asyncio

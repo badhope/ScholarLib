@@ -271,17 +271,19 @@ async def test_quality_rubric_is_public_and_frozen(client: AsyncClient) -> None:
     r = await client.get("/api/quality/rubric")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"] == "2.0"
+    assert body["version"] == "3.0"
     assert set(body["profiles"]) == {"research", "review", "essay", "note"}
     for profile in body["profiles"].values():
         assert sum(profile["weights"].values()) == 100
-    assert [g["code"] for g in body["grades"]] == ["A+", "A", "B", "C", "D"]
+    assert [g["code"] for g in body["grades"]] == [
+        "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F",
+    ]
     assert body["min_references"]["research"] == 8
-    # 2.0 的关键承诺：学术价值维度 + 诚信一票否决 + D 级必须打回
+    # 3.0 的关键承诺：学术价值维度 + 诚信一票否决 + <40 分不予发表必须打回
     keys = {d["key"] for d in body["dimensions"]}
     assert {"problem", "argument", "method", "evidence", "novelty", "integrity"} <= keys
     assert "integrity_veto" in body
-    assert "grade_d_action" in body
+    assert "rejected_action" in body
 
 
 async def test_quality_form_and_prompt_are_public(client: AsyncClient) -> None:

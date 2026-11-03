@@ -204,15 +204,19 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
         <CardContent className="space-y-2 py-4">
           <p className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            学术诚信维度为 0 分时全篇直接判 D（一票否决）。D 级不会直接拒稿，
-            而是打回：编辑部会要求你补审或说明理由，同时把修改要求发给作者。
+            学术诚信维度为 0 分时总分直接归零（一票否决），稿子按不合格处理。
+            低于 40 分的稿子不会直接拒稿，而是打回：编辑部会要求你补审或说明
+            理由，同时把修改要求发给作者。
           </p>
           {scoreMut.data && (
             <p className="text-sm">
               合计 <strong className="tabular-nums">{scoreMut.data.score}</strong> 分 ·{' '}
               {scoreMut.data.grade} {scoreMut.data.grade_label}
               {scoreMut.data.requires_rework && (
-                <span className="ml-2 text-destructive">（D 级将被打回）</span>
+                <span className="ml-2 text-destructive">（不合格，将被打回）</span>
+              )}
+              {scoreMut.data.borderline && (
+                <span className="ml-2 text-muted-foreground">（边缘稿，编辑将谨慎处理）</span>
               )}
             </p>
           )}

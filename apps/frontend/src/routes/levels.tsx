@@ -25,12 +25,22 @@ export const Route = createFileRoute('/levels')({
   component: LevelsPage,
 })
 
+// RQS v3.0 的 14 档等级配色。缺键兜底走末尾的 `?? ''` 链式默认：
+// 新增档位时这里同步即可，页面不会因缺键崩坏。
 const GRADE_STYLES: Record<string, string> = {
-  'A+': 'bg-primary text-primary-foreground',
-  A: 'bg-primary/80 text-primary-foreground',
-  B: 'bg-primary/20 text-primary',
+  'A+': 'bg-amber-300 text-amber-950',
+  A: 'bg-amber-200/80 text-amber-950',
+  'A-': 'bg-amber-100 text-amber-900',
+  'B+': 'bg-primary/20 text-primary',
+  B: 'bg-primary/15 text-primary',
+  'B-': 'bg-primary/10 text-primary',
+  'C+': 'bg-muted text-foreground',
   C: 'bg-muted text-foreground',
-  D: 'bg-destructive/10 text-destructive',
+  'C-': 'bg-muted text-foreground',
+  'D+': 'bg-muted text-muted-foreground',
+  D: 'bg-muted text-muted-foreground',
+  'D-': 'bg-muted text-muted-foreground',
+  F: 'bg-muted text-foreground',
 }
 
 /** 每日签到与积分来源说明：货币体系（XP）的入口页说明 + 一键签到。 */
@@ -308,13 +318,15 @@ function LevelsPage() {
                   ))}
                 </div>
                 <p className="text-muted-foreground">
-                  七个学术价值维度加权满分 100；纯度系数（QC）＝ RQS ÷ 50，范围 0.00–2.00，
-                  仅作展示用，不构成任何影响因子。权重按稿件类型（研究论文 / 综述 / 随笔 / 研究简报）
-                  分别设定，冻结在代码里，保证不同月份入库的文章可比较。
+                  七个学术价值维度加权满分 100（v3.0 严厉客观制：A+ 95–100 为典范水准，
+                  极少达到，多数稿子落在 C/D）。权重按稿件类型（研究论文 / 综述 / 随笔 /
+                  研究简报）分别设定，冻结在代码里，保证不同月份入库的文章可比较。
                 </p>
-                <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                  <strong>D 级（&lt;60）不直接拒稿，而是打回</strong>：通知审稿人补审或说明理由，
-                  同时把逐条修改要求发给作者。最常见的 D 级成因是「审稿人没细看」，直接拒稿会冤枉作者。
+                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <strong className="text-foreground">处置语义（v3.0）</strong>：
+                  F（40–54）= 合格，可以阅读、仍可发表；55–57（D-）为边缘稿，提示编辑谨慎；
+                  <strong className="text-foreground">只有低于 40 分才不予发表</strong>——
+                  不合格稿件打回审稿人补审或要求作者修改，把逐条修改要求发给作者。
                 </p>
                 <p className="text-xs text-muted-foreground">
                   学术诚信维度为<strong>一票否决</strong>：发现编造数据或引用，该维度记 0 分，
