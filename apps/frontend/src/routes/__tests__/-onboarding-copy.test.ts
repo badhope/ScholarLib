@@ -10,12 +10,14 @@ describe('homepage issue information', () => {
 })
 
 describe('onboarding guidance', () => {
- it('directs L1 readers to the rules without claiming comments require L2', () => {
+ it('tells readers that reading and commenting need no points', () => {
  const profile = source('profile')
- expect(profile).toContain('L1 即可阅读和评论')
+ // 身份体系 3.0：评论不再有积分门槛，文案不得再出现"L1/L2 解锁"。
+ expect(profile).toContain('注册即可阅读和评论')
  expect(profile).toContain('to="/policies"')
  expect(profile).not.toContain('解锁 L2：评论')
  expect(profile).not.toContain('L1–L4由积分自动解锁')
+ expect(profile).not.toContain('L2、L3 按积分解锁')
  })
 
  it('allows authors who accepted the current rules to access submissions at L1', () => {
