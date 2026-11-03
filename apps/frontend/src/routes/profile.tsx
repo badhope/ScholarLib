@@ -243,7 +243,7 @@ function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
- L1 即可阅读和评论。阅读社区规范并确认可获得积分，等级由积分决定。
+ 注册即可阅读和评论，无需任何积分门槛。确认社区规范会记入你的贡献积分。
  </p>
  <Button asChild size="sm" variant="outline">
  <Link to="/policies">阅读社区规范</Link>
@@ -267,7 +267,7 @@ function ProfilePage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  阅读并接受《投稿与编辑规范》后即可投稿，无需达到 L3。规范改版后需重新确认。
+                  阅读并接受《投稿与编辑规范》即可成为作者、开始投稿。规范改版后需重新确认。
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Button asChild size="sm" variant="outline">
@@ -292,13 +292,13 @@ function ProfilePage() {
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <TrendingUp className="h-4 w-4" /> 等级阶梯
+              <TrendingUp className="h-4 w-4" /> 我的身份
             </CardTitle>
           </CardHeader>
           <CardContent>
             <Ladder levels={data.ladder} current={level.level} />
             <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-              L2、L3 按积分解锁；L4还需稿件录用；L5 起由编辑部授予。
+              身份管权限，积分只是荣誉：读者注册即得，作者确认规范即得，审稿人与编辑由编辑部授予。
             </p>
           </CardContent>
         </Card>

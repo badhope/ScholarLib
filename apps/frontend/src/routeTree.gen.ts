@@ -14,6 +14,7 @@ import { Route as R403RouteImport } from './routes/403'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as AuthorsRouteImport } from './routes/authors'
+import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as JournalMetricsRouteImport } from './routes/journal-metrics'
@@ -29,6 +30,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
+import { Route as AdminAnnouncementsRouteImport } from './routes/admin/announcements'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminIssuesRouteImport } from './routes/admin/issues'
 import { Route as AdminJournalRouteImport } from './routes/admin/journal'
@@ -40,6 +42,8 @@ import { Route as CatalogIndexRouteImport } from './routes/catalog/index'
 import { Route as CatalogResourceIdRouteImport } from './routes/catalog/$resourceId'
 import { Route as CatalogNewRouteImport } from './routes/catalog/new'
 import { Route as FollowsIndexRouteImport } from './routes/follows/index'
+import { Route as ForumIndexRouteImport } from './routes/forum/index'
+import { Route as ForumTopicIdRouteImport } from './routes/forum/$topicId'
 import { Route as IngestIndexRouteImport } from './routes/ingest/index'
 import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as LibraryListIdRouteImport } from './routes/library/$listId'
@@ -72,6 +76,11 @@ const ArchiveRoute = ArchiveRouteImport.update({
 const AuthorsRoute = AuthorsRouteImport.update({
   id: '/authors',
   path: '/authors',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BrowseRoute = BrowseRouteImport.update({
+  id: '/browse',
+  path: '/browse',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardRoute = DashboardRouteImport.update({
@@ -149,6 +158,11 @@ const AccountSecurityRoute = AccountSecurityRouteImport.update({
   path: '/account/security',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminAnnouncementsRoute = AdminAnnouncementsRouteImport.update({
+  id: '/admin/announcements',
+  path: '/admin/announcements',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
   id: '/admin/audit-logs',
   path: '/admin/audit-logs',
@@ -204,6 +218,16 @@ const FollowsIndexRoute = FollowsIndexRouteImport.update({
   path: '/follows/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForumIndexRoute = ForumIndexRouteImport.update({
+  id: '/forum/',
+  path: '/forum/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForumTopicIdRoute = ForumTopicIdRouteImport.update({
+  id: '/forum/$topicId',
+  path: '/forum/$topicId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IngestIndexRoute = IngestIndexRouteImport.update({
   id: '/ingest/',
   path: '/ingest/',
@@ -251,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
+  '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/journal-metrics': typeof JournalMetricsRoute
@@ -266,6 +291,7 @@ export interface FileRoutesByFullPath {
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
@@ -275,12 +301,14 @@ export interface FileRoutesByFullPath {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
+  '/forum/': typeof ForumIndexRoute
   '/ingest/': typeof IngestIndexRoute
   '/library/': typeof LibraryIndexRoute
   '/submissions/': typeof SubmissionsIndexRoute
@@ -292,6 +320,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
+  '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/journal-metrics': typeof JournalMetricsRoute
@@ -307,6 +336,7 @@ export interface FileRoutesByTo {
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
@@ -316,12 +346,14 @@ export interface FileRoutesByTo {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/catalog': typeof CatalogIndexRoute
   '/follows': typeof FollowsIndexRoute
+  '/forum': typeof ForumIndexRoute
   '/ingest': typeof IngestIndexRoute
   '/library': typeof LibraryIndexRoute
   '/submissions': typeof SubmissionsIndexRoute
@@ -334,6 +366,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
+  '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/journal-metrics': typeof JournalMetricsRoute
@@ -349,6 +382,7 @@ export interface FileRoutesById {
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
+  '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
@@ -358,12 +392,14 @@ export interface FileRoutesById {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
+  '/forum/': typeof ForumIndexRoute
   '/ingest/': typeof IngestIndexRoute
   '/library/': typeof LibraryIndexRoute
   '/submissions/': typeof SubmissionsIndexRoute
@@ -377,6 +413,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/archive'
     | '/authors'
+    | '/browse'
     | '/dashboard'
     | '/forgot-password'
     | '/journal-metrics'
@@ -392,6 +429,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/verify-email'
     | '/account/security'
+    | '/admin/announcements'
     | '/admin/audit-logs'
     | '/admin/issues'
     | '/admin/journal'
@@ -401,12 +439,14 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
     | '/catalog/'
     | '/follows/'
+    | '/forum/'
     | '/ingest/'
     | '/library/'
     | '/submissions/'
@@ -418,6 +458,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/archive'
     | '/authors'
+    | '/browse'
     | '/dashboard'
     | '/forgot-password'
     | '/journal-metrics'
@@ -433,6 +474,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/verify-email'
     | '/account/security'
+    | '/admin/announcements'
     | '/admin/audit-logs'
     | '/admin/issues'
     | '/admin/journal'
@@ -442,12 +484,14 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
     | '/catalog'
     | '/follows'
+    | '/forum'
     | '/ingest'
     | '/library'
     | '/submissions'
@@ -459,6 +503,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/archive'
     | '/authors'
+    | '/browse'
     | '/dashboard'
     | '/forgot-password'
     | '/journal-metrics'
@@ -474,6 +519,7 @@ export interface FileRouteTypes {
     | '/support'
     | '/verify-email'
     | '/account/security'
+    | '/admin/announcements'
     | '/admin/audit-logs'
     | '/admin/issues'
     | '/admin/journal'
@@ -483,12 +529,14 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
     | '/catalog/'
     | '/follows/'
+    | '/forum/'
     | '/ingest/'
     | '/library/'
     | '/submissions/'
@@ -501,6 +549,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ArchiveRoute: typeof ArchiveRoute
   AuthorsRoute: typeof AuthorsRoute
+  BrowseRoute: typeof BrowseRoute
   DashboardRoute: typeof DashboardRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   JournalMetricsRoute: typeof JournalMetricsRoute
@@ -516,6 +565,7 @@ export interface RootRouteChildren {
   SupportRoute: typeof SupportRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
+  AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
   AdminIssuesRoute: typeof AdminIssuesRoute
   AdminJournalRoute: typeof AdminJournalRoute
@@ -525,12 +575,14 @@ export interface RootRouteChildren {
   AdminVolumesRoute: typeof AdminVolumesRoute
   CatalogResourceIdRoute: typeof CatalogResourceIdRoute
   CatalogNewRoute: typeof CatalogNewRoute
+  ForumTopicIdRoute: typeof ForumTopicIdRoute
   LibraryListIdRoute: typeof LibraryListIdRoute
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
   ReviewAssignmentsRoute: typeof ReviewAssignmentsRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
   CatalogIndexRoute: typeof CatalogIndexRoute
   FollowsIndexRoute: typeof FollowsIndexRoute
+  ForumIndexRoute: typeof ForumIndexRoute
   IngestIndexRoute: typeof IngestIndexRoute
   LibraryIndexRoute: typeof LibraryIndexRoute
   SubmissionsIndexRoute: typeof SubmissionsIndexRoute
@@ -572,6 +624,13 @@ declare module '@tanstack/react-router' {
       path: '/authors'
       fullPath: '/authors'
       preLoaderRoute: typeof AuthorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/browse': {
+      id: '/browse'
+      path: '/browse'
+      fullPath: '/browse'
+      preLoaderRoute: typeof BrowseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard': {
@@ -679,6 +738,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountSecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/announcements': {
+      id: '/admin/announcements'
+      path: '/admin/announcements'
+      fullPath: '/admin/announcements'
+      preLoaderRoute: typeof AdminAnnouncementsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/audit-logs': {
       id: '/admin/audit-logs'
       path: '/admin/audit-logs'
@@ -756,6 +822,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FollowsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forum/': {
+      id: '/forum/'
+      path: '/forum'
+      fullPath: '/forum/'
+      preLoaderRoute: typeof ForumIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forum/$topicId': {
+      id: '/forum/$topicId'
+      path: '/forum/$topicId'
+      fullPath: '/forum/$topicId'
+      preLoaderRoute: typeof ForumTopicIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ingest/': {
       id: '/ingest/'
       path: '/ingest'
@@ -821,6 +901,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ArchiveRoute: ArchiveRoute,
   AuthorsRoute: AuthorsRoute,
+  BrowseRoute: BrowseRoute,
   DashboardRoute: DashboardRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   JournalMetricsRoute: JournalMetricsRoute,
@@ -836,6 +917,7 @@ const rootRouteChildren: RootRouteChildren = {
   SupportRoute: SupportRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AccountSecurityRoute: AccountSecurityRoute,
+  AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
   AdminIssuesRoute: AdminIssuesRoute,
   AdminJournalRoute: AdminJournalRoute,
@@ -845,12 +927,14 @@ const rootRouteChildren: RootRouteChildren = {
   AdminVolumesRoute: AdminVolumesRoute,
   CatalogResourceIdRoute: CatalogResourceIdRoute,
   CatalogNewRoute: CatalogNewRoute,
+  ForumTopicIdRoute: ForumTopicIdRoute,
   LibraryListIdRoute: LibraryListIdRoute,
   ReaderResourceIdRoute: ReaderResourceIdRoute,
   ReviewAssignmentsRoute: ReviewAssignmentsRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
   CatalogIndexRoute: CatalogIndexRoute,
   FollowsIndexRoute: FollowsIndexRoute,
+  ForumIndexRoute: ForumIndexRoute,
   IngestIndexRoute: IngestIndexRoute,
   LibraryIndexRoute: LibraryIndexRoute,
   SubmissionsIndexRoute: SubmissionsIndexRoute,

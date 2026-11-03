@@ -584,7 +584,9 @@ function HomePage() {
   const resources = data?.data ?? []
   const total = stats?.total ?? 0
   const disciplines = stats ? Object.keys(stats.by_discipline).length : 0
-  const readsTotal = metrics?.reads_total ?? 0
+  // 双赛道分布：首页第二张卡直接展示"正经/荒诞"的规模对比，
+  // 这是本刊与其他期刊最不同的一点，必须第一屏可见。
+  const tracks = stats?.by_track ?? {}
 
   // 滚动入场：motion 14.5.0 的 whileInView 在本项目不触发（线上同样复现），
   // 改由原生 IntersectionObserver 驱动 animate；容器保留原本的 stagger variants。
@@ -749,10 +751,30 @@ function HomePage() {
               className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 lg:grid-cols-4"
             >
               {[
-                { label: '收录文章', node: <CountUpNumber target={total} /> },
+                // 四项都必须回答读者/作者真正关心的问题：
+                // 有多少可读、覆盖多广、两条赛道各多少、审稿要多久。
+                // 「累计阅读」这种虚荣指标留给后台看，不放在期刊门面。
+                { label: '已刊文章', node: <CountUpNumber target={total} /> },
                 { label: '覆盖学科', node: <CountUpNumber target={disciplines} /> },
-                { label: '开放获取', node: <CountUpNumber target={100} suffix="%" /> },
-                { label: '累计阅读', node: <CountUpNumber target={readsTotal} /> },
+                {
+                  label: '正经 / 荒诞',
+                  node: (
+                    <span className="tabular-nums">
+                      {tracks.serious ?? 0}
+                      <span className="mx-1 text-2xl opacity-40">/</span>
+                      {tracks.absurd ?? 0}
+                    </span>
+                  ),
+                },
+                {
+                  label: '平均审稿天数',
+                  node:
+                    metrics?.avg_review_days != null ? (
+                      <CountUpNumber target={Math.round(metrics.avg_review_days)} suffix=" 天" />
+                    ) : (
+                      <span className="text-2xl text-muted-foreground">—</span>
+                    ),
+                },
               ].map((s) => (
                 <motion.div
                   key={s.label}

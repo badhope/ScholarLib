@@ -180,7 +180,7 @@ function PendingSubmissionsPage() {
   // 'all' tab 不传 status，让后端返回全部状态
   const statusFilter = statusTab === 'all' ? undefined : statusTab
   // 职权分离（与后端 require_chief_editor 同口径）：四元最终决定是
-  // L8 执行编辑 / L9 主编的职权；L7 栏目编辑只有初审、送审与推荐权。
+  // 最终裁决是执行编辑/主编的职权；栏目编辑只有初审、送审与推荐权。
   const { isAdmin, user } = useAuth()
   const isChief = isAdmin || (user?.roles ?? []).includes('editor')
   const isSectionOnly = !isChief && (user?.roles ?? []).includes('section_editor')

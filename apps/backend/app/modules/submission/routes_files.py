@@ -244,6 +244,58 @@ async def upload_submission_file(
     return resp
 
 
+@router.post("/{submission_id}/cover", response_model=SubmissionResponse)
+async def upload_submission_cover(
+    submission_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionResponse:
+    """作者上传封面图（替换式）。
+
+    为什么允许作者自选封面：本刊是双赛道期刊，荒诞稿的封面往往就是
+    作品的一部分（一张梗图胜过一千字摘要）。不给作者这个入口，所有
+    文章只能长成同一个样子。
+
+    限制：仅作者本人；仅图片格式；≤5MB。未上传时前端按学科自动分配
+    默认封面（covers.json 的精选图库），所以封面永远不为空。
+    """
+    entry = await _get_or_404(db, submission_id)
+    if entry.submitted_by != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the submitter can upload a cover",
+        )
+    if entry.status in ("accepted", "approved", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot change cover in status '{entry.status}'",
+        )
+
+    mime = (file.content_type or "").lower()
+    if mime not in ("image/png", "image/jpeg", "image/webp"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="封面仅支持 PNG / JPEG / WebP",
+        )
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="封面图不能超过 5MB",
+        )
+    ext = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}[mime]
+    key = f"{entry.tenant_id}/{entry.id}/cover-{uuid4().hex}{ext}"
+    await get_storage().save(key, contents, content_type=mime)
+
+    old = entry.cover_image
+    entry.cover_image = key
+    await db.commit()
+    await db.refresh(entry)
+    await _try_delete_storage(old)
+    return _to_response(entry)
+
+
 @router.get("/{submission_id}/files")
 async def download_submission_file(
     submission_id: int,

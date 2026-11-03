@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { MoreHorizontal, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
-import { useAdminUsers, useAssignRole, useRevokeRole, useSetUserActive } from '@/hooks/api/use-modules'
+import { useAdminUsers, useAssignRole, useRevokeRole, useSetUserActive, useSetUserAdmin } from '@/hooks/api/use-modules'
 import { useAuth } from '@/hooks/use-auth'
 import type { AssignableRole, UserResponse } from '@/lib/types'
 import { extractError, inferTotalPagesFromFullPage } from '@/lib/utils'
@@ -76,6 +76,7 @@ function AdminUsersPage() {
   // 服务端过滤：本地过滤只能看到当前这一页，用户超过 50 个后搜不到老账号。
   const { data, isLoading, isError, refetch } = useAdminUsers(PAGE_SIZE, offset, debouncedQuery)
   const setActiveMut = useSetUserActive()
+  const setAdminMut = useSetUserAdmin()
   const assignRoleMut = useAssignRole()
   const revokeRoleMut = useRevokeRole()
   const { user } = useAuth()
@@ -211,6 +212,21 @@ function AdminUsersPage() {
                             disabled={setActiveMut.isPending}
                           >
                             {u.is_active ? '禁用账号' : '启用账号'}
+                          </DropdownMenuItem>
+                          {/* 平台管理员提权：此前只能改数据库，界面上无路可走 */}
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              try {
+                                await setAdminMut.mutateAsync({ userId: u.id, isAdmin: !u.is_admin })
+                                toast.success(u.is_admin ? '已取消管理员' : '已设为平台管理员')
+                              } catch (err) {
+                                toast.error(extractError(err, '操作失败'))
+                              }
+                            }}
+                            disabled={setAdminMut.isPending}
+                            className={u.is_admin ? 'text-destructive' : ''}
+                          >
+                            {u.is_admin ? '取消平台管理员' : '设为平台管理员'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuLabel>角色分配</DropdownMenuLabel>

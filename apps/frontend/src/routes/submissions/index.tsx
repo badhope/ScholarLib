@@ -30,6 +30,7 @@ import {
   useSubmissionReports,
   useSubmissionVersions,
   useUpdateSubmission,
+  useUploadSubmissionCover,
   useUploadSubmissionFile,
 } from '@/hooks/api/use-modules'
 import type {
@@ -288,6 +289,7 @@ function SubmissionsPage() {
   const createMut = useCreateSubmission()
   const deleteMut = useDeleteSubmission()
   const uploadMut = useUploadSubmissionFile()
+  const uploadCoverMut = useUploadSubmissionCover()
   const resubmitMut = useResubmitSubmission()
   const updateMut = useUpdateSubmission()
 
@@ -947,6 +949,33 @@ function SubmissionsPage() {
                   </span>
                 )}
               </div>
+            </div>
+
+            {/* 封面：作者可上传，未上传时按学科自动分配默认封面 */}
+            <div className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between">
+                <Label>封面图</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  PNG/JPEG/WebP · ≤5MB · 不上传则自动配图
+                </span>
+              </div>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:text-primary"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0]
+                  if (!f || !detail) return
+                  try {
+                    const updated = await uploadCoverMut.mutateAsync({ id: detail.id, file: f })
+                    setDetail(updated)
+                    toast.success('封面上传成功')
+                  } catch (err) {
+                    toast.error(extractError(err, '封面上传失败'))
+                  }
+                }}
+                disabled={uploadCoverMut.isPending}
+              />
             </div>
             {/* 赛道：本刊最重要的一个选择。放在类型之前，因为读者
                 读到什么、编辑按什么标准审，都由它决定。 */}

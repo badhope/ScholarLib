@@ -121,6 +121,8 @@ async def _materialize_resource_from_submission(
         # jel_codes 不在此物化——catalog.Resource 没有该列（功能未落地），
         # 此处不声称不存在的字段对齐。
         keywords=submission.keywords or None,
+        # 封面随物化带到目录；空则由前端按学科回退默认封面。
+        cover_image=submission.cover_image,
     )
     db.add(resource)
     await db.flush()
@@ -159,6 +161,7 @@ def _to_response(entry: Submission) -> SubmissionResponse:
         admin_note=entry.admin_note,
         editor_note=entry.editor_note,
         resource_id=entry.resource_id,
+        cover_image=entry.cover_image,
         file_path=entry.file_path,
         markdown_path=entry.markdown_path,
         submitted_by=entry.submitted_by,

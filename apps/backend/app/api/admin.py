@@ -207,6 +207,77 @@ async def set_user_active(
     return await _user_with_roles(db, user)
 
 
+@router.patch("/users/{user_id}/admin", response_model=UserResponse)
+async def set_user_admin(
+    user_id: int,
+    is_admin: bool,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> UserResponse:
+    """设置/取消平台管理员（提权为 admin）。
+
+    ``is_admin`` 是平台级特权（可管理所有用户、改评分、看审计），不是租户
+    角色。此前只能靠直接改数据库，前端「用户管理」页只读展示，导致
+    "把某人提成管理员"在界面上无路可走。
+
+    安全约束（三条都必要）：
+    1. 不能改自己的 admin 状态——防止误操作把自己锁在门外；
+    2. 不能把最后一个管理员降级——否则无人可管理系统；
+    3. 提权/降权都写审计（谁在什么时候给了谁特权）。
+    """
+    if user_id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能修改自己的管理员状态（避免把自己锁在门外）",
+        )
+    tenant_id = require_tenant_id()
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.tenant_id == tenant_id)
+    )
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # 降级检查：至少保留一个管理员
+    if not is_admin and user.is_admin:
+        remaining = (
+            await db.execute(
+                select(func.count(User.id)).where(
+                    User.tenant_id == tenant_id,
+                    User.is_admin.is_(True),
+                    User.id != user.id,
+                )
+            )
+        ).scalar_one()
+        if remaining < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能取消最后一个管理员——否则无人可管理系统",
+            )
+
+    previous = user.is_admin
+    user.is_admin = is_admin
+    if not is_admin:
+        # 降权即吊销全部令牌：旧 access token 里的 is_admin 判断会随
+        # 下次请求回查数据库失效，但 refresh token 仍能换新 access，
+        # 所以必须同时 bump 两个版本号，确保彻底退出特权。
+        user.token_version += 1
+        user.refresh_token_version += 1
+    db.add(
+        AuditLog(
+            tenant_id=current_admin.tenant_id,
+            actor_user_id=current_admin.id,
+            action="user.set_admin",
+            target_type="user",
+            target_id=str(user.id),
+            payload={"field": "is_admin", "old": previous, "new": is_admin},
+        )
+    )
+    await db.commit()
+    await db.refresh(user)
+    return await _user_with_roles(db, user)
+
+
 @router.delete(
     "/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,

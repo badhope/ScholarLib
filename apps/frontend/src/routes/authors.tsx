@@ -272,6 +272,12 @@ function AuthorsPage() {
                 body: '公式多的正经研究用它；xelatex 编译出 PDF 后直接投稿。',
               },
               {
+                href: '/templates/rubbish-submission-template-word.md',
+                icon: FileText,
+                title: 'Word 排版要求',
+                body: '页面/字体/标题层级/三线表/参考文献的逐项设置说明，套用样式即可合规。',
+              },
+              {
                 href: '/templates/rubbish-editorial-standards.md',
                 icon: BookOpenCheck,
                 title: '编辑规范（完整版）',

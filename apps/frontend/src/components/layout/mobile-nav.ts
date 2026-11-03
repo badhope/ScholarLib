@@ -17,6 +17,8 @@ import {
   Award,
   CalendarDays,
   Compass,
+  Megaphone,
+  MessagesSquare,
   type LucideIcon,
   User,
 } from 'lucide-react'
@@ -48,7 +50,9 @@ export const MOBILE_MORE_GROUP_ORDER = ['我的', '工作台', '期刊', '设置
 // 人的逻辑：第一个 Tab 是公开首页（不登录也能逛），登录后的概览移入"更多"抽屉。
 export const MOBILE_TABS: MobileTab[] = [
   { to: '/', label: '首页', icon: Home },
-  { to: '/catalog', label: '目录', icon: BookOpen },
+  // 第二个 Tab 给「浏览」而非「目录」：移动端需要分类入口，
+  // 直接甩一张大表格是最差的移动体验。
+  { to: '/browse', label: '浏览', icon: Compass },
   { to: '/notifications', label: '通知', icon: Bell },
   { to: '/__more', label: '我的', icon: User, openSheet: true },
 ]
@@ -60,6 +64,8 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/submissions', label: '我的提交', icon: ScrollText, group: '我的' },
   { to: '/follows', label: '关注与订阅', icon: Heart, group: '我的' },
   { to: '/recommendations', label: '推荐', icon: Lightbulb, group: '我的' },
+  { to: '/forum', label: '讨论区', icon: MessagesSquare, group: '我的' },
+  { to: '/catalog', label: '资源目录', icon: BookOpen, group: '期刊' },
   { to: '/review/assignments', label: '审稿工作台', icon: ClipboardCheck, roles: ['reviewer'], group: '工作台' },
   {
     to: '/submissions/pending',
@@ -78,6 +84,7 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/admin/users', label: '用户管理', icon: Users, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, adminOnly: true, group: '站点管理' },
   { to: '/admin/audit-logs', label: '审计日志', icon: ShieldCheck, adminOnly: true, group: '站点管理' },
+  { to: '/admin/announcements', label: '公告管理', icon: Megaphone, adminOnly: true, group: '站点管理' },
   { to: '/admin/settings', label: '期刊设置', icon: Settings, adminOnly: true, group: '站点管理' },
 ]
 

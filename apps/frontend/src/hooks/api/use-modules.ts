@@ -1238,3 +1238,38 @@ export function useRequestRework() {
     },
   })
 }
+
+/** 设置/取消平台管理员（提权）。后端拒绝改自己、拒绝降级最后一个管理员。 */
+export function useSetUserAdmin() {
+  const qc = useQueryClient()
+  return useMutation<
+    unknown,
+    Error,
+    { userId: number; isAdmin: boolean }
+  >({
+    mutationFn: async ({ userId, isAdmin }) =>
+      (
+        await api.patch(`/admin/users/${userId}/admin`, null, {
+          params: { is_admin: isAdmin },
+        })
+      ).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+}
+
+/** 作者上传封面图（PNG/JPEG/WebP ≤5MB）。 */
+export function useUploadSubmissionCover() {
+  const qc = useQueryClient()
+  return useMutation<SubmissionResponse, Error, { id: number; file: File }>({
+    mutationFn: async ({ id, file }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return (await api.post<SubmissionResponse>(`/submissions/${id}/cover`, fd)).data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
+    },
+  })
+}

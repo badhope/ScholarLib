@@ -135,6 +135,10 @@ class Submission(Base, TenantScopedMixin):
     # 编辑 4 元决定（accept/minor_revision/major_revision/reject）的备注，
     # 区别于 admin_note（兼容旧 review 端点的备注字段）
     editor_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 封面图（作者上传 / 编辑指定）。存储 key 与 file_path 同族，
+    # 物化到 catalog.resources.cover_image 时原样带过去。
+    # 空 = 未上传，前端回退到按学科自动分配的默认封面。
+    cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # 在线阅读用 Markdown 稿件（上传 PDF/Word 后服务端转换，见
     # manuscript.py）；可空 = 未转换或转换失败，阅读器回退 PDF 视图。
@@ -191,6 +195,10 @@ class SubmissionVersion(Base, TenantScopedMixin):
     # 完整书目 payload 快照（title/authors/abstract/... 与 Submission 列同形）
     payload: Mapped[dict[str, Any]] = mapped_column(JSONBVariant, nullable=False)
     # 该版本对应的稿件文件 key（可能为 None：作者还没传文件）
+    # 封面图（作者上传 / 编辑指定）。存储 key 与 file_path 同族，
+    # 物化到 catalog.resources.cover_image 时原样带过去。
+    # 空 = 未上传，前端回退到按学科自动分配的默认封面。
+    cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # 作者附言：v1 恒空；重投版本可填「针对审稿意见做了哪些修改」
     note: Mapped[str | None] = mapped_column(Text, nullable=True)

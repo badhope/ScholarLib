@@ -115,7 +115,7 @@ class Resource(Base, TenantScopedMixin):
     track: Mapped[str] = mapped_column(
         String(16), nullable=False, default="serious", server_default="serious"
     )
-    # --- 质量评分（quality 模块 RQS v1.0，冻结口径） ---
+    # --- 质量评分（quality 模块 RQS v2.0，冻结口径） ---
     # 0–100；grade = A+/A/B/C/D；breakdown 存各维度得分明细（可复现）。
     quality_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     quality_grade: Mapped[str | None] = mapped_column(String(4), nullable=True)

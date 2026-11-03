@@ -121,7 +121,7 @@ class ResourceBase(BaseModel):
     publication_status: PublicationStatus = "published"
     # 荒诞指数：编辑部评定（0–10，一位小数），None 表示未评定。
     absurdity_index: float | None = Field(default=None, ge=0, le=10)
-    # 质量评分（quality 模块 RQS v1.0）：0–100 与等级 A+/A/B/C/D。
+    # 质量评分（quality 模块 RQS v2.0）：0–100 与等级 A+/A/B/C/D。
     quality_score: float | None = Field(default=None, ge=0, le=100)
     quality_grade: str | None = Field(default=None, max_length=4)
     quality_breakdown: dict[str, Any] | None = None

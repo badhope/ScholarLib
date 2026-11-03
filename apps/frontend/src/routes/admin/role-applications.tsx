@@ -46,8 +46,8 @@ interface ApplicationsQueueResponse {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  reviewer: '审稿人（L5）',
-  senior_reviewer: '资深审稿人（L6）',
+  reviewer: '审稿人',
+  senior_reviewer: '资深审稿人',
 }
 
 const STATUS_LABEL: Record<string, string> = {

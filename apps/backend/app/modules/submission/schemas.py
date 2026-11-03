@@ -197,6 +197,7 @@ class SubmissionResponse(BaseModel):
     # 前端据此区分「已发表」与「刊前预览（暂存草稿）」。
     resource_publication_status: str | None = None
     resource_id: int | None = None
+    cover_image: str | None = None
     file_path: str | None = None
     # 在线阅读用 Markdown 稿件的存储 key（可空 = 回退 PDF 视图）。
     markdown_path: str | None = None
@@ -271,6 +272,7 @@ class SubmissionVersionResponse(BaseModel):
     submission_id: int
     version: int
     payload: dict[str, Any]
+    cover_image: str | None = None
     file_path: str | None = None
     note: str | None = None
     created_by: int | None = None

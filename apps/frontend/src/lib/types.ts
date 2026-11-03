@@ -188,7 +188,7 @@ export interface ResourceBase {
   publication_status: PublicationStatus
   /** 荒诞指数：编辑部评定（0–10），未评定为 null */
   absurdity_index?: number | null
-  /** 质量评分（RQS v1.0，0–100）与等级 A+/A/B/C/D */
+  /** 质量评分（RQS v2.0，0–100）与等级 A+/A/B/C/D */
   quality_score?: number | null
   quality_grade?: string | null
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null

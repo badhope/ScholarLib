@@ -25,6 +25,8 @@ import {
   Users,
   Award,
   Compass,
+  Megaphone,
+  MessagesSquare,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -57,6 +59,7 @@ const NAV: NavItem[] = [
   { to: '/journal-metrics', label: '期刊指标', icon: TrendingUp, group: '期刊' },
   { to: '/archive', label: '卷期归档', icon: CalendarDays, group: '期刊' },
   { to: '/levels', label: '等级与规范', icon: Compass, group: '期刊' },
+  { to: '/browse', label: '浏览', icon: Compass, group: '内容' },
   { to: '/catalog', label: '资源目录', icon: BookOpen, group: '内容' },
   { to: '/profile', label: '个人中心', icon: Award, auth: true, group: '我的工作' },
   { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '内容' },
@@ -82,10 +85,12 @@ const NAV: NavItem[] = [
     group: '我的工作',
   },
   { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor'], group: '我的工作' },
+  { to: '/forum', label: '讨论区', icon: MessagesSquare, group: '社区' },
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '消息' },
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/volumes', label: '卷管理', icon: Layers, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/issues', label: '期管理', icon: CalendarDays, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/journal', label: '期刊信息', icon: Building2, auth: true, adminOnly: true, group: '站点管理' },

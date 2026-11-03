@@ -74,7 +74,11 @@ export default function PdfViewer({
  if (token !== renderTokenRef.current) return
       // 按容器宽度自适应（1.5x 保证高清屏清晰），单页纵向布局。
       // pdf.js 各版本 viewBox API 有波动，用 scale=1 视口宽度求基准最稳。
-      const base = Math.min(canvas.parentElement?.clientWidth ?? 800, 900)
+      // clientWidth 在初次渲染 / 隐藏容器 / 移动端折叠时可能为 0。
+      // 为 0 时退回到窗口宽度（再夹到 320–900），否则 scale 会算出 0，
+      // canvas 尺寸变成 0×0，用户看到的就是"白屏 + 加载失败"。
+      const containerW = canvas.parentElement?.clientWidth ?? 0
+      const base = Math.min(containerW > 0 ? containerW : window.innerWidth - 48, 900)
       const viewport1 = pdfPage.getViewport({ scale: 1 })
       const scale = (base / viewport1.width) * 1.5
       const viewport = pdfPage.getViewport({ scale })
@@ -125,7 +129,14 @@ export default function PdfViewer({
  try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const task = pdfjsLib.getDocument({ url } as any)
-        const doc = await task.promise
+        // 加载超时：pdf.js 在服务端挂起/网络半开时会永久 pending，
+        // 用户看到无限转圈而不是错误。45 秒后主动失败并提示重试。
+        const doc = await Promise.race([
+          task.promise,
+          new Promise<never>((_, reject) =>
+            window.setTimeout(() => reject(new Error('加载超时（45 秒）')), 45000),
+          ),
+        ])
         if (disposed) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           void (doc as any).destroy()
