@@ -4,8 +4,9 @@ import { AxiosError } from 'axios'
 import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
 import { parseListField } from '@/lib/utils'
+import { DISCIPLINES } from '@/lib/disciplines'
 import { useCreateResource } from '@/hooks/api/use-modules'
-import type { PublicationStatus, ResourceCreate, ResourceType, Track } from '@/lib/types'
+import type { PublicationStatus, ResourceCreate, ResourceType } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -42,7 +43,6 @@ const STATUS_OPTIONS: { value: PublicationStatus; label: string }[] = [
 
 interface FormState {
   type: ResourceType
-  track: Track
   title: string
   authors: string
   year: string
@@ -71,7 +71,6 @@ function NewResourcePage() {
 
   const [form, setForm] = useState<FormState>({
     type: 'paper',
-    track: 'serious',
     title: '',
     authors: '',
     year: String(new Date().getFullYear()),
@@ -102,7 +101,6 @@ function NewResourcePage() {
     e.preventDefault()
     const body: ResourceCreate = {
       type: form.type,
-      track: form.track,
       title: form.title,
       authors: parseListField(form.authors),
       year: Number(form.year),
@@ -149,18 +147,6 @@ function NewResourcePage() {
             {/* 必填区 */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">必填信息</h3>
-              <div className="space-y-2">
-                <Label>赛道</Label>
-                <Select value={form.track} onValueChange={(v) => set('track', v as Track)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="serious">正经研究</SelectItem>
-                    <SelectItem value="absurd">荒诞研究</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="type">类型</Label>
@@ -212,13 +198,23 @@ function NewResourcePage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="discipline">学科</Label>
+                {/* datalist 选择器：选项来自 2026 学科目录，同时保留自由输入
+                    兜底——本刊为讽刺性期刊，允许自创学科。存学科名。 */}
                 <Input
                   id="discipline"
+                  list="discipline-options"
                   value={form.discipline}
                   onChange={(e) => set('discipline', e.target.value)}
-                  placeholder="如 computer science"
+                  placeholder="选择或输入学科"
                   required
                 />
+                <datalist id="discipline-options">
+                  {DISCIPLINES.flatMap((c) => c.items).map((d) => (
+                    <option key={d.code} value={d.name}>
+                      {d.name}（{d.code}）
+                    </option>
+                  ))}
+                </datalist>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="abstract">摘要</Label>
@@ -253,11 +249,21 @@ function NewResourcePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="subdiscipline">子学科</Label>
+                  {/* 子学科同样走 datalist：目录为一级学科名，可自由输入 */}
                   <Input
                     id="subdiscipline"
+                    list="subdiscipline-options"
                     value={form.subdiscipline}
                     onChange={(e) => set('subdiscipline', e.target.value)}
+                    placeholder="选择或输入子学科"
                   />
+                  <datalist id="subdiscipline-options">
+                    {DISCIPLINES.flatMap((c) => c.items).map((d) => (
+                      <option key={d.code} value={d.name}>
+                        {d.name}（{d.code}）
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="tags">标签（逗号分隔）</Label>

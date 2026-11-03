@@ -20,7 +20,7 @@ from pydantic import (
 )
 
 from app.core.schemas import Authors, PaginationMeta
-from app.core.tracks import Track
+from app.core.tracks import Track, normalize_track
 
 
 class AuthorMeta(BaseModel):
@@ -60,7 +60,8 @@ class ResourceBase(BaseModel):
     """Shared fields for create / update / response."""
 
     type: ResourceType
-    # 赛道：正经研究 / 荒诞研究。本刊的核心分野，公开面按此分组与筛选。
+    # 赛道：历史字段，已下线（见 core/tracks.py）。仅保留 serious 一档，
+    # 旧客户端传 absurd 等值由 before-validator 归一为 serious，不 422。
     track: Track = "serious"
     title: str = Field(min_length=1, max_length=1000)
     authors: Authors = Field(min_length=1, max_length=200)
@@ -90,6 +91,14 @@ class ResourceBase(BaseModel):
         if parsed.scheme in ("http", "https") and parsed.netloc:
             return v
         raise ValueError("url 必须以 http(s) 开头，或为 / 开头的同源相对路径")
+
+    @field_validator("track", mode="before")
+    @classmethod
+    def _normalize_track(cls, v: object) -> object:
+        """赛道已下线：任意非 serious 输入（含历史 absurd）归一为 serious。"""
+        if v is None:
+            return None
+        return normalize_track(v) if isinstance(v, str) else v
 
     # Optional parallel list of author enrichment objects. Must have the same length as ``authors`` (when set), or be empty/null.
     authors_meta: list[AuthorMeta] | None = Field(default=None, max_length=200)
@@ -149,6 +158,7 @@ class ResourceUpdate(BaseModel):
     """Body for PATCH /catalog/{id}. All fields optional."""
 
     type: ResourceType | None = None
+    # 赛道：历史字段，已下线。None = 不修改；非 serious 输入归一为 serious。
     track: Track | None = None
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     # 与 ResourceCreate 用同一个 Authors 注解：PATCH 也必须做逐元素校验
@@ -187,6 +197,14 @@ class ResourceUpdate(BaseModel):
     cover_theme: str | None = Field(default=None, max_length=50)
     publish_at: datetime | None = None
 
+    @field_validator("track", mode="before")
+    @classmethod
+    def _normalize_track(cls, v: object) -> object:
+        """赛道已下线：非 serious 输入（含历史 absurd）归一为 serious。"""
+        if v is None:
+            return None
+        return normalize_track(v) if isinstance(v, str) else v
+
 
 class ResourceResponse(ResourceBase):
     """Response body for read endpoints.
@@ -223,9 +241,8 @@ class ResourceStats(BaseModel):
     total: int
     by_type: dict[str, int]
     by_discipline: dict[str, int]
-    # 赛道分布：首页/目录首页的「正经 N 篇 / 荒诞 M 篇」直接读这里。
-    # 不分赛道时 total 会把两种完全不同的阅读预期混成一个数字。
-    by_track: dict[str, int] = Field(default_factory=dict)
+    # by_track 已随赛道下线移除：文章气质由 absurdity_index 表达，
+    # 不再按赛道分组统计。
     downloads_total: int = 0
     reads_total: int = 0
 

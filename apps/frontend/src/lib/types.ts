@@ -147,23 +147,15 @@ export interface CapabilitiesResponse {
 export type ResourceType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export type PublicationStatus = 'published' | 'in_review' | 'draft'
 
-/** 赛道：本刊唯一的产品分野。serious = 正经研究；absurd = 荒诞研究。 */
-export type Track = 'serious' | 'absurd'
-
-export const TRACK_LABELS: Record<Track, string> = {
-  serious: '正经研究',
-  absurd: '荒诞研究',
-}
-
-export const TRACK_SHORT: Record<Track, string> = {
-  serious: '正经',
-  absurd: '荒诞',
-}
+/** 赛道：历史字段，已下线（对齐后端 core/tracks.py）。仅保留 serious，
+ *  旧值由后端归一化；文章气质由荒诞指数（absurdity_index）表达。 */
+export type Track = 'serious'
 
 export interface ResourceBase {
   type: ResourceType
-  /** 赛道：决定评分画像与读者预期（详见 core/tracks.py） */
-  track: Track
+  /** 赛道：历史字段，已下线（见 core/tracks.py）。前端不再读写，
+   *  后端会把任意值归一为 serious；仅为类型兼容保留为可选。 */
+  track?: Track
   title: string
   authors: string[]
   year: number
@@ -253,8 +245,7 @@ export interface ResourceStats {
   total: number
   by_type: Record<string, number>
   by_discipline: Record<string, number>
-  /** 赛道分布：正经/荒诞各多少篇（首页与目录赛道 tab 用） */
-  by_track?: Record<string, number>
+  /** by_track 已随赛道下线移除：文章气质由 absurdity_index 表达。 */
   downloads_total?: number
   reads_total?: number
 }
@@ -271,7 +262,6 @@ export interface ResourceFacets {
 
 export interface ResourceListParams {
   type?: ResourceType
-  track?: Track
   discipline?: string
   year?: number
   volume?: string
@@ -301,7 +291,7 @@ export type SubmissionType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export interface SubmissionCreate {
   title: string
   type: SubmissionType
-  /** 赛道：投稿时必选（后端默认 serious 兼容旧客户端） */
+  /** 赛道：历史字段，已下线。后端会把任意值归一为 serious，前端不再发送。 */
   track?: Track
   authors: string[]
   year: number
@@ -354,6 +344,7 @@ export interface SubmissionResponse {
   id: number
   title: string
   type: string
+  /** 赛道：历史字段（已下线），恒为 serious，仅为兼容保留。 */
   track: Track
   authors: string[]
   year: number

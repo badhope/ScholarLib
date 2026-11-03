@@ -105,13 +105,11 @@ class Resource(Base, TenantScopedMixin):
     # 荒诞指数：编辑部对单篇内容离谱程度的评定（0–10，一位小数）。
     # 与 R 指数（读者注意力）相互独立；可空——正经论文可以不评定。
     absurdity_index: Mapped[Decimal | None] = mapped_column(Numeric(4, 1), nullable=True)
-    # 赛道：本刊唯一的产品分野，决定稿件的评价口径与读者的阅读预期。
-    #   serious — 正经研究：按学术规范评审，RQS 权重偏向结构/引用/图表
-    #   absurd  — 荒诞研究：同样要求真实引用与完整论证，选题可以离谱
-    # 默认 serious 是让历史数据（迁移前入库的记录）落在保守一侧：把一篇
-    # 正经论文误标成荒诞的伤害远大于反过来。
-    # 复合索引见迁移 013（(tenant_id, track, publication_status)），
-    # 单列 index=True 会让公开面列表多一次回表。
+    # 赛道：历史字段，已下线（见 core/tracks.py）。serious / absurd 双赛道
+    # 已由每篇论文的荒诞指数（absurdity_index）取代，为兼容历史数据保留
+    # 本列，新写入恒为 serious。复合索引见迁移 013
+    # （(tenant_id, track, publication_status)），单列 index=True 会让公开面
+    # 列表多一次回表。
     track: Mapped[str] = mapped_column(
         String(16), nullable=False, default="serious", server_default="serious"
     )

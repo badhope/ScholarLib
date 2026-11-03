@@ -113,9 +113,9 @@ class Submission(Base, TenantScopedMixin):
     # status 兼容旧值 pending/approved/rejected，同时支持
     # under_review/major_revision/minor_revision/resubmitted/accepted。
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
-    # 赛道（serious / absurd）。投稿时由作者选定，决定 RQS 评分画像与
-    # 目录/首页的呈现分组；录用物化时原样带到 catalog.resources.track。
-    # 刻意允许作者自选而非编辑判定：赛道是写作意图的声明，不是质量评级。
+    # 赛道（serious / absurd）：历史字段，已下线（见 core/tracks.py），
+    # 投稿侧由 schema 归一为 serious；录用物化时原样带到
+    # catalog.resources.track。为兼容历史数据保留本列。
     track: Mapped[str] = mapped_column(
         String(16), nullable=False, default="serious", server_default="serious"
     )

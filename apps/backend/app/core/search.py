@@ -89,8 +89,8 @@ def _to_document(resource: Any) -> dict[str, Any]:
         "keywords": resource.keywords or [],
         "tags": resource.tags or [],
         "type": resource.type,
-        # track 进索引：目录的「正经/荒诞」筛选是主维度之一，若只在回表
-        # 阶段过滤，搜索分页总数会与实际可见条数对不上。
+        # track 仍在索引文档里（历史字段，见 core/tracks.py：赛道已下线，
+        # 只保留 serious），但搜索侧不再提供 track 过滤参数。
         "track": getattr(resource, "track", "serious"),
         "discipline": resource.discipline,
         "year": resource.year,
@@ -124,7 +124,6 @@ async def search_resource_ids(
     tenant_id: str,
     q: str,
     type_: str | None = None,
-    track: str | None = None,
     discipline: str | None = None,
     year: int | None = None,
     page: int = 1,
@@ -134,6 +133,8 @@ async def search_resource_ids(
 
     Returns None when the feature is disabled or unavailable — callers
     MUST treat None as "fall back to DB search".
+
+    赛道筛选已随赛道下线移除（core/tracks.py）。
     """
     client = await _get_client()
     if client is None:
@@ -141,8 +142,6 @@ async def search_resource_ids(
     filters = [f"tenant_id = {_quote(str(tenant_id))}"]
     if type_ is not None:
         filters.append(f"type = {_quote(type_)}")
-    if track is not None:
-        filters.append(f"track = {_quote(track)}")
     if discipline is not None:
         filters.append(f"discipline = {_quote(discipline)}")
     if year is not None:

@@ -10,10 +10,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.schemas import Authors, MessageResponse, PaginationMeta
-from app.core.tracks import Track
+from app.core.tracks import Track, normalize_track
 
 # 完整 workflow 状态机：
 #   pending → under_review → (major_revision | minor_revision | accepted | rejected)
@@ -53,9 +53,8 @@ class SubmissionCreate(BaseModel):
 
     title: str = Field(min_length=1, max_length=1000)
     type: SubmissionType
-    # 赛道：决定评分画像、审稿人匹配与读者预期。作者必选而不是默认，
-    # 因为"我不知道投哪条"本身就是需要作者想清楚的问题（两份赛道的
-    # 写作语气完全不同）。历史客户端缺省时按 serious 处理，见 core/tracks。
+    # 赛道：历史字段，已下线（见 core/tracks.py）。仅保留 serious 一档，
+    # 旧客户端传 absurd 等值由 before-validator 归一为 serious，不 422。
     track: Track = "serious"
     authors: Authors = Field(min_length=1, max_length=200)
     year: int = Field(ge=-3000, le=2100)
@@ -73,6 +72,14 @@ class SubmissionCreate(BaseModel):
     external_url: AnyHttpUrl | None = None
     doi: str | None = Field(default=None, max_length=200)
     corresponding_author_email: str | None = Field(default=None, max_length=255)
+
+    @field_validator("track", mode="before")
+    @classmethod
+    def _normalize_track(cls, v: object) -> object:
+        """赛道已下线：任意非 serious 输入（含历史 absurd）归一为 serious。"""
+        if v is None:
+            return None
+        return normalize_track(v) if isinstance(v, str) else v
 
     @model_validator(mode="after")
     def _fill_preview_from_abstract(self) -> SubmissionCreate:
@@ -172,7 +179,7 @@ class SubmissionResponse(BaseModel):
     id: int
     title: str
     type: str
-    # 赛道：前端据此分组展示、编辑据此匹配审稿人。
+    # 赛道：历史字段（已下线），库中恒为 serious，仅为兼容保留。
     track: Track = "serious"
     authors: list[str]
     year: int
@@ -237,9 +244,7 @@ class SubmissionUpdate(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=1000)
     type: SubmissionType | None = None
-    # 赛道可在修改窗口内调整（作者改主意或编辑建议换道），一旦进入
-    # under_review 就锁死——审稿人按某条赛道的标准给出的意见不能被
-    # 中途换道作废。
+    # 赛道：历史字段，已下线。None = 不修改；非 serious 输入归一为 serious。
     track: Track | None = None
     authors: Authors | None = Field(default=None, min_length=1, max_length=200)
     year: int | None = Field(default=None, ge=-3000, le=2100)
@@ -255,6 +260,14 @@ class SubmissionUpdate(BaseModel):
     external_url: AnyHttpUrl | None = None
     doi: str | None = Field(default=None, max_length=200)
     corresponding_author_email: str | None = Field(default=None, max_length=255)
+
+    @field_validator("track", mode="before")
+    @classmethod
+    def _normalize_track(cls, v: object) -> object:
+        """赛道已下线：非 serious 输入（含历史 absurd）归一为 serious。"""
+        if v is None:
+            return None
+        return normalize_track(v) if isinstance(v, str) else v
 
 
 class ResubmitRequest(BaseModel):

@@ -19,7 +19,7 @@ import { useCatalogStats } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceStats } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { ArticleCover } from '@/components/common/article-cover'
-import { trackLabel, qualityGrade } from '@/lib/resource-labels'
+import { absurdityLevel, qualityGrade } from '@/lib/resource-labels'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -67,45 +67,15 @@ function BrowsePage() {
 
   const stats: ResourceStats | undefined = statsQ.data
   const disciplines = Object.entries(stats?.by_discipline ?? {}).sort((a, b) => b[1] - a[1])
-  const tracks = stats?.by_track ?? {}
 
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
       <PageHeader
         title="浏览"
-        description="按学科或赛道进入。也可以直接搜索，但先给入口比先给搜索框更友好。"
+        description="按学科进入。也可以直接搜索，但先给入口比先给搜索框更友好。"
       />
 
-      {/* 赛道入口：本刊最核心的分野，放在最上面 */}
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-muted-foreground">按赛道</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Link
-            to="/catalog"
-            search={{ track: 'serious' }}
-            className="group relative overflow-hidden rounded-xl border bg-gradient-to-br from-sky-500/12 to-sky-500/3 p-5 transition-shadow hover:shadow-md"
-          >
-            <p className="text-lg font-semibold">正经研究</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              按学术惯例评审：结构、引用、论证都要经得起推敲。
-            </p>
-            <p className="mt-3 text-2xl font-semibold tabular-nums">{tracks.serious ?? 0}</p>
-          </Link>
-          <Link
-            to="/catalog"
-            search={{ track: 'absurd' }}
-            className="group relative overflow-hidden rounded-xl border bg-gradient-to-br from-amber-500/12 to-amber-500/3 p-5 transition-shadow hover:shadow-md"
-          >
-            <p className="text-lg font-semibold">荒诞研究</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              选题可以离谱，但格式、引用与论证标准与正经研究完全相同。
-            </p>
-            <p className="mt-3 text-2xl font-semibold tabular-nums">{tracks.absurd ?? 0}</p>
-          </Link>
-        </div>
-      </section>
-
-      {/* 学科九宫格：内容入口的核心 */}
+      {/* 学科九宫格：内容入口的核心（赛道入口已随赛道下线移除） */}
       <section>
         <h2 className="mb-3 text-sm font-medium text-muted-foreground">
           按学科（{disciplines.length} 个）
@@ -163,22 +133,18 @@ function BrowsePage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {(featuredQ.data?.data ?? []).map((r) => {
               const grade = qualityGrade(r.quality_grade)
+              const level = absurdityLevel(r.absurdity_index)
               return (
                 <Link key={r.id} to="/catalog/$resourceId" params={{ resourceId: String(r.id) }}>
                   <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                     <ArticleCover resource={r} className="h-32 w-full" />
                     <CardContent className="space-y-2 p-4">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <Badge
-                          variant="outline"
-                          className={
-                            r.track === 'absurd'
-                              ? 'border-amber-300 bg-amber-500/10 text-amber-700'
-                              : 'border-sky-300 bg-sky-500/10 text-sky-700'
-                          }
-                        >
-                          {trackLabel(r.track)}
-                        </Badge>
+                        {level && (
+                          <Badge variant={level.variant} className="text-[10px]">
+                            {level.label}
+                          </Badge>
+                        )}
                         {grade && (
                           <Badge variant="outline" className={grade.className}>
                             {grade.label}
