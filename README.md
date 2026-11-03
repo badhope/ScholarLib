@@ -43,9 +43,9 @@
 | **Editor** | Assign reviewers, decide (with editorial notes), manuscript management workbench |
 | **Reviewer** | Review reports, blind review (single / double), decision recommendation |
 | **Reader** | Public catalog search, **passwordless email-code sign-in**, **in-reader typography controls (font size / line height / serif)**, **instant manuscript structure check on upload**, **in-browser reading (pdf.js) — no login wall**, cross-device reading progress (local-storage fallback for guests), follow authors, subscribe |
-| **Community** | Reader comments on published papers (public read, login to post, owner/admin delete with audit), guest mode with local storage |
+| **Community** | Reader comments on published papers (public read, login to post, owner/admin delete with audit), **independent discussion board (post / reply / categories / pin / lock, login to post)**, guest mode with local storage |
 | **Journal** | **First-class dual tracks (serious / absurd: required at submission, catalog filter, detail badge, per-track stats)**, editorial metrics (R factor, absurdity index) with hidden methodology, author guide / policies / about pages, submission templates |
-| **Admin** | Users (search / suspend / grant & revoke roles) / volumes / issues / journals management, audit logs, batch import (BibTeX / RIS / CSV / DOI / arXiv) |
+| **Admin** | Users (search / suspend / **promote to platform admin** / grant & revoke roles) / volumes / issues / journals management, **announcement management**, audit logs, batch import (BibTeX / RIS / CSV / DOI / arXiv), **one-click issue publish & reschedule** |
 
 **Secure by default**: passwordless email-code sign-in (hashed one-time codes, rate limited), WebAuthn passkeys + TOTP 2FA, server-side JWT revocation with key rotation, sign-up captcha, per-action audit logs, multi-tenant isolation (PostgreSQL RLS).
 

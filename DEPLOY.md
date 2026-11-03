@@ -204,5 +204,5 @@ Render free 实例**不支持** preDeployCommand 与 persistent disk
 - 后台 `/archive` 的「发刊计划」表提供行内「立即发布」。
 - 创刊排期：第 1 期 2026-10-01，其后每月 1 日一期至 2027-07-01。
 
-导入/重导流水线（含备份、manifest、Markdown 重建、排期脚本）见
-`_deploy/journal_import/README.md`。
+导入/重导流水线（含备份、manifest、Markdown 重建、排期脚本）属于生产运维工具链，
+独立于本参考仓库维护，不随公开镜像分发；应用本身不依赖该工具链即可运行。

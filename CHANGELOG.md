@@ -83,7 +83,7 @@
 - **迁移 ID 冲突**：016 的 revision id 与 004 重复导致 Alembic 报 cycle，
   已改为 `e7f8a9b0c1d2`。
 
-## [Unreleased]
+## [1.9.1] — 2026-11-03（含 1.9.0 发布说明，此前误置于 Unreleased）
 
 ### Added
 
