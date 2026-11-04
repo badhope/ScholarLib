@@ -1,4 +1,4 @@
-"""Quality module — RQS v1.0 scoring rubric (frozen)."""
+"""Quality module — RQS v3.0 scoring rubric."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ registry.register(
     ModuleManifest(
         name="quality",
         version="1.0.0",
-        description="RQS v1.0 paper quality rubric and per-article score surface.",
+        description="RQS v3.0 paper quality rubric and per-article score surface.",
         dependencies=frozenset(),
         router=router,
     )
