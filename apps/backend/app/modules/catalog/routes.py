@@ -835,17 +835,18 @@ async def export_resource_manuscript(
 
     md_text = data.decode("utf-8", errors="replace")
 
-    # 转换放工作线程（pymupdf Story / python-docx 对大文档是秒级操作）
-    if format == "docx":
-        def _convert():
-            from app.modules.submission.export_docs import md_to_docx
+    def _convert():
+        from app.modules.submission.export_docs import (
+            html_to_pdf,
+            md_to_docx,
+            md_to_html,
+            preprocess_md,
+        )
 
+        md_text = preprocess_md(data.decode("utf-8", errors="replace"))
+        if format == "docx":
             return md_to_docx(md_text, resource.title)
-    else:
-        def _convert():
-            from app.modules.submission.export_docs import md_to_html, html_to_pdf
-
-            return html_to_pdf(md_to_html(md_text), resource.title)
+        return html_to_pdf(md_to_html(md_text), resource.title)
 
     payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
 
