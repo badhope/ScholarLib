@@ -547,7 +547,9 @@ textarea {
    段落保持首行缩进，宽表交给 .md-table-wrap 横向滚动。 */
 @media (max-width: 767px) {
   .markdown-body {
-    font-size: 0.9688rem;
+    /* 手机正文字号：0.9688rem ≈ 15px 在 390pt 宽屏上偏小，
+       中文长文尤其吃力。跟桌面同号（≈17px），靠行距与段距控密度。 */
+    font-size: 1.0625rem;
     line-height: 1.9;
     letter-spacing: 0.006em;
   }
@@ -562,7 +564,7 @@ textarea {
     border-radius: 0.6rem;
   }
   .markdown-body .md-abstract h2 { font-size: 0.75rem; letter-spacing: 0.2em; }
-  .markdown-body .md-abstract p { font-size: 0.92rem; line-height: 1.85; }
+  .markdown-body .md-abstract p { font-size: 1rem; line-height: 1.85; }
   .markdown-body .md-caption { max-width: 100%; font-size: 0.78rem; }
   .markdown-body img { margin: 1.2em auto 0.35em; }
   .markdown-body table { font-size: 0.8125rem; }

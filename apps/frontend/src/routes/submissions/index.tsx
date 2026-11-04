@@ -42,6 +42,7 @@ import type {
   SubmissionType,
 } from '@/lib/types'
 import { typeLabel } from '@/lib/resource-labels'
+import { useIsMobile } from '@/hooks/use-is-mobile'
 import { DISCIPLINES } from '@/lib/disciplines'
 import { useCapabilities } from '@/hooks/use-capabilities'
 import { extractError, parseListField } from '@/lib/utils'
@@ -267,6 +268,7 @@ function SubmissionsPage() {
   const page = search.page ?? 1
   const status = statusTab === 'all' ? undefined : statusTab
 
+  const isMobile = useIsMobile()
   const { data, isLoading, isError, refetch } = useMySubmissions(status, page, 20)
   const createMut = useCreateSubmission()
   const deleteMut = useDeleteSubmission()
@@ -481,6 +483,49 @@ function SubmissionsPage() {
           description="新建一条提交，等待管理员审核。"
         />
       ) : (
+        isMobile ? (
+          <div className="mt-4 space-y-3">
+            {data.data.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => setDetail(s)}
+                className="cursor-pointer rounded-lg border bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="line-clamp-2 text-sm font-medium">{s.title}</p>
+                  {statusBadge(s.status)}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {typeLabel(s.type)} · {s.discipline}
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <time className="text-xs text-muted-foreground">
+                    {new Date(s.submitted_at).toLocaleDateString()}
+                  </time>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {s.status === 'pending' && (
+                      <Button variant="ghost" size="sm" onClick={() => setDeleteId(s.id)}>
+                        <Trash2 className="h-4 w-4" />
+                        撤销
+                      </Button>
+                    )}
+                    {s.resource_id != null && (
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link
+                          to="/catalog/$resourceId"
+                          params={{ resourceId: String(s.resource_id) }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          查看发表
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <Card className="mt-4">
           <CardContent className="p-0">
             <Table>
@@ -544,6 +589,7 @@ function SubmissionsPage() {
             </Table>
           </CardContent>
         </Card>
+        )
       )}
 
       {data && (

@@ -1025,89 +1025,80 @@ export function useAdminAuditLogs(limit = 50, offset = 0) {
 
 // --- Volume / Issue management (admin) ---
 
-// 后端单页上限（catalog/routes.py MAX_PAGE_SIZE）。卷/期聚合目前只能拉一页
-// 在前端推导，超过这个量就会少数据，所以页面必须把 truncated 提示出来。
+// 卷/期统计改由后端聚合（GET /catalog/volumes/stats）。不要再走「拉一页
+// 100 条自己数」的老路：期刊一过 100 篇，后台显示的卷数、期数、文章数
+// 就全是错的，还要在页面上挂一句免责说明替后端解释。
 export const CATALOG_PAGE_MAX = 100
 
 export interface AggregatedListResult<T> {
   items: T[]
-  /** 源数据已达单页上限：统计不完整，数字偏小。 */
-  truncated: boolean
+}
+
+interface VolumeStatsRow {
+  volume: string
+  issue_count: number
+  article_count: number
+  issues: Array<{
+    issue: string
+    article_count: number
+    first_year: number | null
+    last_year: number | null
+  }>
+}
+
+function useVolumeStats() {
+  return useQuery<VolumeStatsRow[]>({
+    queryKey: keys.admin.volumes(),
+    queryFn: async () =>
+      (await api.get<{ data: VolumeStatsRow[] }>('/catalog/volumes/stats')).data.data,
+    staleTime: 2 * 60_000,
+  })
+}
+
+// 卷号/期号是字符串（"1"、"10"、"增刊"）。能当数字比就按数字倒序，
+// 否则退回字典序，避免 "10" 排到 "9" 前面这类经典错误。
+function sortDesc(a: string, b: string) {
+  const na = Number(a)
+  const nb = Number(b)
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return nb - na
+  return b.localeCompare(a)
 }
 
 export function useVolumeList() {
-  return useQuery<AggregatedListResult<VolumeInfo>>({
-    queryKey: keys.admin.volumes(),
-    queryFn: async () => {
-      const res = await api.get<ResourceListResponse>('/catalog', {
-        params: { page_size: CATALOG_PAGE_MAX, sort: 'year', order: 'desc' },
-      })
-      const resources = res.data.data
-      const volumeMap = new Map<string, { articles: number; issues: Set<string> }>()
-      for (const r of resources) {
-        if (!r.volume) continue
-        const v = volumeMap.get(r.volume) ?? { articles: 0, issues: new Set<string>() }
-        v.articles++
-        if (r.issue) v.issues.add(r.issue)
-        volumeMap.set(r.volume, v)
-      }
-      return {
-        items: Array.from(volumeMap.entries())
-          .map(([volume, info]) => ({
-            volume,
-            articleCount: info.articles,
-            issueCount: info.issues.size,
-          }))
-          .sort((a, b) => {
-            const na = Number(a.volume)
-            const nb = Number(b.volume)
-            if (!Number.isNaN(na) && !Number.isNaN(nb)) return nb - na
-            return b.volume.localeCompare(a.volume)
-          }),
-        truncated: resources.length >= CATALOG_PAGE_MAX,
-      }
-    },
-    staleTime: 2 * 60_000,
-  })
+  const q = useVolumeStats()
+  return {
+    ...q,
+    data: q.data
+      ? {
+          items: q.data
+            .map((v): VolumeInfo => ({
+              volume: v.volume,
+              articleCount: v.article_count,
+              issueCount: v.issue_count,
+            }))
+            .sort((a, b) => sortDesc(a.volume, b.volume)),
+        }
+      : undefined,
+  }
 }
 
 export function useIssueList(volume: string) {
-  return useQuery<AggregatedListResult<IssueInfo>>({
-    queryKey: keys.admin.issues(volume),
-    queryFn: async () => {
-      const res = await api.get<ResourceListResponse>('/catalog', {
-        params: { page_size: CATALOG_PAGE_MAX, sort: 'year', order: 'desc' },
-      })
-      const resources = res.data.data.filter((r) => r.volume === volume)
-      const issueMap = new Map<string, { articles: number; years: number[] }>()
-      for (const r of resources) {
-        if (!r.issue) continue
-        const v = issueMap.get(r.issue) ?? { articles: 0, years: [] as number[] }
-        v.articles++
-        v.years.push(r.year)
-        issueMap.set(r.issue, v)
-      }
-      return {
-        items: Array.from(issueMap.entries())
-          .map(([issue, info]) => ({
-            issue,
-            articleCount: info.articles,
-            firstYear: Math.min(...info.years),
-            lastYear: Math.max(...info.years),
-          }))
-          .sort((a, b) => {
-            const na = Number(a.issue)
-            const nb = Number(b.issue)
-            if (!Number.isNaN(na) && !Number.isNaN(nb)) return nb - na
-            return b.issue.localeCompare(a.issue)
-          }),
-        truncated: res.data.data.length >= CATALOG_PAGE_MAX,
-      }
-    },
-    // 未选卷时不发请求：组件已经早退到空态，白打一个全量 /catalog 没意义。
-    enabled: !!volume,
-    staleTime: 2 * 60_000,
-  })
+  const q = useVolumeStats()
+  return {
+    ...q,
+    data: q.data
+      ? {
+          items: (q.data.find((v) => v.volume === volume)?.issues ?? [])
+            .map((i): IssueInfo => ({
+              issue: i.issue,
+              articleCount: i.article_count,
+              firstYear: i.first_year ?? 0,
+              lastYear: i.last_year ?? 0,
+            }))
+            .sort((a, b) => sortDesc(a.issue, b.issue)),
+        }
+      : undefined,
+  }
 }
 
 export function useJournalSettings() {

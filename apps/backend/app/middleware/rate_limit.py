@@ -61,6 +61,15 @@ STRICT_PATHS: dict[str, int] = {
 
 _RATE_WINDOW_SECONDS = 60.0
 
+# 这些路径的严格阈值只约束「写」：读请求回落到全局阈值。
+#
+# /api/comments 的 20 次/分 是为了防刷评（POST 才写库、才发通知），
+# 但列表接口是 GET，而且**每打开一篇文章都会调一次**。20 次/分 等于
+# 「一分钟最多看 20 篇带评论的文章」，超了评论区就显示「评论加载失败」——
+# 正常翻页的读者会莫名其妙看到坏掉的评论区。读不该被当成写来限。
+_READ_EXEMPT_PATHS = frozenset({"/api/comments"})
+
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter keyed by client IP + path.
@@ -84,13 +93,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if settings.is_test or request.method == "OPTIONS":
             return await call_next(request)
 
+        # 静态资源与 SPA 文档不计入限流。
+        #
+        # 为什么：全局桶是「每 IP 每分钟」的，而一次文章页加载要拉
+        # index.js + index.css + 字体 + 若干图片，再加 6~8 个 API 调用。
+        # 把这些都算进 120/分，意味着真人快速翻十几篇文章就会被拦，
+        # 而且拦下来的是浏览器直接导航到的 /catalog/<id>，返回的是
+        # JSON —— 用户看到的是一屏 `{"detail":"Too many requests..."}`，
+        # 不是 404 也不是错误页，就是裸 JSON。这不属于要防的威胁模型：
+        # 静态文件由前置反向代理直接吐，成本远低于任何 API。
+        # 限流只应作用于 /api（真正的计算、写库、发信入口）。
         path = request.url.path
-        limit = self._limit_for(path)
+        if not path.startswith("/api"):
+            return await call_next(request)
+        limit = self._limit_for(path, request.method)
         if limit <= 0:
             return await call_next(request)
 
         ip = self._client_ip(request)
-        bucket_key = f"{ip}|{self._path_key(path)}"
+        bucket_key = f"{ip}|{self._path_key(path, request.method)}"
         store = get_rate_limiter_store()
         allowed, _depth = await store.hit_and_check(
             bucket_key=bucket_key,
@@ -111,18 +132,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         return response
 
-    def _limit_for(self, path: str) -> int:
+    def _limit_for(self, path: str, method: str = "GET") -> int:
         for strict_path, limit in STRICT_PATHS.items():
             if path == strict_path:
+                if method in ("GET", "HEAD") and strict_path in _READ_EXEMPT_PATHS:
+                    return self._default
                 return limit
         return self._default
 
-    def _path_key(self, path: str) -> str:
+    def _path_key(self, path: str, method: str = "GET") -> str:
         # Collapse exact strict paths to their key; everything else shares
         # a global bucket so one IP cannot bypass per-path limits by
         # hitting many distinct resource_id URLs.
         for strict_path in STRICT_PATHS:
             if path == strict_path:
+                if method in ("GET", "HEAD") and strict_path in _READ_EXEMPT_PATHS:
+                    return "_global"
                 return strict_path
         return "_global"
 

@@ -515,8 +515,10 @@ export function ManuscriptView({
         <div className="flex min-w-0 flex-1 flex-col">
         {/* 阅读控制条：字号 / 行距 / 衬线切换。
             桌面端常驻右上；手机端折叠成一颗小圆钮——390px 宽的屏上，
-            一条常驻工具条会压住摘要开头，读者第一眼先看到一排图标而不是正文。 */}
-        <div className="sticky top-2 z-10 -mb-2 flex justify-end">
+            一条常驻工具条会压住摘要开头，读者第一眼先看到一排图标而不是正文。
+            容器用正常流占位（不再用负 margin 上提）：上提会让圆钮压在
+            摘要卡右上角的边框上，看着像脱层。 */}
+        <div className="sticky top-2 z-10 mb-2 flex justify-end">
           <button
             type="button"
             aria-label="阅读设置"

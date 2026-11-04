@@ -93,6 +93,44 @@ async def test_options_bypasses(rate_limiter_with_strict_env) -> None:
 
 
 @pytest.mark.asyncio
+async def test_documents_and_static_assets_bypass(rate_limiter_with_strict_env) -> None:
+    """SPA 文档与静态资源不计入限流。
+
+    一次文章页加载会附带几十个静态资源请求；若与 API 共享 120/分 的
+    桶，真人翻十几篇就会被 429，浏览器直接导航到的 HTML 路由还会把
+    JSON 错误原样渲染在屏幕上。限流只对 /api 生效。
+    """
+    mw = rate_limiter_with_strict_env
+    for i in range(200):
+        for path in ("/catalog/291", "/assets/index-abc.js", "/uploads/x.webp"):
+            resp = await mw.dispatch(_make_request(path, method="GET"), lambda req: _ok())
+            assert resp.status_code == 200, f"{path} blocked at {i}"
+    # API 桶不受影响，仍按原阈值拦截
+    for _ in range(10):
+        await mw.dispatch(_make_request("/api/auth/login"), lambda req: _ok())
+    assert (await mw.dispatch(_make_request("/api/auth/login"), lambda req: _ok())).status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_comments_read_not_strict(rate_limiter_with_strict_env) -> None:
+    """评论列表（GET）不吃 20 次/分 的严格阈值，只有发表（POST）吃。
+
+    每打开一篇文章都会拉一次评论列表；按写接口的阈值限读，会让正常
+    翻页的读者看到「评论加载失败」。
+    """
+    mw = rate_limiter_with_strict_env
+    for i in range(60):
+        resp = await mw.dispatch(
+            _make_request("/api/comments", method="GET"), lambda req: _ok()
+        )
+        assert resp.status_code == 200, f"GET blocked at {i}"
+    for _ in range(20):
+        resp = await mw.dispatch(_make_request("/api/comments", method="POST"), lambda req: _ok())
+        assert resp.status_code == 200
+    assert (await mw.dispatch(_make_request("/api/comments", method="POST"), lambda req: _ok())).status_code == 429
+
+
+@pytest.mark.asyncio
 async def test_test_env_skipped(client) -> None:
     """In test env, the real app skips rate limiting entirely."""
     for _ in range(15):

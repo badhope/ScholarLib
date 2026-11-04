@@ -779,16 +779,18 @@ function HomePage() {
                     absurdityMedian != null ? (
                       <span className="tabular-nums">{absurdityMedian.toFixed(1)} / 10</span>
                     ) : (
-                      <span className="text-2xl text-muted-foreground">—</span>
+                      <span className="text-base text-muted-foreground">数据积累中</span>
                     ),
                 },
                 {
                   label: '平均审稿天数',
                   node:
-                    metrics?.avg_review_days != null ? (
+                    // 0 天不是「很快」，是「还没有完成的评审」：旧逻辑把 0 也
+                    // 渲染成「0 天」，门面上等于自曝一份没人审过的刊物。
+                    metrics?.avg_review_days ? (
                       <CountUpNumber target={Math.round(metrics.avg_review_days)} suffix=" 天" />
                     ) : (
-                      <span className="text-2xl text-muted-foreground">—</span>
+                      <span className="text-base text-muted-foreground">数据积累中</span>
                     ),
                 },
               ].map((s) => (

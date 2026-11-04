@@ -48,16 +48,18 @@ export function ArticleCover({
           className="absolute inset-0 bg-[radial-gradient(120%_100%_at_0%_0%,oklch(0.93_0.05_150),transparent_60%),radial-gradient(120%_100%_at_100%_100%,oklch(0.90_0.04_120),transparent_55%)]"
         />
       )}
-      {/* 无封面时的识别符号：淡淡的回收箭头，避免整块变成无信息的色斑 */}
+      {/* 无封面时的识别符号。旧版放的是一个回收箭头 SVG（text-primary/20），
+          在浅绿渐变上缩到 1/3 大小后极像浏览器的「图片加载失败」占位符，
+          读者第一反应是破图。改成衬线刊名水印：一眼看出是设计，不是故障。 */}
       {!hasImage ? (
-        <svg
+        <div
           aria-hidden
-          viewBox="0 0 24 24"
-          className="absolute left-1/2 top-1/2 h-1/3 w-1/3 -translate-x-1/2 -translate-y-1/2 text-primary/20"
-          fill="currentColor"
+          className="absolute inset-0 flex items-center justify-center"
         >
-          <path d="M12 3l3.5 3.5-1.4 1.4L12 5.8 9.9 7.9 8.5 6.5 12 3zM4 11l2 2-2 2v-4zm16 0v4l-2-2 2-2zM7 19l2-2h6l2 2H7z" />
-        </svg>
+          <span className="font-serif text-3xl font-semibold tracking-[0.18em] text-primary/25 sm:text-4xl">
+            RUBBISH
+          </span>
+        </div>
       ) : null}
       {/* 可读性渐层：只压下半部，不整张变灰 */}
       <div

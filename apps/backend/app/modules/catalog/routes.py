@@ -45,6 +45,9 @@ from app.modules.catalog.schemas import (
     ResourceResponse,
     ResourceStats,
     ResourceUpdate,
+    VolumeSummary,
+    VolumeSummaryList,
+    IssueSummary,
 )
 from app.modules.catalog.visibility import as_aware, is_public, public_conditions
 
@@ -293,6 +296,60 @@ async def get_stats(
         downloads_total=int(downloads_total or 0),
         reads_total=int(reads_total or 0),
     )
+
+
+@router.get("/volumes/stats", response_model=VolumeSummaryList)
+async def get_volume_stats(
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> VolumeSummaryList:
+    """按卷聚合期数与文章数（全量，不受列表分页上限影响）。
+
+    旧实现由前端取一页 100 条自己数，期刊超过 100 篇后后台显示的
+    「文章数」就永远停在 100，还要在页面上挂一句免责说明。聚合本该
+    在数据库做：一次 group by，成本与页数无关。
+    """
+    tenant_id = require_tenant_id()
+    base_filter = Resource.tenant_id == tenant_id
+    if not (viewer and viewer.is_admin):
+        for condition in public_conditions():
+            base_filter = base_filter & condition
+    base_filter = base_filter & Resource.volume.is_not(None) & (Resource.volume != "")
+
+    rows = await db.execute(
+        select(
+            Resource.volume,
+            Resource.issue,
+            func.count(Resource.id).label("article_count"),
+            func.min(Resource.year).label("first_year"),
+            func.max(Resource.year).label("last_year"),
+        )
+        .where(base_filter)
+        .group_by(Resource.volume, Resource.issue)
+    )
+
+    volumes: dict[str, VolumeSummary] = {}
+    for volume, issue, article_count, first_year, last_year in rows.all():
+        key = str(volume)
+        summary = volumes.setdefault(
+            key, VolumeSummary(volume=key, issue_count=0, article_count=0, issues=[])
+        )
+        summary.article_count += int(article_count or 0)
+        if issue:
+            summary.issue_count += 1
+            summary.issues.append(
+                IssueSummary(
+                    issue=str(issue),
+                    article_count=int(article_count or 0),
+                    first_year=int(first_year) if first_year is not None else None,
+                    last_year=int(last_year) if last_year is not None else None,
+                )
+            )
+
+    data = sorted(volumes.values(), key=lambda v: v.volume, reverse=True)
+    for summary in data:
+        summary.issues.sort(key=lambda i: i.issue, reverse=True)
+    return VolumeSummaryList(data=data)
 
 
 @router.get("/facets", response_model=ResourceFacets)

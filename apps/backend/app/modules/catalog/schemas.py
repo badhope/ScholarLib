@@ -237,6 +237,31 @@ class ResourceListResponse(BaseModel):
     meta: PaginationMeta
 
 
+class IssueSummary(BaseModel):
+    issue: str
+    article_count: int
+    first_year: int | None = None
+    last_year: int | None = None
+
+
+class VolumeSummary(BaseModel):
+    """一卷的汇总（期数、文章数）。
+
+    为什么不复用列表接口：列表单页上限 100，管理端的卷统计需要的是
+    **全量**聚合。前端拿一页数据自己数，期刊一过 100 篇就会显示
+    「100 篇」，并附一句「数字可能偏小」——那是把后端的活推给用户看。
+    """
+
+    volume: str
+    issue_count: int
+    article_count: int
+    issues: list[IssueSummary] = []
+
+
+class VolumeSummaryList(BaseModel):
+    data: list[VolumeSummary]
+
+
 class ResourceStats(BaseModel):
     total: int
     by_type: dict[str, int]
@@ -303,6 +328,9 @@ __all__ = [
     "ResourceListResponse",
     "ResourceResponse",
     "ResourceStats",
+    "IssueSummary",
+    "VolumeSummary",
+    "VolumeSummaryList",
     "ResourceType",
     "ResourceUpdate",
 ]

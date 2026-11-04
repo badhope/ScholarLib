@@ -188,8 +188,20 @@ export function MobileAppShell() {
         <ThemeToggle />
       </header>
 
-      {/* 内容区：移动端单列、限宽、底部留白避开 Tab 栏 */}
-      <main className={cn('flex-1 overflow-y-auto', showChrome ? 'pb-24' : 'pb-4')}>
+      {/* 内容区：移动端单列、限宽、底部留白避开底部固定栏。
+          文章详情/阅读页自带一条操作栏（在线阅读/下载/登录同步进度）叠在
+          Tab 栏之上，两层加起来约 7.5rem；只留 pb-24 的话最后一段正文会
+          被压在操作栏底下（390×844 实测：摘要卡末行、参考文献标题都被挡）。 */}
+      <main
+        className={cn(
+          'flex-1 overflow-y-auto',
+          hasOwnBottomBar
+            ? 'pb-[calc(8.5rem+env(safe-area-inset-bottom))]'
+            : showChrome
+              ? 'pb-24'
+              : 'pb-4',
+        )}
+      >
         <div className="mx-auto w-full max-w-screen-sm px-4 py-4">
           {/* 页面级错误边界：崩溃时底部 Tab 栏仍可用，换页自动复位 */}
           <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
@@ -200,12 +212,14 @@ export function MobileAppShell() {
         </div>
       </main>
 
-      {/* 中心悬浮按钮：仅登录用户、且在浏览类页面可见，跳导入（创建类操作） */}
+      {/* 悬浮按钮：仅登录用户、且在浏览类页面可见，跳导入（创建类操作）。
+          放在右下角而不是水平居中：居中时它正好压住信息流卡片的标题与
+          作者行（如工作台「为你推荐」第一条），读起来像排版坏了。 */}
       {showFab && (
         <Button
           aria-label="导入"
           onClick={() => go(MOBILE_FAB_TO)}
-          className="fixed bottom-20 left-1/2 z-40 h-14 w-14 -translate-x-1/2 rounded-full shadow-lg"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full shadow-lg"
           size="icon"
         >
           <Plus className="h-6 w-6" />

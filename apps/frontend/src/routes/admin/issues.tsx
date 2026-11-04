@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Search } from 'lucide-react'
 import { requireAdminGuard } from '@/lib/route-guards'
-import { CATALOG_PAGE_MAX, useIssueList } from '@/hooks/api/use-modules'
+import { useIssueList } from '@/hooks/api/use-modules'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
@@ -93,13 +93,7 @@ function AdminIssuesPage() {
         }
       />
 
-      {data?.truncated && (
-        <div className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
-          仅统计了最近 {CATALOG_PAGE_MAX} 条资源（后端单页上限），更多资源未纳入，
-          期数与文章数可能偏小。
-        </div>
-      )}
-
+      
       <div className="mb-4 max-w-sm">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
