@@ -12,6 +12,20 @@ export const Route = createFileRoute('/journal-metrics')({
   component: JournalMetricsPage,
 })
 
+// 百分比 / 中位数类指标的最小样本量：样本不足时一律显示
+// 「暂无数据（样本不足）」，而不是让 0 天 / 0.0% 这种误导性的数字出场。
+// （真实的 0 保留：如自引率恒为 0，是"没有引文系统"的诚实标注。）
+const MIN_STAT_SAMPLE = 3
+
+function statLabel(
+  value: number | null | undefined,
+  n: number,
+  format: (v: number) => string,
+): string {
+  if (value == null || n < MIN_STAT_SAMPLE) return '暂无数据（样本不足）'
+  return format(value)
+}
+
 // 公开指标页（0.5.0 改版）：像正式期刊的指标页一样只呈现数值与含义；
 // 权重与计算口径属于编辑部内部口径，不进页面、不进 API。
 // 没有引文数据，所以诚实标注"不与 JCR 影响因子互比"。
@@ -54,7 +68,7 @@ function JournalMetricsPage() {
                 <CardContent className="flex flex-col items-center gap-2 py-10 text-center sm:flex-row sm:justify-between sm:text-left">
                   <div>
                     <p className="text-sm font-medium tracking-wide text-muted-foreground">
-                      R 因子（{new Date().getFullYear()}）
+                      R 因子（全刊）
                     </p>
                     <p className="mt-1 font-serif text-5xl font-bold tabular-nums text-primary">
                       {data.r_factor.toFixed(2)}
@@ -123,26 +137,28 @@ function JournalMetricsPage() {
                 ['覆盖学科', `${data.discipline_count} 个`],
                 [
                   '开放获取率',
-                  data.open_access_rate == null ? '样本不足' : `${data.open_access_rate}%`,
+                  statLabel(
+                    data.open_access_rate,
+                    data.published_total,
+                    (v) => `${v}%`,
+                  ),
                 ],
                 ['总阅读次数', String(data.reads_total)],
                 ['总下载次数', String(data.downloads_total)],
                 ['总收藏次数', String(data.saves_total)],
                 [
                   '录用率',
-                  data.acceptance_rate == null
-                    ? '样本不足'
+                  data.acceptance_rate == null || data.decided_submissions < MIN_STAT_SAMPLE
+                    ? '暂无数据（样本不足）'
                     : `${data.acceptance_rate}%（${data.accepted_submissions}/${data.decided_submissions}）`,
                 ],
                 [
                   '初审周期（中位数）',
-                  data.median_review_days == null
-                    ? '样本不足'
-                    : `${data.median_review_days} 天`,
+                  statLabel(data.median_review_days, data.decided_submissions, (v) => `${v} 天`),
                 ],
                 [
                   '初审周期（均值）',
-                  data.avg_review_days == null ? '样本不足' : `${data.avg_review_days} 天`,
+                  statLabel(data.avg_review_days, data.decided_submissions, (v) => `${v} 天`),
                 ],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between border-b py-2 text-sm">
@@ -195,8 +211,11 @@ function JournalMetricsPage() {
             <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                关于口径：各指标的构成项与权重属编辑部内部标准，不对外公开、不接受复算请求。
-                本刊未接入 Web of Science、Scopus 或 Crossref 引文数据，因此
+                关于口径：各指数的口径与构成已在
+                <Link to="/policies" className="mx-1 text-primary hover:underline">
+                  期刊政策 · 本刊指数体系
+                </Link>
+                一节公示。本刊未接入 Web of Science、Scopus 或 Crossref 引文数据，因此
                 <strong>不发布影响因子，也不使用 JCR 分区</strong>；任何把本刊指标与外部影响因子并列比较的说法都不成立。
               </p>
             </div>
