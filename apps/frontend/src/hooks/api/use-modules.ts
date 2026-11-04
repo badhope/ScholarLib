@@ -1181,7 +1181,7 @@ export function usePublishIssue() {
   })
 }
 
-// --- 质量评分 v2.0（审稿表单 / 算分 / 改分 / 打回） ---
+// --- 质量评分 v3.0（审稿表单 / 算分 / 改分 / 打回） ---
 
 export function useQualityForm() {
   return useQuery<QualityForm>({

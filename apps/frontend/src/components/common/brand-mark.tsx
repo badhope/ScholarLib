@@ -1,44 +1,28 @@
 /**
- * Rubbish 期刊印章标志。
+ * Rubbish 期刊标志 —— 回收三箭头（源自创刊 PDF 刊头原图提取）。
  *
- * 设计语言与刊头一致：印刷"印章"意象 —— 外粗内细双线方框 + 衬线 R 字，
- * 右下角一枚金色（#C7A24B）菱形点缀，与旧版品牌金一脉相承。
- * 内联 SVG 保证 currentColor 生效：侧边栏明暗主题、折叠态都自动跟随文字色。
- * <text> 使用系统衬线栈，与全站 --font-serif 保持同一气质。
+ * 提取自原稿 PDF 第一页的 RUBBISH 回收标志（瓶子 + 三箭头 + 废纸堆），
+ * 处理为白色 + alpha 通道的模板图（/brand-rubbish.png），再用 CSS mask
+ * 以 currentColor 上色：明暗主题、侧边栏折叠态都自动跟随文字色，
+ * 与旧版"R 字印章"的适配行为完全一致。
  */
 export function BrandMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 64 64"
-      className={className}
+    <span
       role="img"
       aria-label="Rubbish"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <rect x="4" y="4" width="56" height="56" rx="7" stroke="currentColor" strokeWidth="3.5" />
-      <rect
-        x="10.5"
-        y="10.5"
-        width="43"
-        height="43"
-        rx="3.5"
-        stroke="currentColor"
-        strokeWidth="1.1"
-        opacity="0.5"
-      />
-      <text
-        x="32"
-        y="43.5"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Noto Serif SC Variable', 'Noto Serif SC', 'Times New Roman', serif"
-        fontSize="33"
-        fontWeight="600"
-        fill="currentColor"
-      >
-        R
-      </text>
-      <path d="M50.5 44.5 L56 50 L50.5 55.5 L45 50 Z" fill="#C7A24B" />
-    </svg>
+      className={`inline-block shrink-0 ${className ?? ''}`}
+      style={{
+        backgroundColor: 'currentColor',
+        WebkitMaskImage: 'url(/brand-rubbish.png)',
+        maskImage: 'url(/brand-rubbish.png)',
+        WebkitMaskSize: 'contain',
+        maskSize: 'contain',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        WebkitMaskPosition: 'center',
+        maskPosition: 'center',
+      }}
+    />
   )
 }
