@@ -138,7 +138,7 @@ function AboutPage() {
             {[
               { icon: Newspaper, label: '刊名', value: 'Rubbish（开放获取学术期刊）' },
               { icon: Globe, label: '出版形式', value: '纯数字出版 · 滚动刊出 + 不定期合卷' },
-              { icon: ScrollText, label: '收录范围', value: '双轨：正经研究 / 荒诞研究' },
+              { icon: ScrollText, label: '收录范围', value: '正经与荒诞统一评审 · 荒诞指数标注风格' },
               { icon: Building2, label: '出版方', value: 'Rubbish 编辑部' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3 rounded-lg border bg-card p-4">
