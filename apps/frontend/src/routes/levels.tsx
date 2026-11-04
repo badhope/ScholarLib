@@ -249,7 +249,7 @@ function LevelsPage() {
       {/* 质量评分 */}
       <section>
         <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          <BookOpen className="h-4 w-4" /> 论文质量评分（RQS v2.0）
+          <BookOpen className="h-4 w-4" /> 论文质量评分（RQS v3.0）
         </h2>
         {rubric.isLoading ? (
           <Loading />
@@ -330,7 +330,7 @@ function LevelsPage() {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   学术诚信维度为<strong>一票否决</strong>：发现编造数据或引用，该维度记 0 分，
-                  全篇直接判 D——无论其他维度多高。
+                  全篇按不合格处理（不予发表）——无论其他维度多高。
                 </p>
                 <p className="text-xs text-muted-foreground">
                   结构要求（研究论文）：{rubric.data.profile_sections.research?.join('、')}；
