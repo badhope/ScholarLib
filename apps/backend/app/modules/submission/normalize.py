@@ -123,6 +123,9 @@ _BOLD_NUM_HEADING = re.compile(
     rf"\*\*(\d{{1,2}}(?:\.\d{{1,2}}){{0,2}})[ \u3000]+([^*\n]{{1,40}}?)\*\*"
 )
 
+# 句末切分（保留标点）
+_SENT_SPLIT = re.compile(r"(?<=[。！？])")
+
 
 def _is_formula_text(text: str) -> bool:
     return bool(_FORMULA.search(text))
@@ -293,6 +296,43 @@ def _demote_term_headings(md: str) -> str:
         else:
             out.append(line)
     return "\n".join(out)
+
+
+def _split_overlong_blocks(md: str, limit: int = 450) -> str:
+    """把超长段落按句子切开。
+
+    碎段复原之后会出现相反的问题：原稿整节挤在一行、句读完整，reflow 把
+    它收成一段，手机上就是密不透风的一坨（实测有 1226 个汉字一段）。
+    只在超过 600 汉字时才切，切点落在句号处，每段不超过 ``limit``；
+    正常长度的段落一律不动。
+    """
+    out: list[str] = []
+    for block in md.split("\n\n"):
+        s = block.strip()
+        if (
+            len(re.findall(rf"[{_CJK}]", s)) <= 600
+            or s[:1] in "#|!-*>`<"
+            or _BLOCKISH.match(s)
+        ):
+            out.append(block)
+            continue
+
+        pieces: list[str] = []
+        cur: list[str] = []
+        cur_len = 0
+        for sentence in _SENT_SPLIT.split(s):
+            if not sentence:
+                continue
+            n = len(re.findall(rf"[{_CJK}]", sentence))
+            if cur and cur_len + n > limit:
+                pieces.append("".join(cur))
+                cur, cur_len = [], 0
+            cur.append(sentence)
+            cur_len += n
+        if cur:
+            pieces.append("".join(cur))
+        out.extend(pieces)
+    return "\n\n".join(out)
 
 
 def _reflow_shredded(md: str) -> str:
@@ -535,6 +575,7 @@ def normalize_markdown(md: str) -> str:
     body = _fix_captions(body)      # 先规整题注编号，reflow 才能认出题注行
     body = _reflow_shredded(body)
     body = _fix_cjk_brackets(body)
+    body = _split_overlong_blocks(body)
     body = _merge_broken_table_rows(body)
     body = _BROKEN_EMDASH.sub("——", body)
     body = _SPACE_AFTER_CJK_PUNCT.sub(r"\1", body)

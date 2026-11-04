@@ -139,3 +139,17 @@ def test_cjk_bracket_widened_but_code_kept():
     out = normalize_markdown("条件(被爱解存在)成立，函数 f(x) 与 (OOD) 除外。\n")
     assert "（被爱解存在）" in out
     assert "f(x)" in out and "(OOD)" in out
+
+
+def test_overlong_paragraph_split():
+    """800 汉字一段在手机上没法读，按句子切成两段。"""
+    src = "这是第一句话，用来测试切分逻辑是否正常工作。" * 40
+    out = normalize_markdown(src)
+    blocks = [b for b in out.split("\n\n") if b.strip()]
+    assert len(blocks) == 2
+    assert all(len(b) < 520 for b in blocks)
+
+
+def test_normal_paragraph_untouched():
+    src = "短的一段。" * 10
+    assert normalize_markdown(src).strip() == src.strip()
