@@ -773,6 +773,105 @@ async def get_resource_manuscript(
     )
 
 
+@router.get("/{resource_id}/export")
+async def export_resource_manuscript(
+    resource_id: int,
+    format: str = Query(default="pdf", pattern="^(pdf|docx)$"),
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> Response:
+    """规范化文档导出（1.10.0）：把线上阅读版 Markdown 生成干净排版的
+    PDF / Word 供下载。可见性边界与 /manuscript 完全一致（published 公开，
+    未刊稿仅刊前预览者）。与「原稿 PDF」（作者投稿版式）互补——导出版是
+    统一版式的规范化文档，字体、标题层级、表格与图片均已清洗。
+    """
+    import asyncio
+    import hashlib
+    from urllib.parse import quote
+
+    from fastapi.responses import Response
+
+    from app.core.storage import get_storage
+
+    tenant_id = require_tenant_id()
+    result = await db.execute(
+        select(Resource).where(
+            Resource.id == resource_id,
+            Resource.tenant_id == tenant_id,
+        )
+    )
+    resource = result.scalar_one_or_none()
+    is_published = is_public(resource)
+    if resource is None or (
+        not is_published and not await _can_preview_unpublished(db, viewer, resource_id, tenant_id)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    from app.modules.submission.models import Submission
+
+    submission = (
+        (
+            await db.execute(
+                select(Submission).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if submission is None or not submission.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This resource has no online manuscript",
+        )
+    try:
+        data = await get_storage().load(submission.markdown_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
+        ) from exc
+
+    md_text = data.decode("utf-8", errors="replace")
+
+    # 转换放工作线程（pymupdf Story / python-docx 对大文档是秒级操作）
+    if format == "docx":
+        def _convert():
+            from app.modules.submission.export_docs import md_to_docx
+
+            return md_to_docx(md_text, resource.title)
+    else:
+        def _convert():
+            from app.modules.submission.export_docs import md_to_html, html_to_pdf
+
+            return html_to_pdf(md_to_html(md_text), resource.title)
+
+    payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
+
+    ext = "pdf" if format == "pdf" else "docx"
+    media = "application/pdf" if format == "pdf" else (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    try:
+        readable = _download_name(resource.title, ext)
+    except Exception:
+        readable = f"rubbish-{resource.id}"
+    etag = f'W/"{hashlib.sha256(payload).hexdigest()[:32]}"'
+    return Response(
+        content=payload,
+        media_type=media,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{resource.id}-formatted.{ext}"; '
+                f"filename*=UTF-8''{quote(readable)}"
+            ),
+            "ETag": etag,
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
 @router.get("/{resource_id}", response_model=ResourceResponse)
 async def get_resource(
     resource_id: int,

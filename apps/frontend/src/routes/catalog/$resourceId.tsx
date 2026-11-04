@@ -342,9 +342,25 @@ function CatalogDetailPage() {
                   <Button asChild variant="outline" className="w-full">
                     <a href={`/api/catalog/${id}/file`} download>
                       <Download className="h-4 w-4" />
-                      下载 PDF
+                      原稿 PDF
                     </a>
                   </Button>
+                )}
+                {data.has_file && (
+                  <>
+                    <Button asChild variant="outline" className="w-full">
+                      <a href={`/api/catalog/${id}/export?format=pdf`} download>
+                        <Download className="h-4 w-4" />
+                        规范化 PDF
+                      </a>
+                    </Button>
+                    <Button asChild variant="outline" className="w-full">
+                      <a href={`/api/catalog/${id}/export?format=docx`} download>
+                        <Download className="h-4 w-4" />
+                        Word 文档
+                      </a>
+                    </Button>
+                  </>
                 )}
                 {isAuthenticated ? (
                   <>
