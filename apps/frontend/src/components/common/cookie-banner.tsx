@@ -45,6 +45,9 @@ function writeConsent(value: ConsentValue): void {
 export function CookieBanner() {
   // null = undecided (show banner), otherwise hide.
   const [consent, setConsent] = useState<ConsentValue | null>(() => readConsent())
+  // 有模态弹窗（编辑部公告）占用视口时先让位：手机上 390px 宽、844px 高，
+  // 弹窗 + Cookie 条同时压屏等于把首屏全部遮死。弹窗关掉后再问。
+  const [blocked, setBlocked] = useState(false)
 
   // Cross-tab sync: if another tab sets a decision, hide here too.
   useEffect(() => {
@@ -52,11 +55,18 @@ export function CookieBanner() {
       if (e.key !== CONSENT_KEY) return
       setConsent(readConsent())
     }
+    function onModal(e: Event) {
+      setBlocked(Boolean((e as CustomEvent<boolean>).detail))
+    }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    window.addEventListener('rubbish:modal', onModal)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('rubbish:modal', onModal)
+    }
   }, [])
 
-  if (consent !== null) return null
+  if (consent !== null || blocked) return null
 
   const accept = () => {
     writeConsent('accepted')

@@ -31,7 +31,9 @@ export type EChartOption = echarts.EChartsCoreOption
 
 // 统一的图表主题：与站点配色一致，字体走系统衬线，网格极淡。
 // 每一处图表都从这份主题出发，保证「一页里所有图看起来是同一套设计」。
-const PALETTE = ['#2c5aa0', '#c7a24b', '#4e8a6b', '#c96f5e', '#7a6fa8', '#9aa7b5']
+// 主色是回收墨绿，暖赭色只作对比色出现；顺序即语义优先级，
+// 第一根柱子永远是最能代表刊物的颜色。
+const PALETTE = ['#2f6b52', '#c7a24b', '#5f9e7d', '#c96f5e', '#3f7d8c', '#8aa79b']
 
 export function EChart({
   option,

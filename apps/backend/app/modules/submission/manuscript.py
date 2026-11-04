@@ -184,6 +184,11 @@ def convert_to_markdown(contents: bytes, filename: str) -> str | None:
         result = _convert_to_markdown_inner(contents, ext)
         if result is None:
             return None
+        # 排印统一放在最后一步：标题编号补空格、图表题注独立、中英混排间距、
+        # 断行表格补管、连续空行折叠。规则幂等，重复上传不会二次漂移。
+        from app.modules.submission.normalize import normalize_markdown
+
+        result = normalize_markdown(result)
         # PDF 内嵌的数学斜体等字符偶尔以孤立代理对形式出现（\ud835…），
         # 存储层 UTF-8 编码会直接抛异常。这些残缺字形无法还原，直接剔除。
         return re.sub(r"[\ud800-\udfff]", "", result)

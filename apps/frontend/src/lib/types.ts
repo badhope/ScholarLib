@@ -183,10 +183,8 @@ export interface ResourceBase {
   /** 质量评分（RQS v3.0，0–100）与 14 档等级 A+~F */
   quality_score?: number | null
   quality_grade?: string | null
+  // 编辑部评语挂在 quality_breakdown.comment（额外键，读取处自行收窄类型）
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null
-  // 编辑部评语挂在 quality_breakdown.comment（非维度，展示时单独取出），
-  // 与七维分数同源存储，避免给 resources 加列。
-  quality_comment?: string | null
   /** 主题封面图（/covers/xx.jpg）；为空时回退生成式封面 */
   cover_image?: string | null
   cover_theme?: string | null

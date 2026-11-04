@@ -285,6 +285,8 @@ export function ManuscriptView({
   const [tocOpen, setTocOpen] = useState(false)
   // 阅读偏好：字号/行距/衬线。toolbar 折叠收纳，不与目录按钮抢位。
   const { prefs, update: updatePrefs } = useReadingPrefs()
+  // 手机端阅读设置默认收起，避免常驻工具条压住正文开头
+  const [prefsOpen, setPrefsOpen] = useState(false)
 
   // 底部操作栏的「目录」按钮通过 window 事件唤出抽屉：目录条目是在
   // 本组件里从 Markdown 解析出来的，把状态提上去反而要重解析一遍。
@@ -511,10 +513,22 @@ export function ManuscriptView({
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-        {/* 阅读控制条：字号 / 行距 / 衬线切换。绝对定位右上，随正文滚动
-            消失不影响阅读；移动端同样可用（触点 ≥36px）。 */}
+        {/* 阅读控制条：字号 / 行距 / 衬线切换。
+            桌面端常驻右上；手机端折叠成一颗小圆钮——390px 宽的屏上，
+            一条常驻工具条会压住摘要开头，读者第一眼先看到一排图标而不是正文。 */}
         <div className="sticky top-2 z-10 -mb-2 flex justify-end">
-          <div className="flex items-center gap-1 rounded-full border bg-background/90 px-2 py-1 shadow-sm backdrop-blur">
+          <button
+            type="button"
+            aria-label="阅读设置"
+            aria-expanded={prefsOpen}
+            onClick={() => setPrefsOpen((v) => !v)}
+            className="mr-1 grid h-8 w-8 place-items-center rounded-full border bg-background/90 text-xs shadow-sm backdrop-blur lg:hidden"
+          >
+            Aa
+          </button>
+          <div
+            className={`${prefsOpen ? 'flex' : 'hidden'} items-center gap-1 rounded-full border bg-background/95 px-2 py-1 shadow-sm backdrop-blur lg:flex`}
+          >
             <button
               aria-label="减小字号"
               className="grid h-7 w-7 place-items-center rounded-full text-xs hover:bg-muted"

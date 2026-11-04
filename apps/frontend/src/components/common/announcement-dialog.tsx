@@ -78,6 +78,15 @@ export function AnnouncementDialog({
 }) {
   const lines = announcement.body.split('\n').filter(Boolean)
 
+  // 告诉全局「现在有模态占用视口」：Cookie 条据此让位，避免手机首屏
+  // 被两层浮层同时压住（关掉弹窗后 Cookie 条会自己回来）。
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('rubbish:modal', { detail: open }))
+    return () => {
+      window.dispatchEvent(new CustomEvent('rubbish:modal', { detail: false }))
+    }
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent

@@ -13,74 +13,79 @@
 
 :root {
   --radius: 0.625rem;
-  /* 学术感设计 token：纸白底 / 深靛蓝主色 / 琥珀强调 */
-  --background: oklch(0.982 0.005 90);
-  --foreground: oklch(0.19 0.03 260);
-  --card: oklch(0.992 0.004 90);
-  --card-foreground: oklch(0.19 0.03 260);
-  --popover: oklch(0.992 0.004 90);
-  --popover-foreground: oklch(0.19 0.03 260);
-  --primary: oklch(0.31 0.09 273);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.015 90);
-  --secondary-foreground: oklch(0.25 0.05 273);
-  --muted: oklch(0.955 0.012 90);
-  --muted-foreground: oklch(0.48 0.03 260);
-  --accent: oklch(0.93 0.06 75);
-  --accent-foreground: oklch(0.36 0.09 60);
+  /* 品牌 token：纸白微绿底 / 回收墨绿主色 / 苔绿辅助
+     Rubbish = 回收与再生，绿色是刊物的身份色，不是装饰色。
+     主色取深墨绿（hue 155）保证正文链接与按钮在白底上的对比度 ≥ 4.5:1；
+     暖色只留给「荒诞/警示」语义（destructive 与少量图表对比色），
+     不让它参与导航，避免整站变成双主色。 */
+  --background: oklch(0.985 0.006 120);
+  --foreground: oklch(0.21 0.02 155);
+  --card: oklch(0.995 0.004 120);
+  --card-foreground: oklch(0.21 0.02 155);
+  --popover: oklch(0.995 0.004 120);
+  --popover-foreground: oklch(0.21 0.02 155);
+  --primary: oklch(0.37 0.075 155);
+  --primary-foreground: oklch(0.985 0.01 150);
+  --secondary: oklch(0.955 0.018 150);
+  --secondary-foreground: oklch(0.30 0.045 155);
+  --muted: oklch(0.955 0.014 130);
+  --muted-foreground: oklch(0.47 0.02 150);
+  --accent: oklch(0.935 0.045 150);
+  --accent-foreground: oklch(0.33 0.06 155);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.88 0.015 90);
-  --input: oklch(0.88 0.015 90);
-  --ring: oklch(0.62 0.10 273);
-  --chart-1: oklch(0.45 0.11 273);
-  --chart-2: oklch(0.62 0.12 273);
-  --chart-3: oklch(0.72 0.14 75);
-  --chart-4: oklch(0.82 0.12 75);
-  --chart-5: oklch(0.35 0.06 260);
-  --sidebar: oklch(0.985 0.004 90);
-  --sidebar-foreground: oklch(0.19 0.03 260);
-  --sidebar-primary: oklch(0.31 0.09 273);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.93 0.06 75);
-  --sidebar-accent-foreground: oklch(0.36 0.09 60);
-  --sidebar-border: oklch(0.88 0.015 90);
-  --sidebar-ring: oklch(0.62 0.10 273);
+  --border: oklch(0.89 0.012 145);
+  --input: oklch(0.89 0.012 145);
+  --ring: oklch(0.58 0.08 155);
+  --chart-1: oklch(0.45 0.09 155);
+  --chart-2: oklch(0.60 0.10 152);
+  --chart-3: oklch(0.73 0.10 140);
+  --chart-4: oklch(0.62 0.09 75);
+  --chart-5: oklch(0.38 0.05 200);
+  --sidebar: oklch(0.99 0.004 130);
+  --sidebar-foreground: oklch(0.21 0.02 155);
+  --sidebar-primary: oklch(0.37 0.075 155);
+  --sidebar-primary-foreground: oklch(0.985 0.01 150);
+  --sidebar-accent: oklch(0.935 0.045 150);
+  --sidebar-accent-foreground: oklch(0.33 0.06 155);
+  --sidebar-border: oklch(0.89 0.012 145);
+  --sidebar-ring: oklch(0.58 0.08 155);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.64 0.11 273);
-  --primary-foreground: oklch(0.16 0.04 273);
-  --secondary: oklch(0.28 0.03 273);
-  --secondary-foreground: oklch(0.9 0.02 273);
-  --muted: oklch(0.28 0.03 273);
-  --muted-foreground: oklch(0.68 0.02 260);
-  --accent: oklch(0.30 0.08 65);
-  --accent-foreground: oklch(0.85 0.11 70);
+  /* 深色不是纯黑：叠一层极低饱和的绿，和主色同源，截图里才不像「另一个产品」 */
+  --background: oklch(0.168 0.012 150);
+  --foreground: oklch(0.97 0.005 150);
+  --card: oklch(0.212 0.014 152);
+  --card-foreground: oklch(0.97 0.005 150);
+  --popover: oklch(0.212 0.014 152);
+  --popover-foreground: oklch(0.97 0.005 150);
+  --primary: oklch(0.72 0.10 152);
+  --primary-foreground: oklch(0.18 0.03 155);
+  --secondary: oklch(0.27 0.02 155);
+  --secondary-foreground: oklch(0.90 0.02 150);
+  --muted: oklch(0.27 0.018 150);
+  --muted-foreground: oklch(0.70 0.018 150);
+  --accent: oklch(0.29 0.045 150);
+  --accent-foreground: oklch(0.87 0.09 148);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.145 0 0);
+  --destructive-foreground: oklch(0.168 0.012 150);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.55 0.11 273);
-  --chart-1: oklch(0.55 0.11 273);
-  --chart-2: oklch(0.68 0.12 273);
-  --chart-3: oklch(0.76 0.13 75);
-  --chart-4: oklch(0.84 0.10 75);
-  --chart-5: oklch(0.45 0.07 260);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.64 0.11 273);
-  --sidebar-primary-foreground: oklch(0.16 0.04 273);
-  --sidebar-accent: oklch(0.30 0.08 65);
-  --sidebar-accent-foreground: oklch(0.85 0.11 70);
+  --ring: oklch(0.60 0.09 152);
+  --chart-1: oklch(0.55 0.10 155);
+  --chart-2: oklch(0.70 0.10 150);
+  --chart-3: oklch(0.80 0.09 140);
+  --chart-4: oklch(0.72 0.09 75);
+  --chart-5: oklch(0.50 0.06 200);
+  --sidebar: oklch(0.212 0.014 152);
+  --sidebar-foreground: oklch(0.97 0.005 150);
+  --sidebar-primary: oklch(0.72 0.10 152);
+  --sidebar-primary-foreground: oklch(0.18 0.03 155);
+  --sidebar-accent: oklch(0.29 0.045 150);
+  --sidebar-accent-foreground: oklch(0.87 0.09 148);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.55 0.11 273);
+  --sidebar-ring: oklch(0.60 0.09 152);
 }
 
 @theme inline {

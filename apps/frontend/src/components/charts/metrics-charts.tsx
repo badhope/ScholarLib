@@ -24,13 +24,13 @@ export function DisciplineBar({ data }: { data: Record<string, number> }) {
       ariaLabel="各学科已发表论文数条形图"
       option={{
         grid: { left: 8, right: 40, top: 8, bottom: 8, containLabel: true },
-        xAxis: { type: 'value', splitLine: { lineStyle: { color: '#eef2f7' } }, axisLabel: { color: '#8a97a6' } },
+        xAxis: { type: 'value', splitLine: { lineStyle: { color: '#e8efe9' } }, axisLabel: { color: '#8a9a92' } },
         yAxis: {
           type: 'category',
           data: entries.map(([k]) => k),
           axisLine: { show: false },
           axisTick: { show: false },
-          axisLabel: { color: '#5b6b7c' },
+          axisLabel: { color: '#5c6b64' },
         },
         tooltip: { trigger: 'item', formatter: '{b}：{c} 篇' },
         series: [
@@ -38,10 +38,10 @@ export function DisciplineBar({ data }: { data: Record<string, number> }) {
             type: 'bar',
             data: entries.map(([, v], i) => ({
               value: v,
-              itemStyle: { color: ['#2c5aa0', '#c7a24b', '#4e8a6b', '#c96f5e', '#7a6fa8'][i % 5], borderRadius: [0, 4, 4, 0] },
+              itemStyle: { color: ['#2f6b52', '#c7a24b', '#5f9e7d', '#c96f5e', '#3f7d8c'][i % 5], borderRadius: [0, 4, 4, 0] },
             })),
             barWidth: 16,
-            label: { show: true, position: 'right', color: '#5b6b7c', fontSize: 11 },
+            label: { show: true, position: 'right', color: '#5c6b64', fontSize: 11 },
           },
         ],
       }}
@@ -69,18 +69,18 @@ export function EngagementRadar({ data }: { data: JournalMetrics }) {
             { name: '收藏', max },
           ],
           radius: '62%',
-          axisName: { color: '#5b6b7c', fontSize: 12 },
-          splitLine: { lineStyle: { color: '#e6ecf3' } },
-          splitArea: { areaStyle: { color: ['#fbfcfe', '#f5f8fc'] } },
-          axisLine: { lineStyle: { color: '#e6ecf3' } },
+          axisName: { color: '#5c6b64', fontSize: 12 },
+          splitLine: { lineStyle: { color: '#e4ece6' } },
+          splitArea: { areaStyle: { color: ['#fbfdfb', '#f4f9f5'] } },
+          axisLine: { lineStyle: { color: '#e4ece6' } },
         },
         series: [
           {
             type: 'radar',
             data: [{ value: values, name: '全刊合计' }],
-            areaStyle: { color: 'rgba(44,90,160,0.14)' },
-            lineStyle: { color: '#2c5aa0', width: 2 },
-            itemStyle: { color: '#2c5aa0' },
+            areaStyle: { color: 'rgba(47,107,82,0.14)' },
+            lineStyle: { color: '#2f6b52', width: 2 },
+            itemStyle: { color: '#2f6b52' },
           },
         ],
       }}
@@ -119,14 +119,14 @@ export function AbsurdityDonut({ median }: { median: number | null }) {
               position: 'center',
               formatter: () => `{v|${median.toFixed(1)}}\n{s|荒诞指数中位数}`,
               rich: {
-                v: { fontSize: 30, fontWeight: 600, color: '#1b2430', fontFamily: 'Georgia, serif', lineHeight: 38 },
-                s: { fontSize: 11, color: '#8a97a6', lineHeight: 18 },
+                v: { fontSize: 30, fontWeight: 600, color: '#1f2a24', fontFamily: 'Georgia, serif', lineHeight: 38 },
+                s: { fontSize: 11, color: '#8a9a92', lineHeight: 18 },
               },
             },
             labelLine: { show: false },
             data: [
               { value: Number(share.toFixed(1)), name: '荒诞度', itemStyle: { color: '#c7a24b' } },
-              { value: Number((100 - share).toFixed(1)), name: '剩余', itemStyle: { color: '#eef2f7' } },
+              { value: Number((100 - share).toFixed(1)), name: '剩余', itemStyle: { color: '#e8efe9' } },
             ],
           },
         ],

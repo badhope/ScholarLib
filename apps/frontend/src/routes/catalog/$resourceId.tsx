@@ -281,12 +281,17 @@ function CatalogDetailPage() {
                   )
                 })()}
               </div>
-              {data.quality_comment && (
-                <div className="mt-3 rounded-md border bg-muted/40 p-3">
-                  <p className="mb-1 text-xs font-medium text-muted-foreground">编辑部评价</p>
-                  <p className="text-sm leading-relaxed">{data.quality_comment}</p>
-                </div>
-              )}
+              {/* 编辑部评语存于 quality_breakdown.comment（与七维分数同源），
+                  ResourceResponse 没有独立的 quality_comment 字段，直接从 breakdown 取 */}
+              {(() => {
+                const comment = (data.quality_breakdown as Record<string, unknown> | null)?.comment
+                return typeof comment === 'string' && comment.trim() ? (
+                  <div className="mt-3 rounded-md border bg-muted/40 p-3">
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">编辑部评价</p>
+                    <p className="text-sm leading-relaxed">{comment}</p>
+                  </div>
+                ) : null
+              })()}
               {data.quality_breakdown && (
                 <div className="mt-3 space-y-1.5">
                   {Object.entries(data.quality_breakdown)
