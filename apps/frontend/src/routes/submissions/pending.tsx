@@ -86,12 +86,22 @@ const DECISION_OPTIONS: { value: EditorDecision; label: string; hint?: string }[
   { value: 'reject', label: '拒稿（Reject）' },
 ]
 
-// 审稿评分维度显示用中文（存储 key 是英文，展示时才翻译，避免前后端口径漂移）
+// 审稿评分维度显示用中文（与 RQS v3.0 七维口径一致，见 quality/rubric.py；
+// 旧四维 originality/methodology/clarity/significance 已废弃，编辑在新维度
+// key 上不再回退显示英文原文）
 const SCORE_LABELS: Record<string, string> = {
-  originality: '原创性',
-  methodology: '方法学',
-  clarity: '清晰度',
-  significance: '重要性',
+  problem: '问题价值',
+  argument: '论证链完整性',
+  method: '方法透明度',
+  evidence: '证据强度',
+  novelty: '创新与定位',
+  integrity: '学术诚信',
+  presentation: '表达清晰度',
+  // 历史数据兜底：老报告里存的旧四维 key 仍能显示中文
+  originality: '原创性（旧）',
+  methodology: '方法学（旧）',
+  clarity: '清晰度（旧）',
+  significance: '重要性（旧）',
 }
 
 // 编辑工作台状态 tab：全部 + 7 种 submission status

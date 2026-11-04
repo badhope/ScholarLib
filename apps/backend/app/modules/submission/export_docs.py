@@ -99,6 +99,8 @@ blockquote { color: #444; margin: 6pt 12pt; }
 code { font-family: monospace; font-size: 9.5pt; }
 /* 图注：居中灰字 */
 p.caption { text-align: center; color: #555; font-size: 9.5pt; margin: 2pt 0 10pt 0; }
+/* 署名行：标题下居中灰字（作者 · 发表日期） */
+p.byline { text-align: center; color: #555; font-size: 10.5pt; margin: -8pt 0 14pt 0; }
 /* 图片按高宽比分级缩放，减少整块分页造成的空白 */
 img.img-land { width: 88%; }
 img.img-sq { width: 66%; }
@@ -160,22 +162,31 @@ def _classify_images(html: str) -> str:
     return _IMG_TAG.sub(_repl, html)
 
 
-_CAPTION_P = re.compile(r"<p>(图\s*\d+[^<]{0,40})</p>")
+# 「图 N …」或「附图 N …」（编辑部为无图注的历史插图补的编号）都算图注
+_CAPTION_P = re.compile(r"<p>((?:附)?图\s*\d+[^<]{0,40})</p>")
 
 
 def _style_captions(html: str) -> str:
     return _CAPTION_P.sub(lambda m: f'<p class="caption">{m.group(1)}</p>', html)
 
 
-def _story_html(body_html: str, title: str) -> str:
-    return f"<h1>{title}</h1>" + body_html
+def _story_html(body_html: str, title: str, byline: str | None = None) -> str:
+    """正文包上刊头：标题 + 署名行（作者 · 发表日期）。
+
+    署名行来自 Resource 元数据（authors / publish_at），让导出的
+    PDF/Word 不再是"无名氏文档"——作者与刊出日期随文档走。
+    """
+    head = f"<h1>{title}</h1>"
+    if byline:
+        head += f'<p class="byline">{byline}</p>'
+    return head + body_html
 
 
-def html_to_pdf(body_html: str, title: str) -> bytes:
+def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
     """pymupdf Story 渲染 A4 PDF。data URI 图片在分块时逐块绘制。"""
     import pymupdf
 
-    html = _story_html(_style_captions(_classify_images(body_html)), title)
+    html = _story_html(_style_captions(_classify_images(body_html)), title, byline)
     story = pymupdf.Story(html=html, user_css=_CSS, em=11)
     buf = io.BytesIO()
     writer = pymupdf.DocumentWriter(buf)
@@ -227,7 +238,7 @@ def _docx_img_width(data: bytes):
     return Inches(5.5)
 
 
-def md_to_docx(md: str, title: str) -> bytes:
+def md_to_docx(md: str, title: str, byline: str | None = None) -> bytes:
     """轻量 Markdown → docx：标题/段落/表格/列表/data-URI 图片。"""
     import docx
     from docx.shared import Pt, Inches
@@ -237,6 +248,12 @@ def md_to_docx(md: str, title: str) -> bytes:
     style.font.size = Pt(11)
     # 中文字体设置（宋体正文 + 黑体标题由 Word 主题回退，这里不强制指定 east asian 字体名）
     document.add_heading(title, level=0)
+    if byline:
+        p = document.add_paragraph()
+        run = p.add_run(byline)
+        run.font.size = Pt(10.5)
+        run.italic = True
+        p.alignment = 1  # 居中
 
     lines = md.splitlines()
     i = 0

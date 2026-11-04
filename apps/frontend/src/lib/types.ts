@@ -184,6 +184,9 @@ export interface ResourceBase {
   quality_score?: number | null
   quality_grade?: string | null
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null
+  // 编辑部评语挂在 quality_breakdown.comment（非维度，展示时单独取出），
+  // 与七维分数同源存储，避免给 resources 加列。
+  quality_comment?: string | null
   /** 主题封面图（/covers/xx.jpg）；为空时回退生成式封面 */
   cover_image?: string | null
   cover_theme?: string | null

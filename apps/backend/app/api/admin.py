@@ -13,6 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,13 +38,15 @@ logger = get_logger("rubbish.admin")
 # Allowlist of assignable role names; mirrors Role.name values. Admin
 # privilege is governed by User.is_admin, not by role membership.
 # senior_reviewer（L6 资深审稿人）与 reviewer 共用评审端点，仅资格差异。
+#
+# 作者/读者不再作为可分配角色：读者身份 = 注册即得，作者身份 = 确认
+# 《投稿规范》即得（users.rules_ack_version），二者是"身份"不是"角色"，
+# 由编辑部手工分配只会造成授权逻辑混乱（2026-11 收窄口径）。
 ASSIGNABLE_ROLES = {
     "reviewer",
     "senior_reviewer",
     "editor",
     "section_editor",
-    "author",
-    "reader",
 }
 
 
@@ -604,3 +607,176 @@ async def email_status(
         "from_address": accounts[0].from_address if accounts else "",
         "guard": guard_stats(),
     }
+
+
+# ---------------------------------------------------------------------------
+# 作者认领审批（Author Claim review）
+#
+# 作者对"无人认领"的存量文章发起认领（见 catalog.routes.claim_resource），
+# 编辑部在这里批准 / 拒绝。批准 = 创建一条 accepted 关联投稿，把文章
+# 正式挂到认领人名下；拒绝 = 保留申请记录供仲裁。
+# ---------------------------------------------------------------------------
+
+
+class ClaimDecision(BaseModel):
+    action: str  # "approve" | "reject"
+    note: str | None = None
+
+
+@router.get("/claims")
+async def list_claims(
+    claim_status: str = Query(default="pending", pattern="^(pending|approved|rejected|all)$"),
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> list[dict[str, Any]]:
+    """认领申请列表（编辑部审批台）。"""
+    from app.modules.catalog.models import AuthorClaim, Resource
+
+    tenant_id = require_tenant_id()
+    stmt = (
+        select(AuthorClaim, Resource.title, User.username)
+        .join(Resource, Resource.id == AuthorClaim.resource_id)
+        .join(User, User.id == AuthorClaim.user_id)
+        .where(AuthorClaim.tenant_id == tenant_id)
+        .order_by(desc(AuthorClaim.created_at))
+        .limit(200)
+    )
+    if claim_status != "all":
+        stmt = stmt.where(AuthorClaim.status == claim_status)
+    rows = (await db.execute(stmt)).all()
+    return [
+        {
+            "id": claim.id,
+            "resource_id": claim.resource_id,
+            "resource_title": title,
+            "user_id": claim.user_id,
+            "username": username,
+            "note": claim.note,
+            "status": claim.status,
+            "decision_note": claim.decision_note,
+            "created_at": claim.created_at,
+            "decided_at": claim.decided_at,
+        }
+        for claim, title, username in rows
+    ]
+
+
+@router.post("/claims/{claim_id}/decision")
+async def decide_claim(
+    claim_id: int,
+    body: ClaimDecision,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """批准 / 拒绝一篇认领申请。
+
+    批准会创建一条 ``accepted`` 关联投稿（submitted_by = 认领人，
+    resource_id 指向文章），使"我的文章"等 Submission 链路功能生效；
+    同时给认领人发通知。全程写审计日志。
+    """
+    from app.core.time import utcnow
+    from app.modules.catalog.models import AuthorClaim, Resource
+    from app.modules.notifications import services as notifications
+    from app.modules.submission.models import Submission
+
+    if body.action not in ("approve", "reject"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="action 必须是 approve 或 reject"
+        )
+
+    tenant_id = require_tenant_id()
+    claim = (
+        await db.execute(
+            select(AuthorClaim).where(
+                AuthorClaim.id == claim_id, AuthorClaim.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if claim is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Claim not found")
+    if claim.status != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该申请已处理")
+
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == claim.resource_id, Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    if body.action == "approve":
+        # 防重复：同一资源已有该用户名下的投稿就不重复建
+        existing_sub = (
+            await db.execute(
+                select(Submission.id).where(
+                    Submission.resource_id == resource.id,
+                    Submission.submitted_by == claim.user_id,
+                    Submission.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_sub is None:
+            db.add(
+                Submission(
+                    tenant_id=tenant_id,
+                    submitted_by=claim.user_id,
+                    resource_id=resource.id,
+                    title=resource.title,
+                    type=resource.type,
+                    authors=resource.authors,
+                    year=resource.year,
+                    venue=resource.venue,
+                    discipline=resource.discipline,
+                    subdiscipline=resource.subdiscipline,
+                    keywords=resource.keywords or [],
+                    jel_codes=[],
+                    tags=resource.tags or [],
+                    abstract=resource.abstract or "",
+                    preview=resource.preview or "",
+                    status="accepted",
+                    admin_note="作者认领批准后自动创建的关联投稿",
+                )
+            )
+        claim.status = "approved"
+        notify_title = f"认领已批准：{resource.title}"
+        notify_body = "编辑部已批准你对该文章的认领，文章已挂到你的名下。"
+    else:
+        claim.status = "rejected"
+        notify_title = f"认领未通过：{resource.title}"
+        notify_body = "编辑部未能确认你与该文章的作者关系。如有异议，请通过申诉渠道联系编辑部。"
+
+    if body.note:
+        claim.decision_note = body.note
+        notify_body += f"\n编辑部备注：{body.note}"
+    claim.decided_by = current_admin.id
+    claim.decided_at = utcnow()
+
+    await notifications.create(
+        db,
+        tenant_id=tenant_id,
+        user_id=claim.user_id,
+        type_="claim.decision",
+        title=notify_title,
+        body=notify_body,
+        related_type="resource",
+        related_id=str(claim.resource_id),
+    )
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="catalog.claim.decision",
+            target_type="author_claim",
+            target_id=str(claim.id),
+            payload={
+                "action": body.action,
+                "resource_id": claim.resource_id,
+                "user_id": claim.user_id,
+            },
+        )
+    )
+    await db.commit()
+    return {"id": claim.id, "status": claim.status}

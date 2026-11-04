@@ -1,25 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Atom,
-  BookOpen,
-  Brain,
-  Cpu,
-  FlaskConical,
-  Globe2,
-  Landmark,
-  Leaf,
-  LineChart,
-  Users,
-  type LucideIcon,
-} from 'lucide-react'
 import { api } from '@/lib/api'
 import { useCatalogStats } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceStats } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { ArticleCover } from '@/components/common/article-cover'
 import { absurdityLevel, qualityGrade } from '@/lib/resource-labels'
+import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -28,30 +16,6 @@ import { cn } from '@/lib/utils'
 export const Route = createFileRoute('/browse')({
   component: BrowsePage,
 })
-
-/**
- * 学科 → 图标/配色映射。
- *
- * 为什么要有这一页：此前目录页一进来就是一张大表格，读者面对 109 条
- * 记录无从下手。好的内容站不会让人"先看到全部"再自己筛——它先给
- * 入口（九宫格），让人按兴趣缩小范围，再进列表。这是导航逻辑，不是
- * 装饰。
- */
-const DISCIPLINE_STYLE: Record<string, { icon: LucideIcon; tint: string }> = {
-  计算机科学: { icon: Cpu, tint: 'from-sky-500/15 to-sky-500/5' },
-  信息科学: { icon: LineChart, tint: 'from-indigo-500/15 to-indigo-500/5' },
-  生命科学: { icon: FlaskConical, tint: 'from-emerald-500/15 to-emerald-500/5' },
-  物理与宇宙学: { icon: Atom, tint: 'from-violet-500/15 to-violet-500/5' },
-  地球科学: { icon: Globe2, tint: 'from-teal-500/15 to-teal-500/5' },
-  生态与环境科学: { icon: Leaf, tint: 'from-green-500/15 to-green-500/5' },
-  数学与统计: { icon: LineChart, tint: 'from-cyan-500/15 to-cyan-500/5' },
-  心理学: { icon: Brain, tint: 'from-rose-500/15 to-rose-500/5' },
-  社会科学: { icon: Users, tint: 'from-amber-500/15 to-amber-500/5' },
-  人文与文化研究: { icon: Landmark, tint: 'from-orange-500/15 to-orange-500/5' },
-  管理学: { icon: BookOpen, tint: 'from-blue-500/15 to-blue-500/5' },
-}
-
-const DEFAULT_STYLE = { icon: BookOpen, tint: 'from-primary/15 to-primary/5' }
 
 function BrowsePage() {
   const statsQ = useCatalogStats()
@@ -89,7 +53,7 @@ function BrowsePage() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {disciplines.map(([name, count]) => {
-              const style = DISCIPLINE_STYLE[name] ?? DEFAULT_STYLE
+              const style = DISCIPLINE_STYLE[name] ?? DEFAULT_DISCIPLINE_STYLE
               const Icon = style.icon
               return (
                 <Link

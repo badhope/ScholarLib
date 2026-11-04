@@ -163,3 +163,4 @@ apps/backend/deploy_demo.db*
 apps/backend/prebuilt-static/assets/
 dist.tar.gz
 .tmp-*.log
+dist.tgz

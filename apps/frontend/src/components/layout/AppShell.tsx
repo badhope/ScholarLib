@@ -25,6 +25,7 @@ import {
   Users,
   Award,
   Compass,
+  FileSignature,
   Megaphone,
   MessagesSquare,
   X,
@@ -89,6 +90,7 @@ const NAV: NavItem[] = [
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '消息' },
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/volumes', label: '卷管理', icon: Layers, auth: true, adminOnly: true, group: '站点管理' },

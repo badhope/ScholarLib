@@ -2,6 +2,7 @@ import {
   Bell,
   BookOpen,
   ClipboardCheck,
+  FileSignature,
   Gavel,
   Heart,
   Home,
@@ -82,13 +83,14 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/about', label: '关于本刊', icon: Building2, group: '期刊' },
   { to: '/settings', label: '账号设置', icon: Settings, group: '设置' },
   { to: '/admin/users', label: '用户管理', icon: Users, adminOnly: true, group: '站点管理' },
+  { to: '/admin/claims', label: '认领审批', icon: FileSignature, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, adminOnly: true, group: '站点管理' },
   { to: '/admin/audit-logs', label: '审计日志', icon: ShieldCheck, adminOnly: true, group: '站点管理' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, adminOnly: true, group: '站点管理' },
   { to: '/admin/settings', label: '期刊设置', icon: Settings, adminOnly: true, group: '站点管理' },
 ]
 
-// 中心悬浮按钮（FAB）跳转目标：导入（所有登录用户可用，属于创建类操作）。
-// 说明：项目暂无独立的"新建投稿"路由，资源创建入口 /catalog/new 仅 admin 可用，
-// 故 FAB 统一指向导入页，避免非 admin 用户被重定向到登录页。
+// 中心悬浮按钮（FAB）跳转目标：导入页（投稿/导入属于创建类操作）。
+// 可见性由外壳按角色控制（author/editor/section_editor/admin），纯读者
+// 不显示 FAB——避免点进去只有 403 空壳。
 export const MOBILE_FAB_TO = '/ingest'

@@ -33,14 +33,14 @@ import {
 
 const PAGE_SIZE = 50
 
-// 与后端 ASSIGNABLE_ROLES 一致；admin 角色由 is_admin 控制，不在此处
+// 与后端 ASSIGNABLE_ROLES 一致；admin 角色由 is_admin 控制，不在此处。
+// 作者/读者是"身份"不是"角色"：读者=注册即得、作者=确认《投稿规范》
+// 即得，不由管理员手工分配（2026-11 收窄口径，授权只管编辑线）。
 const ASSIGNABLE_ROLES: AssignableRole[] = [
   'reviewer',
   'senior_reviewer',
   'editor',
   'section_editor',
-  'author',
-  'reader',
 ]
 
 const ROLE_LABELS: Record<AssignableRole, string> = {
@@ -117,7 +117,7 @@ function AdminUsersPage() {
     <div>
       <PageHeader
         title="用户管理"
-        description="管理租户内用户、启用状态与角色分配。"
+        description="管理用户、启用状态与编辑线角色分配。读者身份=注册即得，作者身份=确认《投稿规范》即得，均不在此分配。"
         actions={
           data ? <Badge variant="secondary">当前页 {data.length}</Badge> : null
         }
@@ -229,7 +229,7 @@ function AdminUsersPage() {
                             {u.is_admin ? '取消平台管理员' : '设为平台管理员'}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuLabel>角色分配</DropdownMenuLabel>
+                          <DropdownMenuLabel>编辑线角色分配</DropdownMenuLabel>
                           {ASSIGNABLE_ROLES.map((role) => {
                             const checked = roles.includes(role)
                             const pending =
