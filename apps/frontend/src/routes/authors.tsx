@@ -260,10 +260,16 @@ function AuthorsPage() {
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
+                href: '/templates/rubbish-submission-template.docx',
+                icon: FileText,
+                title: 'Word 模板（推荐）',
+                body: '官方排版模板，直接在样式上填写即可：题名/作者/摘要/关键词/三级标题/图表题注/利益冲突声明/国标参考文献一应俱全。',
+              },
+              {
                 href: '/templates/rubbish-submission-template.md',
                 icon: FileText,
                 title: 'Markdown 模板',
-                body: '推荐。结构齐全，站点导入与在线阅读器最友好。',
+                body: '结构齐全，站点导入与在线阅读器最友好；喜欢纯文本写作流可用它。',
               },
               {
                 href: '/templates/rubbish-submission-template.tex',
@@ -275,7 +281,7 @@ function AuthorsPage() {
                 href: '/templates/rubbish-submission-template-word.md',
                 icon: FileText,
                 title: 'Word 排版要求',
-                body: '页面/字体/标题层级/三线表/参考文献的逐项设置说明，套用样式即可合规。',
+                body: '页面/字体/标题层级/三线表/参考文献的逐项设置说明，与 Word 模板配套。',
               },
               {
                 href: '/templates/rubbish-editorial-standards.md',

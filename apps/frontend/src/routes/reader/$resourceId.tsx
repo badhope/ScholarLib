@@ -294,6 +294,14 @@ function ReaderPage() {
         </Link>
         <span className="min-w-0 flex-1 text-sm font-medium line-clamp-1">{data.title}</span>
         {data.type && <Badge variant="secondary">{typeLabel(data.type)}</Badge>}
+        {data.has_markdown && data.download_url && (
+          <button
+            onClick={() => setModeOverride(mode === 'pdf' ? 'md' : 'pdf')}
+            className="inline-flex min-h-[28px] shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+          >
+            {mode === 'pdf' ? '阅读版' : '原稿 PDF'}
+          </button>
+        )}
       </div>
 
       <div
@@ -310,32 +318,6 @@ function ReaderPage() {
             (windowScroll ? '' : 'h-[calc(100dvh-14rem)] min-h-[26rem] md:h-[calc(100dvh-11rem)]')
           }
         >
-          {data.has_markdown && (
-            <div className="flex shrink-0 items-center gap-1 border-b px-3 py-1.5">
-              <button
-                onClick={() => setModeOverride('md')}
-                className={
-                  'min-h-[36px] rounded-full px-4 py-1.5 text-xs transition-colors ' +
-                  (mode === 'md'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground')
-                }
-              >
-                富文本阅读
-              </button>
-              <button
-                onClick={() => setModeOverride('pdf')}
-                className={
-                  'min-h-[36px] rounded-full px-4 py-1.5 text-xs transition-colors ' +
-                  (mode === 'pdf'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground')
-                }
-              >
-                原稿 PDF
-              </button>
-            </div>
-          )}
           {mode === 'md' && data.has_markdown ? (
             <ManuscriptView
               resourceId={id}
