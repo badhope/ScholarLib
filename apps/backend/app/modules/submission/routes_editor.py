@@ -639,9 +639,10 @@ async def editor_decision(
                 db, entry, publication_status=body.publication_status
             )
             entry.resource_id = new_resource.id
-        # D 级不能直接录用：评分低于 60 意味着"当前形态不能发表"。
-        # 这不是提示而是硬约束——否则评分体系对最终处置没有任何约束力，
-        # 编辑部可以一边给 D 一边照发，分数就成了装饰。
+        # 评分低于 40（不合格）不能直接录用：rubric v3.0 的处置语义是
+        # "<40 = rejected"。这不是提示而是硬约束——否则评分体系对最终
+        # 处置没有任何约束力，编辑部可以一边给不合格分一边照发，分数
+        # 就成了装饰。F（40–54）与 D-（55–57，borderline）均可发表。
         target_resource = (
             await db.execute(
                 select(Resource).where(
@@ -652,17 +653,17 @@ async def editor_decision(
         ).scalar_one_or_none()
         if (
             target_resource is not None
-            and target_resource.quality_grade == "D"
+            and target_resource.quality_score is not None
+            and target_resource.quality_score < 40
             and not body.force_accept_d_grade
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
-                    "code": "grade_d_requires_rework",
-                    "grade": "D",
-                    "score": float(target_resource.quality_score or 0),
+                    "code": "rejected_requires_rework",
+                    "score": float(target_resource.quality_score),
                     "message": (
-                        "该稿件质量评分为 D 级（<60），按规范不能直接录用。"
+                        "该稿件质量评分低于 40 分（不合格），按规范不能直接录用。"
                         "请先调用 rework 端点打回审稿人补审或要求作者修改；"
                         "如确需破例，请传 force_accept_d_grade=true 并在备注中写明理由。"
                     ),

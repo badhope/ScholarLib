@@ -1,9 +1,10 @@
-"""RQS v2.0 评分口径测试。
+"""RQS v3.0 评分口径测试。
 
-三条核心承诺必须被这些用例锁死：
+四条核心承诺必须被这些用例锁死：
 1. 权重每套合计 100；
 2. 分数确定（同样的维度分 → 同样的总分）；
-3. 学术诚信一票否决（integrity=0 → 全篇 D）。
+3. 学术诚信一票否决（integrity=0 → 总分归零，不予发表）；
+4. 14 档等级带连续无缝隙：<40 才 rejected，55–57 为 D- 边缘稿。
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from app.modules.quality.review_form import (
 )
 from app.modules.quality.rubric import (
     DIMENSIONS,
+    GRADE_BANDS,
     PROFILES,
     DimensionScore,
     PaperMetrics,
@@ -65,18 +67,20 @@ def test_full_marks_scores_100() -> None:
 def test_all_zero_scores_zero() -> None:
     result = evaluate(_scores(0))
     assert result["score"] == 0.0
-    assert result["grade"] == "D"
+    assert result["grade"] == "F"
+    assert result["rejected"] is True
     assert result["requires_rework"] is True
 
 
-def test_integrity_veto_forces_d() -> None:
-    """integrity=0 时，即使其他维度满分也必须判 D。"""
+def test_integrity_veto_forces_rejected() -> None:
+    """integrity=0 时，即使其他维度满分也必须总分归零、不予发表。"""
     scores = [DimensionScore(k, 5, "其余维度满分") for k in _ALL_KEYS if k != "integrity"]
     scores.append(DimensionScore("integrity", 0, "发现引用编造"))
     result = evaluate(scores)
     assert result["integrity_veto"] is True
     assert result["score"] == 0.0
-    assert result["grade"] == "D"
+    assert result["grade"] == "F"
+    assert result["rejected"] is True
     assert result["requires_rework"] is True
 
 
@@ -104,10 +108,45 @@ def test_score_out_of_range_rejected() -> None:
 
 
 def test_grade_bands_tolerate_fractions() -> None:
-    assert grade_for(95) == ("A+", "卓越")
+    """分数带按「下限」降序匹配，小数分必须落在正确档（历史 bug 防回归）。"""
+    assert grade_for(94.9) == ("A", "极佳")
     assert grade_for(79.5) == ("B", "良好")
-    assert grade_for(69.9) == ("C", "合格")
-    assert grade_for(59.9) == ("D", "待改进")
+    assert grade_for(71.0) == ("C", "中等")
+    assert grade_for(59.9) == ("D", "较弱")
+    assert grade_for(40.0) == ("F", "合格")
+
+
+def test_grade_bands_boundaries_v3() -> None:
+    """v3.0 等级带边界：A+ 极难达到，40 分是合格/不合格的分水岭。"""
+    assert grade_for(95) == ("A+", "极佳")
+    assert grade_for(89.9) == ("A-", "优秀")
+    assert grade_for(85) == ("A-", "优秀")
+    assert grade_for(54.9) == ("F", "合格")
+    assert grade_for(57.5) == ("D-", "较弱")
+
+
+def test_rejected_only_below_40() -> None:
+    """F（40–54）合格可发表；<40 才 rejected；55–57 是 D- 边缘稿。"""
+    assert evaluate(_scores(5), override_total=39.9)["rejected"] is True
+    result_40 = evaluate(_scores(5), override_total=40)
+    assert result_40["rejected"] is False
+    assert result_40["grade"] == "F"
+    assert result_40["requires_rework"] is False
+    assert evaluate(_scores(5), override_total=54.9)["grade"] == "F"
+    borderline = evaluate(_scores(5), override_total=56)
+    assert borderline["borderline"] is True
+    assert borderline["rejected"] is False
+    assert evaluate(_scores(5), override_total=54.9)["borderline"] is False
+    assert evaluate(_scores(5), override_total=57.5)["borderline"] is False
+
+
+def test_grade_bands_contiguous() -> None:
+    """14 档分数带必须连续无缝隙：上一档 min = 下一档 max + 1（向下）。"""
+    ordered = list(GRADE_BANDS)
+    for upper, lower in zip(ordered, ordered[1:]):
+        assert upper[2] == lower[3] + 1, f"{upper[0]} 与 {lower[0]} 之间有缝隙"
+    assert ordered[0][2] == 95 and ordered[0][3] == 100
+    assert ordered[-1][2] == 40
 
 
 def test_same_scores_same_total_deterministic() -> None:
@@ -135,11 +174,17 @@ def test_auto_precheck_flags_missing_abstract() -> None:
 
 def test_rubric_payload_shape() -> None:
     payload = rubric_payload()
-    assert payload["version"] == "2.0"
+    assert payload["version"] == "3.0"
     assert len(payload["dimensions"]) == 7
     assert set(payload["profiles"]) == set(PROFILES)
-    assert [g["code"] for g in payload["grades"]] == ["A+", "A", "B", "C", "D"]
+    assert [g["code"] for g in payload["grades"]] == [
+        "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+", "D", "D-", "F",
+    ]
     assert "integrity_veto" in payload
+    assert "rejected_action" in payload
+    assert "borderline_action" in payload
+    # v3.0 移除了没人看得懂的换算系数
+    assert "coefficient_formula" not in payload
     assert len(payload["score_anchors"]) == 6
 
 
@@ -150,6 +195,13 @@ def test_every_dimension_has_check_items() -> None:
     """每个维度都必须有可勾的检查项，否则该维度无法被一致地评。"""
     for key in _ALL_KEYS:
         assert CHECK_ITEMS_BY_DIMENSION[key], f"{key} 没有检查项"
+
+
+def test_presentation_has_no_figure_check() -> None:
+    """v3.0：图表格式不是学术质量，p_figures 已移除（走 auto_precheck warning）。"""
+    keys = {item.key for item in CHECK_ITEMS_BY_DIMENSION["presentation"]}
+    assert keys == {"p_structure", "p_language"}
+    assert all(item.key != "p_figures" for item in CHECK_ITEMS)
 
 
 def test_all_yes_suggests_full_marks() -> None:
@@ -188,7 +240,7 @@ def test_form_payload_covers_all_dimensions() -> None:
 
 def test_prompt_payload_has_output_schema_and_rules() -> None:
     payload = prompt_payload("research")
-    assert payload["rubric_version"] == "2.0"
+    assert payload["rubric_version"] == "3.0"
     assert "output_schema" in payload
     assert len(payload["rules"]) >= 4
     assert payload["weights"] == PROFILES["research"]

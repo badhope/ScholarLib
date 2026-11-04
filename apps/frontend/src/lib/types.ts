@@ -827,6 +827,12 @@ export interface QualityDimension {
   max_score?: number
 }
 
+/**
+ * 评分口径（v3.0 起为 14 档 ABCDF± 严厉客观制）。
+ * v3.0 移除了 ``coefficient_formula``（RQS/50 换算系数无人能懂），
+ * 处置语义改为：<40 不合格（rejected，必须打回）、55–57 边缘稿
+ * （borderline）、F（40–54）= 合格可发表。
+ */
 export interface QualityRubric {
   version: string
   dimensions: QualityDimension[]
@@ -837,13 +843,18 @@ export interface QualityRubric {
   min_references: Record<string, number>
   length_tiers: Record<string, { short: number; medium: number; long: number }>
   abstract_band: [number, number]
-  coefficient_formula: string
   /** 0–5 分锚点（v2.0 起） */
   score_anchors?: { score: number; meaning: string }[]
   /** 学术诚信一票否决的说明 */
   integrity_veto?: string
-  /** D 级处置说明 */
-  grade_d_action?: string
+  /** 不合格的分数下限（v3.0 起，固定 40） */
+  rejected_below?: number
+  /** 不合格稿件处置说明（v3.0 起，取代旧的 grade_d_action） */
+  rejected_action?: string
+  /** 边缘稿分数带（v3.0 起，55–57） */
+  borderline_band?: [number, number]
+  /** 边缘稿处置说明（v3.0 起） */
+  borderline_action?: string
 }
 
 /** 一个维度的评分（审稿人提交） */
@@ -853,6 +864,7 @@ export interface DimensionScoreInput {
   reason: string
 }
 
+/** 评分结果（v3.0：rejected = <40 必须打回；borderline = 55–57 边缘稿） */
 export interface QualityScoreResult {
   rubric_version: string
   article_type: string
@@ -860,7 +872,6 @@ export interface QualityScoreResult {
   score: number
   grade: string
   grade_label: string
-  coefficient: number
   breakdown: Record<
     string,
     {
@@ -875,6 +886,10 @@ export interface QualityScoreResult {
   >
   integrity_veto: boolean
   overridden: boolean
+  /** 总分 <40：不合格，不予发表，必须打回（与 requires_rework 等价） */
+  rejected: boolean
+  /** 总分 55–57（D-）：可发表但属边缘稿，提示编辑谨慎 */
+  borderline: boolean
   requires_rework: boolean
   auto_precheck?: { level: string; dimension: string; message: string }[]
 }

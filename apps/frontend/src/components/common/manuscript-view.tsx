@@ -98,6 +98,16 @@ function splitManuscript(md: string): { main: string; refs: string } {
   return { main: md.slice(0, idx), refs: md.slice(idx + 1) }
 }
 
+// Word → HTML → Markdown 的转换管线会在插图位置留下
+// `<!-- Start of picture text --> … <!-- End of picture text -->` 这类
+// 注释，Markdown 渲染时被当成正文显示（生产 /reader/133 实锤）。
+// 只在渲染层剥离，不改存储原文。
+const HTML_COMMENT = /<!--[\s\S]*?-->/g
+
+export function stripHtmlComments(md: string): string {
+  return md.replace(HTML_COMMENT, '')
+}
+
 interface AbstractSplit {
   before: string
   abstract: string
@@ -203,6 +213,25 @@ function referenceEntries(refs: string): string[] {
     .filter(Boolean)
 }
 
+// 公式/插图原图 404 时，浏览器会把 img 的 alt（整段 LaTeX 回退文本）
+// 当正文渲染出来，看起来像"一堆乱码"（生产 /reader/133 实锤）。
+// onError 后换成小占位元素：保留 a11y 信息，但不显示 alt 原文。
+function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) {
+    return (
+      <span
+        role="img"
+        aria-label={alt || '缺失的插图'}
+        className="md-img-missing inline-block rounded border border-dashed border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground align-middle"
+      >
+        插图缺失（原图未上传）
+      </span>
+    )
+  }
+  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+}
+
 const markdownComponents: Components = {
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noopener noreferrer nofollow">
@@ -213,7 +242,7 @@ const markdownComponents: Components = {
     // 空/非字符串 src（例如转换失败的本地绝对路径被清洗成空串）
     // 直接不渲染：浏览器对 src="" 会重新请求整页，且控制台报错。
     typeof src === 'string' && src ? (
-      <img src={src} alt={alt ?? ''} loading="lazy" />
+      <ManuscriptImage src={src} alt={alt ?? ''} />
     ) : null,
   p: ({ children }) => <p className={paragraphClass(children)}>{children}</p>,
   table: ({ children }) => (
@@ -278,8 +307,11 @@ export function ManuscriptView({
     },
   })
 
+  // 渲染前剥离 Word 转换残留的 HTML 注释（只在渲染层，不改存储原文）。
+  const cleaned = data ? stripHtmlComments(data) : data
+
   // 目录与正文/参考文献拆分：纯字符串操作，无需 memo
-  const split = data ? splitManuscript(data) : { main: '', refs: '' }
+  const split = cleaned ? splitManuscript(cleaned) : { main: '', refs: '' }
   const sections = split.main
     ? splitAbstract(split.main)
     : { before: '', abstract: '', label: '摘要', after: '' }

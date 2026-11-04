@@ -11,6 +11,9 @@
   看起来像"检查了但没问题"。
 - 检查项的答案（是/否/不适用）直接映射到该维度的建议分，审稿人可以
   覆盖建议分，但**必须写理由**（见 ``rubric.DimensionScore``）。
+- v3.0 起表达清晰度（presentation）不再包含图表检查项（p_figures 已
+  移除）：图表格式不是学术质量，相关问题由 ``rubric.auto_precheck``
+  以 warning 形式提示，不进入建议分。
 
 这套表单同时是给 AI 的输入规格：``prompt_payload`` 输出的 JSON 结构
 就是要求外部模型返回的结构，配合 ``docs/quality-rubric-v2.md`` 里的
@@ -70,9 +73,8 @@ CHECK_ITEMS: tuple[CheckItem, ...] = (
     CheckItem("i_data", "integrity", "数据与代码可用性声明是否给出且可执行？", 2),
     CheckItem("i_contrib", "integrity", "作者贡献（CRediT）与利益冲突声明是否完整？", 2),
     CheckItem("i_ethics", "integrity", "涉及人类/动物被试时是否有伦理审批说明？"),
-    # --- 表达与结构 ---
+    # --- 表达清晰度 ---
     CheckItem("p_structure", "presentation", "结构是否让读者能按顺序理解研究？"),
-    CheckItem("p_figures", "presentation", "图表是否自解释（标题、坐标轴、单位、图注齐全）？"),
     CheckItem("p_language", "presentation", "语言是否清晰到不需要反复重读才能理解？"),
 )
 
@@ -195,7 +197,7 @@ def prompt_payload(article_type: str = "research") -> dict[str, object]:
             "每个维度必须给出 reason，且必须引用正文的具体证据。",
             "integrity 维度若发现编造数据或引用，直接给 0 分。",
             "总分由权重计算得出，不得自行调高或调低。",
-            "总分与 D 级（<60）时，必须列出至少 3 条具体修改要求。",
+            "总分低于 40（不合格）时，必须列出至少 3 条具体修改要求。",
         ],
     }
 
