@@ -62,9 +62,7 @@ def html_to_pdf(body_html: str, title: str) -> bytes:
 
     html = _story_html(body_html, title)
     story = pymupdf.Story(html=html, user_css=_CSS, em=11)
-    writer = pymupdf.DocumentWriter()
     buf = io.BytesIO()
-    # DocumentWriter 需要文件路径或可写二进制——pymupdf 支持直接传 BytesIO
     writer = pymupdf.DocumentWriter(buf)
     mediabox = pymupdf.paper_rect("a4")
     where = mediabox + (52, 56, -52, -56)
