@@ -340,6 +340,37 @@ export function ManuscriptView({
  setToc(entries)
  }, [data, refs])
 
+  // 超宽条图适配：宽高比 ≥ 4 的图（常见于从 PDF 里裁出来的一行公式截图），
+  // 按 100% 宽度等比缩放后在 390px 的手机上只剩十几像素高，字迹完全糊掉。
+  // 这里把这类图包进可横向滚动的容器，按可读宽度展示。
+  useEffect(() => {
+    const root = articleRef.current
+    if (!root) return
+    const wrapWide = () => {
+      root.querySelectorAll<HTMLImageElement>('img:not([data-wide])').forEach((img) => {
+        const mark = () => {
+          if (!img.naturalWidth || !img.naturalHeight) return
+          if (img.naturalWidth / img.naturalHeight < 4) return
+          if (img.closest('.md-wide-figure')) return
+          img.dataset.wide = '1'
+          const box = document.createElement('div')
+          box.className = 'md-wide-figure'
+          img.parentNode?.insertBefore(box, img)
+          box.appendChild(img)
+          const hint = document.createElement('span')
+          hint.className = 'md-wide-figure__hint'
+          hint.textContent = '左右滑动查看完整图片'
+          box.parentNode?.insertBefore(hint, box.nextSibling)
+        }
+        if (img.complete) mark()
+        else img.addEventListener('load', mark, { once: true })
+      })
+    }
+    wrapWide()
+    const timer = window.setTimeout(wrapWide, 400)
+    return () => window.clearTimeout(timer)
+  }, [data, refsOpen])
+
   // 目录条目数上报给阅读页：不足 3 条时底部不出现「目录」按钮，
   // 避免按下去弹出一个几乎空白的抽屉。
   useEffect(() => {
@@ -570,8 +601,7 @@ export function ManuscriptView({
         </div>
         <article
           ref={articleRef}
-          className="markdown-body min-w-0 flex-1"
-          style={{
+          className="markdown-body min-w-0 flex-1"          style={{
             fontSize: `${prefs.fontScale}em`,
             lineHeight: prefs.lineHeight,
             fontFamily: prefs.serif

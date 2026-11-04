@@ -239,105 +239,21 @@ def _docx_img_width(data: bytes):
 
 
 def md_to_docx(md: str, title: str, byline: str | None = None) -> bytes:
-    """轻量 Markdown → docx：标题/段落/表格/列表/data-URI 图片。"""
-    import docx
-    from docx.shared import Pt, Inches
+    """Markdown → 官方模板 docx。
 
-    document = docx.Document()
-    style = document.styles["Normal"]
-    style.font.size = Pt(11)
-    # 中文字体设置（宋体正文 + 黑体标题由 Word 主题回退，这里不强制指定 east asian 字体名）
-    document.add_heading(title, level=0)
+    1.11.0 起不再用「能塞进去就行」的轻量转换：那版没有刊头（题名/作者/单位/
+    摘要/关键词）、图题表题不居中、表格还是带竖线的网格。读者下载到的 Word
+    和站内规范不一致，编辑部也就没法拿它当工作稿。现在统一走
+    ``docx_template.build``，模板参数写在 docs/paper-specification.md §7.2。
+
+    ``byline`` 仍保留：导出接口从 Resource 元数据带过来的「作者 · 日期」，
+    拆回作者列表交给模板排版。
+    """
+    from app.modules.submission.docx_template import Meta, build, parse_meta
+
+    meta = parse_meta(md, fallback_title=title)
     if byline:
-        p = document.add_paragraph()
-        run = p.add_run(byline)
-        run.font.size = Pt(10.5)
-        run.italic = True
-        p.alignment = 1  # 居中
-
-    lines = md.splitlines()
-    i = 0
-    while i < len(lines):
-        ln = lines[i]
-        t = ln.strip()
-        if not t:
-            i += 1
-            continue
-        # 图片（data URI 或普通 URL）
-        m = _MD_IMAGE.match(t)
-        if m:
-            src = m.group(2)
-            try:
-                if src.startswith("data:"):
-                    b64 = src.split("base64,", 1)[1]
-                    data = base64.b64decode(b64)
-                    document.add_picture(io.BytesIO(data), width=_docx_img_width(data))
-                else:
-                    document.add_paragraph(f"[图片] {m.group(1) or src}")
-            except Exception:
-                document.add_paragraph(f"[图片加载失败] {m.group(1)}")
-            i += 1
-            continue
-        # 表格
-        if t.startswith("|") and i + 1 < len(lines) and re.match(r"^\|[\s:|-]+\|$", lines[i + 1].strip()):
-            rows = []
-            j = i
-            while j < len(lines) and lines[j].strip().startswith("|"):
-                cells = [c.strip() for c in lines[j].strip().strip("|").split("|")]
-                if not re.match(r"^\|[\s:|-]+\|$", lines[j].strip()):
-                    rows.append(cells)
-                j += 1
-            if rows:
-                ncols = max(len(r) for r in rows)
-                table = document.add_table(rows=len(rows), cols=ncols)
-                table.style = "Table Grid"
-                for ri, row in enumerate(rows):
-                    for ci in range(ncols):
-                        cell = table.cell(ri, ci)
-                        cell.text = ""
-                        _add_runs(cell.paragraphs[0], row[ci] if ci < len(row) else "")
-            i = j
-            continue
-        # 标题
-        hm = re.match(r"^(#{1,6})\s+(.*)$", t)
-        if hm:
-            level = min(len(hm.group(1)), 4)
-            document.add_heading(hm.group(2).strip(), level=level)
-            i += 1
-            continue
-        # 图注（居中小字）
-        cm = re.match(r"^(图\s*\d+[^。]{0,28}。)$", t)
-        if cm:
-            p = document.add_paragraph()
-            p.alignment = 1  # WD_ALIGN_PARAGRAPH.CENTER
-            run = p.add_run(cm.group(1))
-            run.font.size = Pt(9.5)
-            run.italic = True
-            i += 1
-            continue
-        # 列表
-        lm = re.match(r"^[-*•]\s+(.*)$", t)
-        if lm:
-            p = document.add_paragraph(style="List Bullet")
-            _add_runs(p, lm.group(1))
-            i += 1
-            continue
-        nm = re.match(r"^(\d+)[\.、\)]\s+(.*)$", t)
-        if nm:
-            p = document.add_paragraph(style="List Number")
-            _add_runs(p, nm.group(2))
-            i += 1
-            continue
-        # 普通段落（合并软换行）
-        para = [t]
-        j = i + 1
-        while j < len(lines) and lines[j].strip() and not re.match(r"^(#|\||[-*•]\s|\d+[\.、\)]\s|!\[)", lines[j].strip()):
-            para.append(lines[j].strip())
-            j += 1
-        p = document.add_paragraph()
-        _add_runs(p, " ".join(para))
-        i = j
-
-    buf = io.BytesIO()
-    document.save(buf)
-    return buf.getvalue()
+        authors = byline.split("·")[0].strip()
+        if authors:
+            meta.authors = [a.strip() for a in re.split(r"[、,，]", authors) if a.strip()]
+    return build(md, meta)

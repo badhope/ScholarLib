@@ -9,6 +9,10 @@ export interface AuthUser {
   // 前端只用来决定导航可见性，真正的权限仍由后端 require_* 依赖强制。
   // 可选：旧版会话缓存里没有这个字段，读取方一律 `?? []`。
   roles?: string[]
+  // 资料页要显示「邮箱 / 是否已验证」。登录响应里不一定带，缺了就显示占位，
+  // 不为了两个只读字段去多打一次接口。
+  email?: string
+  is_email_verified?: boolean
 }
 
 interface AuthState {

@@ -306,6 +306,30 @@ h4 {
   text-indent: 0;
 }
 .markdown-body .md-caption-figure { margin-left: auto; margin-right: auto; }
+/* 超宽条图（宽高比 ≥ 4）：按 100% 宽等比缩放后只剩十几像素高，字全糊。
+   改为横向滚动 + 可读的最小宽度，读者能左右滑动看清原图。 */
+.markdown-body .md-wide-figure {
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin: 1.6em -0.25rem 0.2rem;
+  padding-bottom: 0.35rem;
+  border-radius: 0.5rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.markdown-body .md-wide-figure img {
+  min-width: 620px;
+  max-width: none;
+  margin: 0;
+  border-radius: 0.5rem;
+}
+.markdown-body .md-wide-figure__hint {
+  display: block;
+  margin: -0.1rem 0 0.6rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--color-muted-foreground);
+}
 .markdown-body .md-caption-table { max-width: 100%; }
 .markdown-body .md-caption em { font-style: normal; }
 .markdown-body .md-caption strong { color: var(--color-foreground); }

@@ -924,6 +924,14 @@ async def verify_email_login_code(
             detail="验证码无效或已过期，请重新获取。",
         )
 
+    # 收到并输对了发往该邮箱的 6 位码，就等于证明了邮箱所有权——此刻不置
+    # is_email_verified，用户会永远停在「未验证」：注册时那封验证邮件被忽略
+    # 或被丢进垃圾箱之后，他再也不会去点链接，后台却一直显示未验证。
+    # 两条证明路径（点邮件链接 / 用邮箱验证码登录）必须收敛到同一个状态。
+    if not user.is_email_verified:
+        user.is_email_verified = True
+        await db.commit()
+
     # 2FA 账户照常走 pending token：邮箱验证码只是第一因子替代，
     # 不能绕过第二因子。
     if user.totp_enabled_at is not None:

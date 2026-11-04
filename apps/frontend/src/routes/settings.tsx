@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-router'
 import { getAuthState, useAuthStore } from '@/lib/auth'
-import { useMe } from '@/hooks/api/use-auth'
+import { useMe, useResendVerification } from '@/hooks/api/use-auth'
 import { TwoFactorSection } from '@/components/settings/two-factor-section'
 import { ChangePasswordCard } from '@/components/settings/change-password-card'
 import { BioCard } from '@/components/settings/bio-card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>): { tab?: 'profile' | 'security' } => {
@@ -39,7 +42,11 @@ function roleSummary(isAdmin?: boolean, roles?: string[]) {
 }
 
 function ProfileCard() {
-  const user = useAuthStore((s) => s.user)
+  const cached = useAuthStore((s) => s.user)
+  const { data: me } = useMe()
+  // 以 /auth/me 为准：登录响应里通常没有 is_email_verified
+  const user = (me ?? cached) as typeof cached
+  const resend = useResendVerification()
   return (
     <Card>
       <CardHeader>
@@ -51,6 +58,43 @@ function ProfileCard() {
           <span className="text-muted-foreground">用户名</span>
           <span className="font-medium">{user?.username ?? '—'}</span>
         </div>
+        {/* 邮箱验证：注册后要确认邮箱所有权（点邮件里的链接，或用邮箱验证码
+            登录一次）。没验证不影响阅读与投稿，但会影响找回密码与作者页展示，
+            所以这里常驻一个明确的状态与一键重发。 */}
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-muted-foreground">邮箱</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-medium">{user?.email ?? '—'}</span>
+            <Badge variant={user?.is_email_verified ? 'default' : 'outline'}>
+              {user?.is_email_verified ? '已验证' : '未验证'}
+            </Badge>
+          </span>
+        </div>
+        {!user?.is_email_verified && user?.email && (
+          <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+            <p>
+              验证方式有两种：点开注册邮件里的链接；或者到登录页用「邮箱验证码」登录一次。
+              两种都算证明你拥有这个邮箱。
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              disabled={resend.isPending}
+              onClick={() =>
+                resend.mutate(
+                  { email: user.email as string },
+                  {
+                    onSuccess: () => toast.success('验证邮件已重新发送，请查收（含垃圾箱）'),
+                    onError: () => toast.error('发送失败，请稍后再试'),
+                  },
+                )
+              }
+            >
+              {resend.isPending ? '发送中…' : '重发验证邮件'}
+            </Button>
+          </div>
+        )}
         <div className="flex justify-between gap-4">
           <span className="text-muted-foreground">角色</span>
           <span className="text-right font-medium">{roleSummary(user?.is_admin, user?.roles)}</span>

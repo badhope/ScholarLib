@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Download, ListTree, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FileText, ListTree, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { typeLabel } from '@/lib/resource-labels'
 import { ReadingProgressBar } from '@/components/common/reading-progress-bar'
@@ -536,9 +536,20 @@ function ReaderPage() {
           )}
           {data.has_file && (
             <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-1 px-2">
-              <a href={`/api/catalog/${id}/file`} download aria-label="下载 PDF">
+              <a href={`/api/catalog/${id}/file`} download aria-label="下载原稿 PDF">
                 <Download className="h-4 w-4" />
-                <span className="text-xs">下载</span>
+                <span className="text-xs">PDF</span>
+              </a>
+            </Button>
+          )}
+          {data.has_markdown && (
+            <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-1 px-2">
+              <a
+                href={`/api/catalog/${id}/export?format=docx`}
+                aria-label="下载规范版 Word"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="text-xs">Word</span>
               </a>
             </Button>
           )}
