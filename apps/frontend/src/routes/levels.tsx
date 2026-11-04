@@ -25,7 +25,7 @@ export const Route = createFileRoute('/levels')({
   component: LevelsPage,
 })
 
-// RQS v3.0 的 14 档等级配色。缺键兜底走末尾的 `?? ''` 链式默认：
+// RQS v3.0 的 13 档等级配色（A+ ~ F，见 quality/rubric.py GRADE_BANDS）。缺键兜底走末尾的 `?? ''` 链式默认：
 // 新增档位时这里同步即可，页面不会因缺键崩坏。
 const GRADE_STYLES: Record<string, string> = {
   'A+': 'bg-amber-300 text-amber-950',

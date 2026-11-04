@@ -15,12 +15,15 @@ import {
   Send,
   Share2,
   Trash2,
+  UserCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import {
   useAuthorFollowStatus,
+  useClaimResource,
+  useClaimStatus,
   useDeleteResource,
   useDisciplineSubscriptionStatus,
   useFollowAuthor,
@@ -109,6 +112,22 @@ function CatalogDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  // 作者认领：登录用户可对"无人认领"的存量文章发起认领（编辑部审批）
+  const [claimOpen, setClaimOpen] = useState(false)
+  const [claimNote, setClaimNote] = useState('')
+  const claimStatus = useClaimStatus(id, isAuthenticated)
+  const claimMut = useClaimResource()
+
+  const onClaim = async () => {
+    try {
+      await claimMut.mutateAsync({ resourceId: id, note: claimNote.trim() || undefined })
+      toast.success('认领申请已提交，等待编辑部审核')
+      setClaimOpen(false)
+      setClaimNote('')
+    } catch (err) {
+      toast.error(extractError(err, '认领失败'))
+    }
+  }
 
   if (isLoading) return <LoadingSkeleton rows={6} />
   if (isError || !data) {
@@ -183,6 +202,33 @@ function CatalogDetailPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* 主体 */}
         <div className="space-y-6 lg:col-span-2">
+          {/* 认领入口：登录 + 文章可认领时显示（编辑部导入的早期文章与站内账号无关） */}
+          {isAuthenticated && claimStatus.data?.claimable && (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">这篇文章还没有挂到任何站内账号名下</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    如果你是本文作者，可以发起认领，编辑部核实后会把文章挂到你的名下。
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setClaimOpen(true)} disabled={claimMut.isPending}>
+                  <UserCheck className="h-4 w-4" />
+                  认领本文
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {isAuthenticated && claimStatus.data?.mine && (
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="py-4">
+                <p className="text-sm">
+                  你已提交认领申请（{claimStatus.data.mine.status === 'pending' ? '待编辑部审核' : claimStatus.data.mine.status === 'approved' ? '已批准' : '未通过'}）。
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           <AbstractCard text={data.abstract} collapsible={isMobile} />
 
           <CitationCard resource={data} />
@@ -235,9 +281,17 @@ function CatalogDetailPage() {
                   )
                 })()}
               </div>
+              {data.quality_comment && (
+                <div className="mt-3 rounded-md border bg-muted/40 p-3">
+                  <p className="mb-1 text-xs font-medium text-muted-foreground">编辑部评价</p>
+                  <p className="text-sm leading-relaxed">{data.quality_comment}</p>
+                </div>
+              )}
               {data.quality_breakdown && (
-                <div className="space-y-1.5">
-                  {Object.entries(data.quality_breakdown).map(([key, dim]) => (
+                <div className="mt-3 space-y-1.5">
+                  {Object.entries(data.quality_breakdown)
+                    .filter(([key]) => key !== 'comment')
+                    .map(([key, dim]) => (
                     <div key={key} className="flex items-center gap-2 text-xs">
                       <span className="w-24 shrink-0 text-muted-foreground">{dim.label}</span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -595,6 +649,37 @@ function CatalogDetailPage() {
         onOpenChange={setDeleteOpen}
         onConfirm={onDelete}
       />
+
+      {/* 认领申请弹窗：说明选填，编辑部审批后文章挂到名下 */}
+      <Dialog open={claimOpen} onOpenChange={setClaimOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>认领本文</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              申请提交后编辑部会核实作者身份，批准后文章将挂到你的账号名下。
+            </p>
+            <Label htmlFor="claim-note">申请说明（选填）</Label>
+            <Textarea
+              id="claim-note"
+              rows={3}
+              maxLength={500}
+              value={claimNote}
+              onChange={(e) => setClaimNote(e.target.value)}
+              placeholder="例：本文第一作者，原始投稿邮箱为 …，可提供底稿核对。"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClaimOpen(false)}>
+              取消
+            </Button>
+            <Button onClick={() => void onClaim()} disabled={claimMut.isPending}>
+              {claimMut.isPending ? '提交中…' : '提交申请'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

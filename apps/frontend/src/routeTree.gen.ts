@@ -32,6 +32,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
 import { Route as AdminAnnouncementsRouteImport } from './routes/admin/announcements'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
+import { Route as AdminClaimsRouteImport } from './routes/admin/claims'
 import { Route as AdminIssuesRouteImport } from './routes/admin/issues'
 import { Route as AdminJournalRouteImport } from './routes/admin/journal'
 import { Route as AdminRoleApplicationsRouteImport } from './routes/admin/role-applications'
@@ -168,6 +169,11 @@ const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
   path: '/admin/audit-logs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminClaimsRoute = AdminClaimsRouteImport.update({
+  id: '/admin/claims',
+  path: '/admin/claims',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIssuesRoute = AdminIssuesRouteImport.update({
   id: '/admin/issues',
   path: '/admin/issues',
@@ -293,6 +299,7 @@ export interface FileRoutesByFullPath {
   '/account/security': typeof AccountSecurityRoute
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/claims': typeof AdminClaimsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
@@ -338,6 +345,7 @@ export interface FileRoutesByTo {
   '/account/security': typeof AccountSecurityRoute
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/claims': typeof AdminClaimsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
@@ -384,6 +392,7 @@ export interface FileRoutesById {
   '/account/security': typeof AccountSecurityRoute
   '/admin/announcements': typeof AdminAnnouncementsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/claims': typeof AdminClaimsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
@@ -431,6 +440,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/admin/announcements'
     | '/admin/audit-logs'
+    | '/admin/claims'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/role-applications'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/admin/announcements'
     | '/admin/audit-logs'
+    | '/admin/claims'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/role-applications'
@@ -521,6 +532,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/admin/announcements'
     | '/admin/audit-logs'
+    | '/admin/claims'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/role-applications'
@@ -567,6 +579,7 @@ export interface RootRouteChildren {
   AccountSecurityRoute: typeof AccountSecurityRoute
   AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
+  AdminClaimsRoute: typeof AdminClaimsRoute
   AdminIssuesRoute: typeof AdminIssuesRoute
   AdminJournalRoute: typeof AdminJournalRoute
   AdminRoleApplicationsRoute: typeof AdminRoleApplicationsRoute
@@ -752,6 +765,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditLogsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/claims': {
+      id: '/admin/claims'
+      path: '/admin/claims'
+      fullPath: '/admin/claims'
+      preLoaderRoute: typeof AdminClaimsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/issues': {
       id: '/admin/issues'
       path: '/admin/issues'
@@ -919,6 +939,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountSecurityRoute: AccountSecurityRoute,
   AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
+  AdminClaimsRoute: AdminClaimsRoute,
   AdminIssuesRoute: AdminIssuesRoute,
   AdminJournalRoute: AdminJournalRoute,
   AdminRoleApplicationsRoute: AdminRoleApplicationsRoute,

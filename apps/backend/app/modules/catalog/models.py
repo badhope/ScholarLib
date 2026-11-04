@@ -226,4 +226,53 @@ class Subdiscipline(Base, TenantScopedMixin):
     discipline: Mapped[Discipline] = relationship(back_populates="subdisciplines")
 
 
-__all__ = ["Discipline", "Resource", "Subdiscipline"]
+class AuthorClaim(Base, TenantScopedMixin):
+    """作者认领申请：站内用户认领一篇"无人认领"的存量文章。
+
+    背景：本刊早期文章由编辑部批量导入（authors 是纯字符串数组，
+    与站内账号无关）。作者想在站内名下挂上自己的文章，需要走认领
+    流程：用户对资源发起认领 → 编辑部批准后自动创建一条关联投稿
+    （``submissions.submitted_by`` = 认领人），从此"我的文章"、
+    录用数统计、刊前预览等一切基于 Submission 链路的功能都能生效。
+
+    状态机：``pending`` → ``approved`` | ``rejected``（终态）。
+    同一 (tenant, resource, user) 只允许一条申请（唯一约束）；
+    同一资源同一时刻只允许一条 pending（由服务层校验）。
+    """
+
+    __tablename__ = "author_claims"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "resource_id", "user_id", name="uq_author_claims_once"),
+        Index("ix_author_claims_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resource_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("resources.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # 认领说明（申请人填写，如"我是本文作者"）。
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # 编辑部决定说明（批准/拒绝理由，通知里带给申请人）。
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_by: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+__all__ = ["AuthorClaim", "Discipline", "Resource", "Subdiscipline"]

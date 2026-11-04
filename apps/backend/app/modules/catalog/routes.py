@@ -32,9 +32,9 @@ from app.core import search as fulltext
 from app.core.db import get_db, paginate
 from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
-from app.models import AuditLog, User
+from app.models import AuditLog, Role, User, UserRole
 from app.modules.catalog.engagement import compute_engagement, journal_metrics
-from app.modules.catalog.models import Resource
+from app.modules.catalog.models import AuthorClaim, Resource
 from app.modules.catalog.ontology_routes import router as ontology_router
 from app.modules.catalog.schemas import (
     FacetBucket,
@@ -844,9 +844,14 @@ async def export_resource_manuscript(
         )
 
         md_text = preprocess_md(data.decode("utf-8", errors="replace"))
+        # 署名行：作者 · 发表日期（来自 Resource 元数据，bigbad 等在列）
+        authors_str = "、".join(resource.authors or [])
+        pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
+        date_str = pub_date.strftime("%Y 年 %-m 月 %-d 日") if pub_date else ""
+        byline = " · ".join(x for x in (authors_str, date_str) if x) or None
         if format == "docx":
-            return md_to_docx(md_text, resource.title)
-        return html_to_pdf(md_to_html(md_text), resource.title)
+            return md_to_docx(md_text, resource.title, byline)
+        return html_to_pdf(md_to_html(md_text), resource.title, byline)
 
     payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
 
@@ -1174,3 +1179,178 @@ async def delete_resource(
         )
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# 作者认领（Author Claim）
+#
+# 早期文章由编辑部批量导入，authors 是字符串数组、与站内账号无关。
+# 本组端点让作者能认领这类"无人认领"的文章：登录用户对资源发起认领
+# → 编辑部批准后自动创建一条关联投稿（submitted_by = 认领人），从此
+# "我的文章"、录用统计、刊前预览等基于 Submission 链路的功能全部生效。
+# ---------------------------------------------------------------------------
+
+
+class ClaimCreate(BaseModel):
+    note: str | None = None
+
+
+async def _notify_editors(
+    db: AsyncSession, tenant_id: UUID, *, title: str, body: str, type_: str, related_id: str
+) -> None:
+    """给本租户全部活跃编辑（含 admin）发一条通知（随调用方事务提交）。"""
+    from app.modules.notifications import services as notifications
+
+    editor_ids = (
+        select(UserRole.user_id)
+        .join(Role, Role.id == UserRole.role_id)
+        .where(
+            UserRole.tenant_id == tenant_id,
+            Role.tenant_id == tenant_id,
+            Role.name == "editor",
+        )
+    )
+    editors = (
+        (
+            await db.execute(
+                select(User)
+                .where(
+                    User.tenant_id == tenant_id,
+                    User.is_active.is_(True),
+                    (User.id.in_(editor_ids)) | (User.is_admin.is_(True)),
+                )
+                .distinct()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for editor in editors:
+        await notifications.create(
+            db,
+            tenant_id=tenant_id,
+            user_id=editor.id,
+            type_=type_,
+            title=title,
+            body=body,
+            related_type="resource",
+            related_id=related_id,
+        )
+
+
+async def _resource_claim_state(
+    db: AsyncSession, resource_id: int, tenant_id: UUID, viewer: User | None
+) -> dict[str, object]:
+    """汇总一篇资源当前的认领状态（claim-status 与 claim 共用）。"""
+    approved = (
+        await db.execute(
+            select(AuthorClaim)
+            .where(
+                AuthorClaim.resource_id == resource_id,
+                AuthorClaim.tenant_id == tenant_id,
+                AuthorClaim.status == "approved",
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if approved is not None:
+        claimer = (
+            await db.execute(select(User.username).where(User.id == approved.user_id))
+        ).scalar_one_or_none()
+        return {"claimable": False, "state": "claimed", "claimer": claimer}
+
+    mine = None
+    if viewer is not None:
+        row = (
+            await db.execute(
+                select(AuthorClaim)
+                .where(
+                    AuthorClaim.resource_id == resource_id,
+                    AuthorClaim.tenant_id == tenant_id,
+                    AuthorClaim.user_id == viewer.id,
+                    AuthorClaim.status == "pending",
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is not None:
+            mine = {"id": row.id, "status": row.status, "created_at": row.created_at}
+    return {"claimable": mine is None, "state": "open", "mine": mine}
+
+
+@router.get("/{resource_id}/claim-status")
+async def get_claim_status(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> dict[str, object]:
+    """查询一篇资源可否被认领（登录后文章页据此显示认领入口）。"""
+    tenant_id = require_tenant_id()
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == resource_id, Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    return await _resource_claim_state(db, resource_id, tenant_id, viewer)
+
+
+@router.post("/{resource_id}/claim")
+async def claim_resource(
+    resource_id: int,
+    body: ClaimCreate | None = None,
+    db: AsyncSession = Depends(get_db),
+    viewer: User = Depends(get_current_user_optional),
+) -> dict[str, object]:
+    """发起认领：创建 pending 申请并通知编辑部。
+
+    同一用户对同一资源只能有一条申请（唯一约束兜底）；同一资源已有
+    被批准的认领时拒绝（先到先得，争议由编辑部仲裁）。
+    """
+    tenant_id = require_tenant_id()
+    if viewer is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == resource_id, Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    state = await _resource_claim_state(db, resource_id, tenant_id, viewer)
+    if not state["claimable"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该文章已被认领" if state.get("claimer") else "你已提交过认领申请，请等待编辑部处理",
+        )
+
+    note = (body.note if body else None) or None
+    claim = AuthorClaim(
+        tenant_id=tenant_id,
+        resource_id=resource_id,
+        user_id=viewer.id,
+        note=note,
+        status="pending",
+    )
+    db.add(claim)
+    await db.flush()
+
+    await _notify_editors(
+        db,
+        tenant_id,
+        type_="claim.created",
+        title=f"新的认领申请：{resource.title}",
+        body=(
+            f"{viewer.username}（#{viewer.id}）申请认领本文。"
+            + (f"申请说明：{note}" if note else "")
+        ),
+        related_id=str(resource_id),
+    )
+    await db.commit()
+    return {"id": claim.id, "status": claim.status}

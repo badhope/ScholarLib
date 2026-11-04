@@ -117,6 +117,10 @@ export const keys = {
     volumes: () => ['admin', 'volumes'] as const,
     issues: (volume: string) => ['admin', 'issues', volume] as const,
     journalSettings: () => ['admin', 'journal-settings'] as const,
+    claims: (status: string) => ['admin', 'claims', status] as const,
+  },
+  claims: {
+    status: (resourceId: number) => ['claims', 'status', resourceId] as const,
   },
   follows: {
     author: (name: string) => ['follows', 'author', name] as const,
@@ -918,6 +922,72 @@ export function useRevokeRole() {
       (await api.delete<UserResponse>(`/admin/users/${userId}/roles/${role}`)).data,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
+  })
+}
+
+// --- 作者认领（Author Claim） ----------------------------------------------
+
+export interface ClaimStatus {
+  claimable: boolean
+  state: 'open' | 'claimed'
+  claimer?: string | null
+  mine?: { id: number; status: string; created_at: string } | null
+}
+
+// 查询某篇文章当前可否被认领（登录后文章页据此显示认领入口）
+export function useClaimStatus(resourceId: number | null, enabled = true) {
+  return useQuery<ClaimStatus>({
+    queryKey: keys.claims.status(resourceId ?? 0),
+    enabled: enabled && resourceId != null,
+    queryFn: async () =>
+      (await api.get<ClaimStatus>(`/catalog/${resourceId}/claim-status`)).data,
+  })
+}
+
+// 发起认领（登录用户对"无人认领"的存量文章）
+export function useClaimResource() {
+  const qc = useQueryClient()
+  return useMutation<{ id: number; status: string }, Error, { resourceId: number; note?: string }>({
+    mutationFn: async ({ resourceId, note }) =>
+      (await api.post(`/catalog/${resourceId}/claim`, { note })).data,
+    onSuccess: (_res, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.claims.status(vars.resourceId) })
+    },
+  })
+}
+
+export interface AdminClaim {
+  id: number
+  resource_id: number
+  resource_title: string
+  user_id: number
+  username: string
+  note: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  decision_note: string | null
+  created_at: string
+  decided_at: string | null
+}
+
+// 编辑部：认领申请列表
+export function useAdminClaims(claimStatus: string) {
+  return useQuery<AdminClaim[]>({
+    queryKey: keys.admin.claims(claimStatus),
+    queryFn: async () =>
+      (await api.get<AdminClaim[]>('/admin/claims', { params: { claim_status: claimStatus } }))
+        .data,
+  })
+}
+
+// 编辑部：批准 / 拒绝认领
+export function useDecideClaim() {
+  const qc = useQueryClient()
+  return useMutation<{ id: number; status: string }, Error, { claimId: number; action: 'approve' | 'reject'; note?: string }>({
+    mutationFn: async ({ claimId, action, note }) =>
+      (await api.post(`/admin/claims/${claimId}/decision`, { action, note })).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'claims'] })
     },
   })
 }

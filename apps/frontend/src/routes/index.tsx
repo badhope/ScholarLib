@@ -35,12 +35,12 @@ import {
   AnnouncementDialog,
   useAnnouncementPortal,
 } from '@/components/common/announcement-dialog'
-import { ArticleCover } from '@/components/common/article-cover'
 import { BrandMark } from '@/components/common/brand-mark'
 import { qualityGrade } from '@/lib/resource-labels'
 import { issueTitle } from '@/lib/issue-meta'
+import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Skeleton } from '@/components/ui/skeleton'
-import { absurdityLevel, typeLabel } from '@/lib/resource-labels'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -149,8 +149,12 @@ const card: Variants = {
 }
 
 function fmtDate(iso: string): string {
+  // 本地时区取日期：toISOString() 是 UTC，东八区晚间发布的文章会被
+  // 显示成前一天（用户实测过的"日期不对"来源之一）。
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 /** 打字机：轮播短语，尊重系统减弱动效（直接显示第一条，无动画）。 */
@@ -576,7 +580,7 @@ function HomePage() {
     sort: 'created_at',
     order: 'desc',
   })
-  const { data: stats } = useCatalogStats()
+  const { data: stats, isLoading: statsLoading } = useCatalogStats()
   const { data: metrics } = useJournalMetrics()
 
   // 公告：自动弹出 + 顶栏重开入口共用一份状态
@@ -585,6 +589,10 @@ function HomePage() {
   const resources = data?.data ?? []
   const total = stats?.total ?? 0
   const disciplines = stats ? Object.keys(stats.by_discipline).length : 0
+  // 分类入口数据：按篇数降序，点击直达 /catalog?discipline=…（跳转式导航）
+  const disciplineEntries = Object.entries(stats?.by_discipline ?? {}).sort(
+    (a, b) => b[1] - a[1],
+  )
   // 荒诞指数均值：赛道下线后，首页第二张卡改用荒诞指数均值回答
   // "这本刊物有多正经"，口径见 /api/catalog/journal-metrics。
   const absurdityMedian = metrics?.absurdity_index_median
@@ -873,17 +881,19 @@ function HomePage() {
           </div>
         </div>
 
-        {/* ── 最新发表：卡片网格 ── */}
+        {/* ── 分类入口：跳转式导航（点哪个学科进哪个模块） ──
+            用户口径：入门先是分类界面，而不是把全部文章铺在脸上。
+            每张卡直达 /catalog?discipline=…，最新文章降级为下方紧凑列表。 */}
         <motion.section
           ref={revealLatestRef}
           initial="hidden"
           animate={revealLatest ? 'show' : 'hidden'}
-          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07 } } }}
+          variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
           className="mx-auto max-w-6xl px-4 py-16 sm:px-6"
         >
           <SectionHeading
-            title="最新发表"
-            label="Latest Articles"
+            title="按学科浏览"
+            label="Browse by Discipline"
             action={
               <Link
                 to="/catalog"
@@ -893,18 +903,60 @@ function HomePage() {
               </Link>
             }
           />
+          {statsLoading ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
+              {Array.from({ length: 9 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {disciplineEntries.map(([name, count]) => {
+                const style = DISCIPLINE_STYLE[name] ?? DEFAULT_DISCIPLINE_STYLE
+                const Icon = style.icon
+                return (
+                  <motion.div
+                    key={name}
+                    variants={card}
+                    animate={revealLatest ? 'show' : 'hidden'}
+                    whileHover={{ y: -4 }}
+                  >
+                    <Link
+                      to="/catalog"
+                      search={{ discipline: name }}
+                      className={cn(
+                        'group flex items-center gap-4 rounded-xl border bg-gradient-to-br p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/40',
+                        style.tint,
+                      )}
+                    >
+                      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-background/70 ring-1 ring-border">
+                        <Icon className="h-5 w-5 text-foreground/75" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{name}</span>
+                        <span className="block text-xs text-muted-foreground">{count} 篇</span>
+                      </span>
+                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
+                    </Link>
+                  </motion.div>
+                )
+              })}
+            </div>
+          )}
+        </motion.section>
+
+        {/* ── 最新发表：紧凑列表（分类已承担导航，这里只做"随便看看"） ── */}
+        <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+          <SectionHeading
+            title="最新发表"
+            label="Latest Articles"
+          />
           {isLoading ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-hidden>
+            <div className="space-y-2" aria-hidden>
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-lg border bg-card p-5 shadow-sm">
-                  <Skeleton className="h-3 w-16 rounded-full" />
-                  <Skeleton className="mt-4 h-5 w-4/5" />
-                  <Skeleton className="mt-2 h-3.5 w-1/2" />
-                  <Skeleton className="mt-4 h-3 w-full" />
-                  <Skeleton className="mt-2 h-3 w-full" />
-                  <Skeleton className="mt-2 h-3 w-2/3" />
-                  <Skeleton className="mt-5 h-px w-full" />
-                  <Skeleton className="mt-4 h-3 w-1/3" />
+                <div key={i} className="rounded-lg border bg-card px-4 py-3">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="mt-2 h-3 w-1/3" />
                 </div>
               ))}
             </div>
@@ -916,105 +968,41 @@ function HomePage() {
               description="编辑接受投稿后，论文会第一时间出现在这里。欢迎注册成为作者，投出第一稿。"
             />
           ) : (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {resources.map((r, i) => (
-                <motion.article
-                  key={r.id}
-                  variants={card}
-                  animate={revealLatest ? 'show' : 'hidden'}
-                  whileHover={{ y: -5 }}
-                  className="card-lift group relative flex flex-col overflow-hidden rounded-lg border bg-card shadow-sm hover:border-primary/40"
-                >
-                  {/* 整卡可点：覆盖整张卡片的链接（视觉内容在其上、不拦截点击） */}
-                  <Link
-                    to="/catalog/$resourceId"
-                    params={{ resourceId: String(r.id) }}
-                    aria-label={`阅读《${r.title}》`}
-                    className="absolute inset-0 z-20 rounded-lg focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  {/* 主题封面：16:9 固定比例，图片懒加载不引起版面跳动 */}
-                  <ArticleCover resource={r} priority={i < 3} />
-                  <div className="pointer-events-none relative z-10 flex flex-1 flex-col p-5 [&_a]:pointer-events-auto">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <ol className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
+              {resources.map((r) => {
+                const grade = qualityGrade(r.quality_grade)
+                return (
+                  <li key={r.id}>
+                    <Link
+                      to="/catalog/$resourceId"
+                      params={{ resourceId: String(r.id) }}
+                      className="flex items-baseline gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-5"
+                    >
+                      <span className="w-20 shrink-0 text-xs tabular-nums text-muted-foreground sm:w-24">
+                        {fmtDate(r.created_at)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                        {r.title}
+                      </span>
+                      {grade ? (
                         <Badge
                           variant="outline"
-                          className="rounded-full px-2.5 text-[10px] font-normal uppercase tracking-widest text-muted-foreground"
+                          className={`hidden shrink-0 rounded-full px-2 text-[10px] font-normal sm:inline-flex ${grade.className}`}
+                          title={`RQS ${r.quality_score ?? ''} / 100`}
                         >
-                          {typeLabel(r.type)}
+                          {grade.label}
                         </Badge>
-                        {(() => {
-                          const grade = qualityGrade(r.quality_grade)
-                          return grade ? (
-                            <Badge
-                              variant="outline"
-                              className={`rounded-full px-2.5 text-[10px] font-normal ${grade.className}`}
-                              title={`RQS ${r.quality_score ?? ''} / 100 · ${grade.description}`}
-                            >
-                              {grade.label}
-                            </Badge>
-                          ) : null
-                        })()}
-                        {(() => {
-                          const level = absurdityLevel(r.absurdity_index)
-                          return level ? (
-                            <Badge
-                              variant={level.variant}
-                              className="rounded-full px-2.5 text-[10px] font-normal"
-                              title={`荒诞指数 ${r.absurdity_index} / 10 · ${level.description}`}
-                            >
-                              {level.label}
-                            </Badge>
-                          ) : null
-                        })()}
-                      </div>
-                      <time className="shrink-0 text-xs text-muted-foreground">
-                        {fmtDate(r.created_at)}
-                      </time>
-                    </div>
-                    <h3 className="text-lg leading-snug" style={{ fontFamily: DISPLAY_FONT }}>
-                      <Link
-                        to="/catalog/$resourceId"
-                        params={{ resourceId: String(r.id) }}
-                        className="pointer-events-auto underline-offset-4 decoration-1 hover:underline"
-                      >
-                        {r.title}
-                      </Link>
-                    </h3>
-                    <p className="mt-2 line-clamp-1 text-xs text-muted-foreground">
-                      {r.authors.join('、')}
-                    </p>
-                    <p className="mt-3 line-clamp-3 flex-1 text-sm leading-relaxed text-muted-foreground">
-                      {r.abstract}
-                    </p>
-                    <div className="mt-4 flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
-                      <span className="truncate">
+                      ) : null}
+                      <span className="hidden w-28 shrink-0 truncate text-right text-xs text-muted-foreground sm:block">
                         {r.discipline}
-                        {/* R 指数只在有真实阅读样本时展示：仅 1 次下载也会算出
-                            R 30.0，满屏同号会被误读成假指标。 */}
-                        {r.r_index != null &&
-                        (r.reads ?? 0) + (r.downloads ?? 0) + (r.saves ?? 0) >= 3 ? (
-                          <span className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 font-medium tabular-nums text-primary">
-                            R {r.r_index.toFixed(1)}
-                          </span>
-                        ) : null}
                       </span>
-                      <span
-                        className="inline-flex items-center gap-1 text-primary opacity-0 transition-opacity group-hover:opacity-100"
-                        aria-hidden
-                      >
-                        阅读 <ArrowRight className="h-3 w-3" />
-                      </span>
-                    </div>
-                  </div>
-                  <span aria-hidden className="absolute right-4 top-8 text-5xl leading-none text-muted-foreground/10" style={{ fontFamily: DISPLAY_FONT }}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                </motion.article>
-              ))}
-            </div>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ol>
           )}
-        </motion.section>
+        </section>
 
         {/* ── 了解本刊：四个栏目按需展开 ── */}
         <motion.section
