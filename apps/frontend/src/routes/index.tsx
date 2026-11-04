@@ -36,6 +36,7 @@ import {
   useAnnouncementPortal,
 } from '@/components/common/announcement-dialog'
 import { ArticleCover } from '@/components/common/article-cover'
+import { BrandMark } from '@/components/common/brand-mark'
 import { qualityGrade } from '@/lib/resource-labels'
 import { issueTitle } from '@/lib/issue-meta'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -687,10 +688,18 @@ function HomePage() {
 
             <motion.h1
               variants={slideInLeft}
-              className="mt-5 text-7xl leading-none tracking-tight sm:text-9xl"
-              style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}
+              className="mt-5 flex items-center justify-center gap-4 sm:gap-6"
             >
-              Rubbish
+              {/* 刊头回收标志：源自创刊 PDF 原图，随主题色（品牌绿） */}
+              <BrandMark
+                className="h-14 w-14 text-primary sm:h-24 sm:w-24"
+              />
+              <span
+                className="text-7xl leading-none tracking-tight sm:text-9xl"
+                style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}
+              >
+                Rubbish
+              </span>
             </motion.h1>
 
             {/* 打字机口号：固定两行高度 + 移动端降字号。
