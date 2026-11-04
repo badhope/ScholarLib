@@ -68,7 +68,7 @@ function JournalMetricsPage() {
                 <CardContent className="flex flex-col items-center gap-2 py-10 text-center sm:flex-row sm:justify-between sm:text-left">
                   <div>
                     <p className="text-sm font-medium tracking-wide text-muted-foreground">
-                      R 因子（{new Date().getFullYear()}）
+                      R 因子（全刊）
                     </p>
                     <p className="mt-1 font-serif text-5xl font-bold tabular-nums text-primary">
                       {data.r_factor.toFixed(2)}

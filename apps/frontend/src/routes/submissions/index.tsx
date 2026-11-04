@@ -1116,7 +1116,7 @@ function SubmissionsPage() {
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   开源仓库（GitHub / GitLab / Gitee / Zenodo / OSF）、可复现脚本、
                   原始数据、补充图表都放这里。审稿人与读者会先看这个链接：
-                  有仓库的稿件，评审意见通常更具体，也更容易被引用。
+                  有仓库的稿件，评审意见通常更具体，也更容易获得推荐与曝光。
                 </p>
               </div>
             </div>

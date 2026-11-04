@@ -21,10 +21,10 @@ export const Route = createFileRoute('/archive')({
 // 注意：本刊不设固定刊期，这里的排期只是归档组织与参考，随时可能调整。
 import { issueTitle } from '@/lib/issue-meta'
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return '已上线'
+function fmtDate(iso: string | null, fallback: string = '待定'): string {
+  if (!iso) return fallback
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '已上线'
+  if (Number.isNaN(d.getTime())) return fallback
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
@@ -115,7 +115,7 @@ function ArchivePage() {
                 <CalendarDays className="h-4 w-4 text-primary" />
                 第 1 卷 第 {Number(activeEntry.issue)} 期
                 <span className="text-muted-foreground">
-                  · {fmtDate(activeEntry.publish_at)}
+                  · {fmtDate(activeEntry.publish_at, '已上线（即时刊出）')}
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -265,7 +265,9 @@ function IssueRow({
         {issueTitle(entry.issue)}
       </td>
       <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
-        {fmtDate(entry.publish_at)}
+        {entry.state === 'scheduled' && !entry.publish_at
+          ? '排期待定'
+          : fmtDate(entry.publish_at)}
         {entry.state === 'scheduled' && wait !== null && wait > 0 ? (
           <span className="ml-2 text-[11px] text-muted-foreground/80">还有 {wait} 天</span>
         ) : null}
