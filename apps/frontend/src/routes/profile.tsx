@@ -383,7 +383,7 @@ function ProfilePage() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        当前账号：{user?.username ?? data.username} · 等级体系口径 v1.0（冻结）
+        当前账号：{user?.username ?? data.username} · 等级体系口径 v3.0（冻结）
       </p>
     </div>
   )

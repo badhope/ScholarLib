@@ -213,8 +213,8 @@ function CatalogDetailPage() {
 
           {/* R 指数：只有真实事件才算数；分区样本不足时明确写出来，
               不用一个看着漂亮的字母糊弄读者。 */}
-          {/* 质量评分：RQS v1.0 七维明细（口径公开在 /levels） */}
-          <FoldCard title="质量评分（RQS v1.0）" defaultOpen={!isMobile}>
+          {/* 质量评分：RQS v3.0 七维明细（口径公开在 /levels） */}
+          <FoldCard title="质量评分（RQS v3.0）" defaultOpen={!isMobile}>
             <CardContent>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {(() => {
@@ -254,8 +254,9 @@ function CatalogDetailPage() {
                 </div>
               )}
               <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                评分为七维加权（结构 20 / 篇幅 12 / 引用 22 / 图表 15 / 摘要 11 / 排版 10 / 语言 10，
-                按稿件类型另有分档权重）；口径冻结在评分规范 v1.0，不随月份变化。
+                评分为七维加权（问题价值 / 论证链 / 方法透明度 / 证据强度 / 创新与定位 /
+                学术诚信 / 表达清晰度，按稿件类型另有分档权重，学术诚信 0 分一票否决）；
+                口径冻结在评分规范 v3.0，不随月份变化。
               </p>
             </CardContent>
           </FoldCard>

@@ -70,7 +70,7 @@ const RECOMMENDATION_OPTIONS: { value: Recommendation; label: string }[] = [
   { value: 'reject', label: '拒稿（Reject）' },
 ]
 
-// 与后端 RQS v2.0 的七个学术价值维度一一对应（rubric.py）。
+// 与后端 RQS v3.0 的七个学术价值维度一一对应（rubric.py）。
 // 旧的 originality/methodology/clarity/significance 四个临时维度已废弃——
 // 它们与公开的评分口径对不上，导致"审稿人打分"与"文章页展示的 RQS"是
 // 两套互不相干的数字。
@@ -348,7 +348,7 @@ function ReviewWorkbenchPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>评分（1–5）· 对应公开的 RQS v2.0 七个维度</Label>
+              <Label>评分（1–5）· 对应公开的 RQS v3.0 七个维度</Label>
               <p className="text-[11px] text-muted-foreground">
                 学术诚信为 0 分即全篇判 D（一票否决）。完整检查项与 0–5 锚点见
                 「等级与规范」页。
