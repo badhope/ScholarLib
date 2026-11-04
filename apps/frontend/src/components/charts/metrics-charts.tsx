@@ -6,7 +6,18 @@ import { EChart } from './echart'
 
 export function DisciplineBar({ data }: { data: Record<string, number> }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1])
-  if (entries.length === 0) return null
+  if (entries.length === 0) {
+    // 与荒诞环形图同理：空数据时给一张有说明的空态卡，而不是 return null
+    // 在三栏网格里留下让读者误以为加载失败的空白卡片。
+    return (
+      <div className="flex h-[180px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
+        <span className="text-2xl font-semibold text-muted-foreground">—</span>
+        <p className="max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
+          暂无数据：站内互动与学科分布样本积累中。已有论文刊出后，这里会显示各学科构成。
+        </p>
+      </div>
+    )
+  }
   return (
     <EChart
       height={Math.max(170, entries.length * 30 + 30)}

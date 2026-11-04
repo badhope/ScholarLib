@@ -416,8 +416,11 @@ async def get_issue_plan(db: AsyncSession = Depends(get_db)) -> IssuePlanRespons
     """Publication calendar: what is live now and what is queued.
 
     Public on purpose — the archive page shows upcoming issues with their
-    release dates, so a reader can see the journal is monthly rather than
-    wondering why only one issue exists. Counts only; no drafts leak.
+    tentative release dates, so a reader can see how the rolling publication
+    schedule is currently organized. The journal does not commit to a fixed
+    periodicity: issues are released as soon as peer review completes, and
+    the queued dates are archival/organizational hints that may change at
+    any time. Counts only; no drafts leak.
     """
     tenant_id = require_tenant_id()
     now = utcnow()

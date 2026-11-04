@@ -17,7 +17,8 @@ export const Route = createFileRoute('/archive')({
 })
 
 // 卷期归档 = 公开的出版日历：已发期次可点开读全文，排期中的期次只显示
-// 上线日期与篇数（服务端 publish_at 未到点前，这些记录对公众不存在）。
+// 预计上线日期与篇数（服务端 publish_at 未到点前，这些记录对公众不存在）。
+// 注意：本刊不设固定刊期，这里的排期只是归档组织与参考，随时可能调整。
 import { issueTitle } from '@/lib/issue-meta'
 
 function fmtDate(iso: string | null): string {
@@ -58,7 +59,7 @@ function ArchivePage() {
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <PageHeader
         title="卷期归档"
-        description="第 1 卷（2026–2027）· 月刊 · 每月 1 日上线一期。已刊出期次可读全文，排期中的期次显示上线日期。"
+        description="第 1 卷（2026–2027）· 滚动刊出：稿件完成评审即上线，不设固定刊期；卷期仅作归档组织，排期信息仅供参考、随时可能调整。"
       />
 
       {/* 出版日历：横向滚动，不撑破视口 */}
@@ -196,7 +197,7 @@ function ArchivePage() {
       {/* 排期表 */}
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-base font-semibold">
-          <Clock3 className="h-4 w-4 text-primary" /> 发刊计划
+          <Clock3 className="h-4 w-4 text-primary" /> 刊出排期（仅供参考）
         </h2>
         <div className="overflow-hidden rounded-xl border">
           <table className="w-full text-sm">
