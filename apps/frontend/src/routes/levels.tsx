@@ -257,7 +257,7 @@ function LevelsPage() {
           <ErrorState message="加载评分规范失败" onRetry={() => rubric.refetch()} />
         ) : (
           <div className="space-y-4">
-            {/* 维度说明：v2.0 的核心变化是「评价值」而非「评形式」，
+            {/* 维度说明：v3.0 的核心变化是「评价值」而非「评形式」，
                 必须让读者看懂每一维到底在问什么。 */}
             <Card>
               <CardHeader className="pb-2">

@@ -46,7 +46,7 @@ interface Props {
 }
 
 /**
- * 审稿评分表（RQS v2.0）。
+ * 审稿评分表（RQS v3.0）。
  *
  * 交互设计刻意是「先勾事实、再给判断」：审稿人先把每个维度下的检查项
  * 逐条答「是/部分/否/不适用」，系统折算建议分；审稿人可以覆盖建议分，
@@ -96,7 +96,7 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <ClipboardCheck className="h-4 w-4" />
-            审稿评分表（RQS v2.0）
+            审稿评分表（RQS v3.0）
             <Badge variant="outline" className="ml-auto text-[10px]">
               已作答 {answeredCount}/{totalItems}
             </Badge>
