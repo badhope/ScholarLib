@@ -372,6 +372,43 @@ async def test_disable_when_not_enabled_is_400(client: AsyncClient, test_user: d
     assert resp.status_code == 400
 
 
+async def test_disable_rejects_replayed_totp_code(
+    client: AsyncClient, test_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """M2 加固回归：disable 与 authenticate 同样拒绝重放已消费的 time-step。
+
+    verify-setup 已消耗当前窗口 N 的码（last_counter=N）。同窗口重发该码
+    关 2FA 必须被拒（防止被钓鱼/截获的验证码在 30 秒内既登录又关 2FA）；
+    拨到下一窗口后用新码则能正常关闭——证明拒绝来自重放保护而非别处。
+    """
+    secret, _ = await _enable(client, test_user)
+    real_time = time.time()
+
+    # 同窗口重放 verify-setup 消费过的码 → 401，且 2FA 保持开启
+    replay = await client.post(
+        "/api/auth/2fa/disable",
+        json={"password": test_user["password"], "code": _code(secret)},
+        headers=auth_headers(test_user),
+    )
+    assert replay.status_code == 401, replay.text
+    status_resp = await client.get("/api/auth/2fa/status", headers=auth_headers(test_user))
+    assert status_resp.json()["enabled"] is True
+
+    # 下一窗口的新码 → 正常关闭
+    monkeypatch.setattr(time, "time", lambda: real_time + 35)
+    resp = await client.post(
+        "/api/auth/2fa/disable",
+        json={"password": test_user["password"], "code": pyotp.TOTP(secret).at(real_time + 30)},
+        headers=auth_headers(test_user),
+    )
+    assert resp.status_code == 200, resp.text
+    status_resp = await client.get(
+        "/api/auth/2fa/status", headers=auth_headers(test_user)
+    )
+    # 关闭动作会吊销会话，此请求用的是被吊销的旧 token；401 即视为已吊销
+    assert status_resp.status_code in (200, 401)
+
+
 async def test_two_factor_endpoints_require_auth(client: AsyncClient) -> None:
     """未登录不能碰任何 2FA 自管理端点。"""
     for method, path, body in (

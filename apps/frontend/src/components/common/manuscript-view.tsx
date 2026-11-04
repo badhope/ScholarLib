@@ -548,7 +548,7 @@ export function ManuscriptView({
               title="切换正文字体（衬线/无衬线）"
               onClick={() => updatePrefs({ serif: !prefs.serif })}
             >
-              {prefs.serif ? '宋' : '黑'}
+              {prefs.serif ? '宋体' : '黑体'}
             </button>
           </div>
         </div>
