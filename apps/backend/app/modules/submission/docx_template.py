@@ -302,18 +302,23 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
         if hm:
             level = len(hm.group(1))
             text = hm.group(2).strip()
-            if level <= 2:
-                p = _para(doc, align=WD_ALIGN_PARAGRAPH.LEFT, before=12, after=6, line=1.3)
-                r = p.add_run(text)
-                _set_font(r, name=HEAD_FONT, size=14, bold=True)
-            elif level == 3:
-                p = _para(doc, align=WD_ALIGN_PARAGRAPH.LEFT, before=8, after=4, line=1.3)
-                r = p.add_run(text)
-                _set_font(r, name=HEAD_FONT, size=BODY_PT, bold=True)
-            else:
-                p = _para(doc, align=WD_ALIGN_PARAGRAPH.LEFT, before=6, after=3, line=1.3)
-                r = p.add_run(text)
-                _set_font(r, name=HEAD_FONT, size=BODY_PT, bold=True)
+            # 必须用 Word 内置的 Heading 样式，不能只是「把字设成黑体加粗」：
+            # 编辑部改完要回传系统，入库走 mammoth，它只认样式。直接格式化
+            # 的标题回读后一律变成 <p><strong>，章节结构全丢——这正是上一批
+            # 旧稿「没有标题」的来源。
+            style = "Heading 1" if level <= 2 else ("Heading 2" if level == 3 else "Heading 3")
+            try:
+                p = doc.add_paragraph(style=style)
+            except KeyError:
+                p = doc.add_paragraph()
+            pf = p.paragraph_format
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            pf.space_before = Pt(12 if level <= 2 else 8)
+            pf.space_after = Pt(6 if level <= 2 else 4)
+            pf.line_spacing = 1.3
+            run = p.add_run(text)
+            _set_font(run, name=HEAD_FONT, size=14 if level <= 2 else BODY_PT, bold=True)
+            run.font.color.rgb = RGBColor(0, 0, 0)
             i += 1
             continue
 
