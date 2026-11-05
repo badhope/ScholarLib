@@ -578,16 +578,29 @@ textarea {
     letter-spacing: 0.006em;
   }
   .markdown-body h1 { font-size: 1.45rem; margin-bottom: 0.8em; }
-  .markdown-body h2 { font-size: 1.22rem; margin: 1.9em 0 0.7em; padding-left: 0.55rem; border-left-width: 4px; }
+  /* 手机上一个屏幕里最多容得下两行标题，2.4em 的上边距会让
+     「1 方法」「2 结果」看着像两块玻璃牌子；收到 1.5em。 */
+  .markdown-body h2 { font-size: 1.18rem; margin: 1.5em 0 0.6em; padding-left: 0.5rem; border-left-width: 4px; }
   .markdown-body h3 { font-size: 1.08rem; margin: 1.6em 0 0.55em; }
   .markdown-body h4 { font-size: 1rem; }
   .markdown-body p { margin-bottom: 0.85em; }
+  /* 摘要卡：手机上不再套一层带边框的卡（外层卡 + 内层竖线 + 阴影，
+     350px 宽里要扣掉两次内边距，正文只剩 300px）。改成「一条竖线 +
+     极浅底色」，视觉仍与正文分层，但不缩窄行宽。 */
   .markdown-body .md-abstract {
-    margin: 0.2rem 0 1.6rem;
-    padding: 0.95rem 1rem 1rem;
-    border-radius: 0.6rem;
+    margin: 0.2rem 0 1.4rem;
+    padding: 0.35rem 0 0.35rem 0.85rem;
+    border: 0;
+    border-left: 3px solid var(--color-primary);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
-  .markdown-body .md-abstract h2 { font-size: 0.75rem; letter-spacing: 0.2em; }
+  .markdown-body .md-abstract h2 {
+    margin-bottom: 0.4rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.18em;
+  }
   .markdown-body .md-abstract p { font-size: 1rem; line-height: 1.85; }
   .markdown-body .md-caption { max-width: 100%; font-size: 0.78rem; }
   .markdown-body img { margin: 1.2em auto 0.35em; }

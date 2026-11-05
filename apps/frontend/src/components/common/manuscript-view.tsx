@@ -466,7 +466,9 @@ export function ManuscriptView({
         (useWindowScroll ? '' : 'overflow-y-auto')
       }
     >
-      <div className="mx-auto flex max-w-6xl items-start px-5 py-8">
+      {/* 手机上左右各留 14px：390pt 屏里正文行宽从 350 → 362，
+          每行多容纳约 1.5 个汉字，长文读起来明显不挤。 */}
+      <div className="mx-auto flex max-w-6xl items-start px-3.5 py-6 sm:px-5 sm:py-8">
         {/* 目录：桌面端左侧吸附；移动端底部抽屉，由阅读页操作栏的
             「目录」按钮通过 TOC_OPEN_EVENT 唤出（见下方 useEffect）。 */}
         {toc.length > 2 && (

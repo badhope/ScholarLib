@@ -190,7 +190,7 @@ def lint(md: str, name: str = "") -> Report:
         if kind == "heading" and re.search(r"摘\s*要|abstract", text, re.I):
             got: list[str] = []
             for k2, t2 in blocks[i + 1 :]:
-                if k2 == "heading" or re.match(r"^\s*\**\s*关键词", t2):
+                if k2 == "heading" or re.match(r"^\s*\**\s*(关键词|关键字|keywords?|key\s*words?)", t2, re.I):
                     break
                 if k2 == "para" and t2:
                     got.append(t2)
@@ -206,11 +206,11 @@ def lint(md: str, name: str = "") -> Report:
             rep.add("E002", "error", f"摘要过长：{n} 字（规范 {ABSTRACT_MIN}–{ABSTRACT_MAX}）")
 
     # --- 关键词 -----------------------------------------------------------
-    kw_line = next((p for p in paras if re.match(r"^\s*\**\s*关键词", p)), "")
+    kw_line = next((p for p in paras if re.match(r"^\s*\**\s*(关键词|关键字|keywords?|key\s*words?)", p, re.I)), "")
     if not kw_line:
         rep.add("E003", "error", "缺关键词段")
     else:
-        kw_body = re.sub(r"^\**\s*关键词[：:]*\**", "", kw_line)
+        kw_body = re.sub(r"^\**\s*(关键词|关键字|keywords?|key\s*words?)\s*[：:]*\**", "", kw_line, flags=re.I)
         kw_body = re.split(r"[；;]", kw_body)
         kws = [k.strip(" 　*~") for k in kw_body if k.strip(" 　*~")]
         if not (KEYWORD_MIN <= len(kws) <= KEYWORD_MAX):
@@ -278,7 +278,8 @@ def lint(md: str, name: str = "") -> Report:
     # 图表是否被正文引用
     for label, num, _ in captions:
         key = f"{label[0]}{num}"
-        if not re.search(rf"(见|如|参)?\s*{key}", _strip_images("\n".join(paras))):
+        # 「图 1」中间那个空格是规范写法，不能因为它判成没引用
+        if not re.search(rf"{label[0]}\s*{num}(?![0-9])", _strip_images("\n".join(paras))):
             rep.add("W004", "info", f"{key} 未在正文中被引用")
 
     # --- 重复 -------------------------------------------------------------

@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, Download, FileText, ListTree, Trash2 } from 'lucide-react'
+import {
+  BookmarkCheck,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FileText,
+  ListTree,
+  LogIn,
+  MoreHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { typeLabel } from '@/lib/resource-labels'
 import { ReadingProgressBar } from '@/components/common/reading-progress-bar'
@@ -16,6 +26,13 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
@@ -271,29 +288,32 @@ function ReaderPage() {
     >
       <ReadingProgressBar />
       {!isAuthenticated && (
-        <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-4 py-1 text-[11px] text-muted-foreground">
-          {/* 移动端只留一句，把纵向空间还给正文 */}
+        <div className="hidden items-center justify-between gap-2 border-b bg-muted/40 px-4 py-1 text-[11px] text-muted-foreground sm:flex">
+          {/* 手机上这条会被折进「⋯」菜单：390×844 实测，游客条 + 操作栏
+              + Tab 栏 + 浏览器工具栏四层叠起来，正文只剩不到半屏。 */}
           <span className="truncate">
-            <span className="hidden sm:inline">游客模式：阅读进度保存在本设备，登录后可跨设备同步并参与评论。</span>
-            <span className="sm:hidden">游客模式 · 进度存在本设备</span>
+            游客模式：阅读进度保存在本设备，登录后可跨设备同步并参与评论。
           </span>
           <Link to="/login" search={{ redirect: `/reader/${id}` }} className="shrink-0 text-primary hover:underline">
             登录
           </Link>
         </div>
       )}
-      {/* 顶部标题栏 */}
-      <div className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5 sm:gap-3 sm:px-4 sm:py-2">
+      {/* 顶部工具条：返回 / 标题 / 视图切换 / ⋯，一行到底。
+          原来手机上还叠了一条固定操作栏（目录·PDF·Word·登录同步），
+          与底部 Tab 栏一起压掉约 11rem 屏高——正文可视区只剩一半。 */}
+      <div className="flex items-center gap-1 border-b px-1.5 py-1 sm:gap-2 sm:px-4 sm:py-2">
         <Link
           to="/catalog/$resourceId"
           params={{ resourceId: String(id) }}
-          className="inline-flex min-h-[36px] shrink-0 items-center text-sm text-muted-foreground hover:text-primary"
+          aria-label="返回详情"
+          className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-primary sm:px-2"
         >
-          <ChevronLeft className="mr-1 h-4 w-4" />
-          返回详情
+          <ChevronLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">返回详情</span>
         </Link>
-        <span className="min-w-0 flex-1 text-sm font-medium line-clamp-1">{data.title}</span>
-        {data.type && <Badge variant="secondary">{typeLabel(data.type)}</Badge>}
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</span>
+        {data.type && <Badge variant="secondary" className="hidden sm:inline-flex">{typeLabel(data.type)}</Badge>}
         {data.has_markdown && data.download_url && (
           <button
             onClick={() => setModeOverride(mode === 'pdf' ? 'md' : 'pdf')}
@@ -302,13 +322,75 @@ function ReaderPage() {
             {mode === 'pdf' ? '阅读版' : '原稿 PDF'}
           </button>
         )}
+        {/* ⋯：把原来压在正文上的整条底栏收进来（目录 / 原稿 / 规范版 Word /
+            同步进度）。底部只留 Tab 栏一层，正文可视区回到整屏。 */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              aria-label="更多操作"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-primary"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {mode === 'md' && tocCount > 2 && (
+              <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(TOC_OPEN_EVENT))}>
+                <ListTree className="mr-2 h-4 w-4" />
+                目录
+              </DropdownMenuItem>
+            )}
+            {mode === 'pdf' && (
+              <>
+                <DropdownMenuItem onClick={() => goToPage(page - 1)}>
+                  <ChevronLeft className="mr-2 h-4 w-4" />
+                  上一页
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => goToPage(page + 1)}>
+                  <ChevronRight className="mr-2 h-4 w-4" />
+                  下一页{totalPages ? `（${page}/${totalPages}）` : ''}
+                </DropdownMenuItem>
+              </>
+            )}
+            {data.has_file && (
+              <DropdownMenuItem asChild>
+                <a href={`/api/catalog/${id}/file`} download>
+                  <Download className="mr-2 h-4 w-4" />
+                  下载原稿 PDF
+                </a>
+              </DropdownMenuItem>
+            )}
+            {data.has_markdown && (
+              <DropdownMenuItem asChild>
+                <a href={`/api/catalog/${id}/export?format=docx`}>
+                  <FileText className="mr-2 h-4 w-4" />
+                  下载规范版 Word
+                </a>
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            {isAuthenticated ? (
+              <DropdownMenuItem onClick={onManualUpdate} disabled={updateMut.isPending}>
+                <BookmarkCheck className="mr-2 h-4 w-4" />
+                保存进度 · {progressPercent}%
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem asChild>
+                <Link to="/login" search={{ redirect: `/reader/${id}` }}>
+                  <LogIn className="mr-2 h-4 w-4" />
+                  登录以同步进度
+                </Link>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div
         data-reader-scroll
         className={
           'flex flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden' +
-          (isMobile ? ' pb-44' : '')
+          (isMobile ? ' pb-24' : '')
         }
       >
         {/* 主体：Markdown 在线阅读（0.6.2 起）或 pdf.js 视图（兜底） */}
@@ -484,93 +566,6 @@ function ReaderPage() {
           )}
         </aside>
       </div>
-
-      {/* 移动端底部阅读操作栏：PDF 翻页 + 下载 + 保存进度。
-          刻意不用整宽登录按钮：它会占掉一整行高度、把正文尾部压住，
-          而游客提示已经在页面顶部出现过一次。 */}
-      {isMobile && (
-        <div
-          role="toolbar"
-          aria-label="阅读操作栏"
-          className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex items-center gap-2 border-t bg-background/95 p-2 backdrop-blur"
-        >
-          {mode === 'pdf' && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-2"
-                onClick={() => goToPage(page - 1)}
-                aria-label="上一页"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {page}
-                {totalPages ? `/${totalPages}` : ''}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-2"
-                onClick={() => goToPage(page + 1)}
-                aria-label="下一页"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-          {mode === 'md' && tocCount > 2 && (
-            // 目录入口放在操作栏里，而不是正文右侧常驻悬浮按钮——
-            // 后者会一直压住两三个字。
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 shrink-0 gap-1 px-2"
-              onClick={() => window.dispatchEvent(new Event(TOC_OPEN_EVENT))}
-              aria-label="打开目录"
-            >
-              <ListTree className="h-4 w-4" />
-              <span className="text-xs">目录</span>
-            </Button>
-          )}
-          {data.has_file && (
-            <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-1 px-2">
-              <a href={`/api/catalog/${id}/file`} download aria-label="下载原稿 PDF">
-                <Download className="h-4 w-4" />
-                <span className="text-xs">PDF</span>
-              </a>
-            </Button>
-          )}
-          {data.has_markdown && (
-            <Button asChild variant="outline" size="sm" className="h-9 shrink-0 gap-1 px-2">
-              <a
-                href={`/api/catalog/${id}/export?format=docx`}
-                aria-label="下载规范版 Word"
-              >
-                <FileText className="h-4 w-4" />
-                <span className="text-xs">Word</span>
-              </a>
-            </Button>
-          )}
-          {isAuthenticated ? (
-            <Button
-              size="sm"
-              className="h-9 flex-1"
-              onClick={onManualUpdate}
-              disabled={updateMut.isPending}
-            >
-              {updateMut.isPending ? '保存中…' : `保存进度 · ${progressPercent}%`}
-            </Button>
-          ) : (
-            <Button asChild variant="outline" size="sm" className="h-9 flex-1">
-              <Link to="/login" search={{ redirect: `/reader/${id}` }}>
-                登录以同步进度
-              </Link>
-            </Button>
-          )}
-        </div>
-      )}
 
       <ConfirmDialog
         open={removeOpen}

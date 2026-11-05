@@ -29,6 +29,14 @@ def main() -> int:
         from .restore import main as m
     elif cmd == "extract":
         from .extract import main as m
+    elif cmd == "rebuild":
+        from .rebuild import main as m
+    elif cmd == "batch":
+        from .batch import main as m
+    elif cmd == "normalize":
+        from .normalize_md import main as m
+    elif cmd == "inline":
+        from .inline_images import main as m
     elif cmd == "docx":
         from .docx_template import build_file  # noqa: F401
         from .docx_cli import main as m

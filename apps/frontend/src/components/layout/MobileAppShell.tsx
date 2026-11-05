@@ -120,10 +120,44 @@ export function MobileAppShell() {
     setSheetOpen(false)
   }, [location.pathname])
 
-  // 阅读页与资源详情页自带底部固定操作栏（z-40），会盖住 Tab 栏；
-  // 这类页面不再叠加中心 FAB，否则 FAB 悬在操作栏上方遮挡内容。
-  const hasOwnBottomBar =
-    /^\/reader\//.test(location.pathname) || /^\/catalog\/\d+/.test(location.pathname)
+  // 资源详情页自带底部固定操作栏（z-40），会盖住 Tab 栏；这类页面不再
+  // 叠加中心 FAB，否则 FAB 悬在操作栏上方遮挡内容。
+  // 阅读页 0.9 起取消了自己的操作栏（操作收进标题栏「⋯」），只靠 Tab 栏。
+  const hasOwnBottomBar = /^\/catalog\/\d+/.test(location.pathname)
+  // 沉浸阅读：Tab 栏随滚动方向隐藏，把整屏还给正文；上滑即回来。
+  const immersive = /^\/reader\//.test(location.pathname)
+  const [barHidden, setBarHidden] = useState(false)
+
+  // 沉浸阅读：向下滚动藏起 Tab 栏，向上滚动或回到顶部时露出。
+  // 阅读页可能是 window 滚动（富文本），也可能是内部容器滚动（PDF），
+  // 两个源都要监听，否则其中一种模式下栏不会动。
+  useEffect(() => {
+    if (!immersive) {
+      setBarHidden(false)
+      return
+    }
+    let lastY = 0
+    const onScroll = (e: Event) => {
+      const el = e.target as HTMLElement | Document
+      const y =
+        el instanceof HTMLElement && el !== document.documentElement
+          ? el.scrollTop
+          : window.scrollY
+      const dy = y - lastY
+      if (y < 48) setBarHidden(false)
+      else if (dy > 14) setBarHidden(true)
+      else if (dy < -14) setBarHidden(false)
+      lastY = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    const inner = document.querySelector('[data-reader-scroll]')
+    inner?.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      inner?.removeEventListener('scroll', onScroll)
+    }
+  }, [immersive])
+
 
   // FAB 只在「浏览类」页面出现。表单页（设置、账号安全、后台、投稿）
   // 的输入框经常落在屏幕中下部，悬浮按钮正好压在上面——实测在
@@ -197,9 +231,11 @@ export function MobileAppShell() {
           'flex-1 overflow-y-auto',
           hasOwnBottomBar
             ? 'pb-[calc(8.5rem+env(safe-area-inset-bottom))]'
-            : showChrome
-              ? 'pb-24'
-              : 'pb-4',
+            : immersive
+              ? 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]'
+              : showChrome
+                ? 'pb-24'
+                : 'pb-4',
         )}
       >
         <div className="mx-auto w-full max-w-screen-sm px-4 py-4">
@@ -229,7 +265,11 @@ export function MobileAppShell() {
       {/* 底部 Tab 栏：4 等分，中心 FAB 浮于其上（仅非认证页） */}
       {showChrome && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 items-stretch border-t bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]"
+          className={cn(
+            'fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 items-stretch border-t bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]',
+            'transition-transform duration-300 ease-out',
+            immersive && barHidden ? 'translate-y-full' : 'translate-y-0',
+          )}
           aria-label="主导航"
         >
           {MOBILE_TABS.map((tab) => (
