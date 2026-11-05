@@ -225,7 +225,7 @@ function statusBadge(status: SubmissionStatus) {
     case 'pending':
       return <Badge variant="secondary">待审核</Badge>
     case 'under_review':
-      return <Badge className="bg-blue-500/15 text-blue-700">审核中</Badge>
+      return <Badge className="bg-primary/15 text-primary">审核中</Badge>
     case 'major_revision':
       return <Badge className="bg-amber-500/15 text-amber-700">大修</Badge>
     case 'minor_revision':

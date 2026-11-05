@@ -89,7 +89,7 @@ function statusBadge(status: AssignmentStatus) {
     case 'pending':
       return <Badge variant="secondary">待回应</Badge>
     case 'accepted':
-      return <Badge className="bg-blue-500/15 text-blue-700">已接受</Badge>
+      return <Badge className="bg-primary/15 text-primary">已接受</Badge>
     case 'declined':
       return <Badge variant="outline">已拒绝</Badge>
     case 'completed':
@@ -594,7 +594,7 @@ function SubmissionDetailDialog({
                         : '该链接协议不安全，已禁用'
                     }
                     aria-disabled={!isSafeExternalUrl(data.external_url)}
-                    className="text-blue-600 hover:underline"
+                    className="text-primary hover:underline"
                   >
                     {data.external_url}
                   </a>
@@ -614,7 +614,7 @@ function SubmissionDetailDialog({
                         : '该链接协议不安全，已禁用'
                     }
                     aria-disabled={!isSafeExternalUrl(data.download_url)}
-                    className="text-blue-600 hover:underline"
+                    className="text-primary hover:underline"
                   >
                     {data.download_url}
                   </a>

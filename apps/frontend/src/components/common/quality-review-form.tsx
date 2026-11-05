@@ -18,7 +18,7 @@ const ANSWER_OPTIONS = [
 
 const ANSWER_POINTS: Record<string, number> = { yes: 1, partial: 0.5, no: 0, na: 0 }
 
-/** 把一个维度内的答案折算成 0–5 建议分（与后端同一公式）。 */
+/** 把一个维度内的答案折算成 0–100 建议分（v4.0，与后端同一公式）。 */
 function suggestScore(form: QualityForm, dimensionKey: string, answers: Record<string, string>) {
   const dim = form.dimensions.find((d) => d.key === dimensionKey)
   if (!dim) return 0
@@ -34,8 +34,8 @@ function suggestScore(form: QualityForm, dimensionKey: string, answers: Record<s
     totalWeight += item.weight
     earned += item.weight * (ANSWER_POINTS[ans] ?? 0)
   }
-  if (totalWeight === 0) return 3
-  return Math.round((5 * earned) / totalWeight * 10) / 10
+  if (totalWeight === 0) return 60
+  return Math.round((100 * earned) / totalWeight * 10) / 10
 }
 
 interface Props {
@@ -46,7 +46,7 @@ interface Props {
 }
 
 /**
- * 审稿评分表（RQS v3.0）。
+ * 审稿评分表（RQS v4.0，七维百分制 + ABCDEF 全字母制）。
  *
  * 交互设计刻意是「先勾事实、再给判断」：审稿人先把每个维度下的检查项
  * 逐条答「是/部分/否/不适用」，系统折算建议分；审稿人可以覆盖建议分，
@@ -96,7 +96,7 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <ClipboardCheck className="h-4 w-4" />
-            审稿评分表（RQS v3.0）
+            审稿评分表（RQS v4.0）
             <Badge variant="outline" className="ml-auto text-[10px]">
               已作答 {answeredCount}/{totalItems}
             </Badge>
@@ -127,7 +127,7 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
                 <Badge variant="secondary" className="tabular-nums">
                   {answered}/{dim.items.length}
                 </Badge>
-                <span className="font-semibold tabular-nums">{finalScore(dim.key)}/5</span>
+                <span className="font-semibold tabular-nums">{finalScore(dim.key)}/100</span>
               </span>
             </button>
             {open && (
@@ -171,8 +171,8 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
                     <input
                       type="range"
                       min={0}
-                      max={5}
-                      step={0.5}
+                      max={100}
+                      step={1}
                       disabled={readOnly}
                       value={finalScore(dim.key)}
                       onChange={(e) =>
@@ -181,7 +181,7 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
                       className="flex-1"
                       aria-label={`${dim.label} 覆盖建议分`}
                     />
-                    <span className="w-8 text-right text-xs tabular-nums">
+                    <span className="w-10 text-right text-xs tabular-nums">
                       {finalScore(dim.key)}
                     </span>
                   </div>

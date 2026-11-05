@@ -832,7 +832,7 @@ export interface QualityDimension {
  * 评分口径（v3.0 起为 14 档 ABCDF± 严厉客观制）。
  * v3.0 移除了 ``coefficient_formula``（RQS/50 换算系数无人能懂），
  * 处置语义改为：<40 不合格（rejected，必须打回）、55–57 边缘稿
- * （borderline）、F（40–54）= 合格可发表。
+ * （borderline）、F（40–49）= 及格可发表。
  */
 export interface QualityRubric {
   version: string
@@ -844,7 +844,7 @@ export interface QualityRubric {
   min_references: Record<string, number>
   length_tiers: Record<string, { short: number; medium: number; long: number }>
   abstract_band: [number, number]
-  /** 0–5 分锚点（v2.0 起） */
+  /** 0–100 分锚点（v4.0 起） */
   score_anchors?: { score: number; meaning: string }[]
   /** 学术诚信一票否决的说明 */
   integrity_veto?: string

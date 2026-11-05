@@ -2,8 +2,8 @@
 
 设计意图
 --------
-只给审稿人一个 0–5 滑杆是不够的——同一篇稿子，手松的审稿人给 4，
-手紧的给 2，编辑部无从判断谁对。所以每个维度下面挂**具体的检查问题**：
+只给审稿人一个孤立的滑杆是不够的——同一篇稿子，手松的审稿人给 85，
+手紧的给 60，编辑部无从判断谁对。所以每个维度下面挂**具体的检查问题**：
 
 - 检查项是**事实性问题**（"是否报告了样本量"），不是感受性问题
   （"你觉得方法好吗"）。事实性问题不同人答得一致。
@@ -87,7 +87,7 @@ ANSWER_VALUES: dict[str, float] = {"yes": 1.0, "partial": 0.5, "no": 0.0}
 
 
 def suggest_dimension_score(answers: dict[str, str], dimension: str) -> float:
-    """把检查项答案折算成该维度的建议分（0–5）。
+    """把检查项答案折算成该维度的建议分（0–100 百分制，v4.0）。
 
     只作**建议**：审稿人可以覆盖，但覆盖必须写理由。这样既保留了
     一致性（大多数人直接采纳建议分），又保留了专业判断的空间
@@ -112,10 +112,10 @@ def suggest_dimension_score(answers: dict[str, str], dimension: str) -> float:
         total_weight += item.weight
         earned += item.weight * ANSWER_VALUES.get(ans, 0.0)
     if total_weight == 0:
-        # 全部不适用：该维度对这篇稿子不构成区分，给中间偏上（3 分），
+        # 全部不适用：该维度对这篇稿子不构成区分，给中间偏上（60 分），
         # 避免"不适用"被当成"零分"。
-        return 3.0
-    return round(5.0 * earned / total_weight, 2)
+        return 60.0
+    return round(100.0 * earned / total_weight, 1)
 
 
 def score_answers(answers: dict[str, str]) -> dict[str, dict[str, object]]:
@@ -168,7 +168,7 @@ def form_payload() -> dict[str, object]:
 def prompt_payload(article_type: str = "research") -> dict[str, object]:
     """给外部 AI 的完整判分规格（JSON）。
 
-    包含：维度定义、检查项、0–5 锚点、画像权重、等级带、输出格式要求。
+    包含：维度定义、检查项、0–100 锚点、画像权重、等级带、输出格式要求。
     目标是让不同模型对同一篇稿子的总分差异控制在 ±5 分以内——靠的是
     把"判断"拆成"逐条事实核查 + 固定的加权规则"，而不是让模型直接
     凭感觉给一个总分。
@@ -186,7 +186,7 @@ def prompt_payload(article_type: str = "research") -> dict[str, object]:
             "answers": {"<check_item_key>": "yes | partial | no | na"},
             "dimensions": {
                 "<dimension_key>": {
-                    "score": "0-5 的整数或半分",
+                    "score": "0-100 的整数",
                     "reason": "必填：为什么给这个分，引用正文具体位置",
                 }
             },

@@ -127,7 +127,7 @@ function statusBadge(status: string) {
     case 'pending':
       return <Badge variant="secondary">待分配</Badge>
     case 'under_review':
-      return <Badge className="bg-blue-500/15 text-blue-700">审稿中</Badge>
+      return <Badge className="bg-primary/15 text-primary">审稿中</Badge>
     case 'major_revision':
       return <Badge className="bg-amber-500/15 text-amber-700">大修</Badge>
     case 'minor_revision':
@@ -160,7 +160,7 @@ function assignmentStatusBadge(status: string) {
     case 'pending':
       return <Badge variant="secondary">待回应</Badge>
     case 'accepted':
-      return <Badge className="bg-blue-500/15 text-blue-700">已接受</Badge>
+      return <Badge className="bg-primary/15 text-primary">已接受</Badge>
     case 'declined':
       return <Badge variant="outline">已拒绝</Badge>
     case 'completed':

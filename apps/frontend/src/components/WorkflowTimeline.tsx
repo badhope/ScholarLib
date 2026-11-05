@@ -82,7 +82,7 @@ export default function WorkflowTimeline({
           const iconColor = isCompleted
             ? 'text-white bg-emerald-500'
             : isCurrent
-              ? 'text-white bg-blue-500'
+              ? 'text-primary-foreground bg-primary'
               : 'text-muted-foreground bg-muted'
 
           const labelColor = isFuture
@@ -148,7 +148,7 @@ export default function WorkflowTimeline({
           const iconColor = isCompleted
             ? 'text-white bg-emerald-500'
             : isCurrent
-              ? 'text-white bg-blue-500'
+              ? 'text-primary-foreground bg-primary'
               : 'text-muted-foreground bg-muted'
 
           const labelColor = isFuture
