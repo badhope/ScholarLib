@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ChevronDown, Download, FileDown, Plus, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
@@ -313,6 +313,37 @@ function CatalogListPage() {
   )
 }
 
+// 目录搜索：350ms 防抖的「输入即搜」，回车立即提交。
+// 为什么防抖而不是每次击键都发请求：目录查询是聚合接口，逐键请求
+// 会放大后端压力；比回车触发多的价值是无需学习成本的即时反馈。
+function DebouncedSearchInput({
+  initial,
+  onCommit,
+}: {
+  initial: string
+  onCommit: (q: string) => void
+}) {
+  const [value, setValue] = useState(initial)
+  useEffect(() => {
+    setValue(initial)
+  }, [initial])
+  useEffect(() => {
+    if (value === initial) return
+    const timer = setTimeout(() => onCommit(value), 350)
+    return () => clearTimeout(timer)
+  }, [value, initial, onCommit])
+  return (
+    <Input
+      placeholder="标题/作者/摘要"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(value)
+      }}
+    />
+  )
+}
+
 // 桌面常驻卡片与移动折叠面板共用同一组筛选字段（此前是整段复制）。
 // 两边只有容器布局不同，所以布局由调用方用 className 指定。
 function CatalogFilterFields({
@@ -330,16 +361,11 @@ function CatalogFilterFields({
     <div className={className}>
       <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">
-          搜索（输入后按回车）
+          搜索（输入即搜，回车立即）
         </label>
-        <Input
-          placeholder="标题/作者/摘要"
-          defaultValue={search.q ?? ''}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              updateSearch({ q: (e.target as HTMLInputElement).value, page: 1 })
-            }
-          }}
+        <DebouncedSearchInput
+          initial={search.q ?? ''}
+          onCommit={(q) => updateSearch({ q: q || undefined, page: 1 })}
         />
       </div>
       <div className="space-y-1.5">
