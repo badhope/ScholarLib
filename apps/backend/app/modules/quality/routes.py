@@ -54,7 +54,8 @@ class DimensionInput(BaseModel):
     key: Literal[
         "problem", "argument", "method", "evidence", "novelty", "integrity", "presentation"
     ]
-    score: int = Field(ge=0, le=5)
+    # v4.0 起每维 0–100（百分制）；旧口径 0–5 会让前端 v4 滑杆直接 422。
+    score: int = Field(ge=0, le=100)
     reason: str = Field(min_length=4, max_length=2000)
 
 

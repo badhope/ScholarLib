@@ -238,7 +238,7 @@ function DashboardPage() {
   // 待审队列（require_editor），普通用户只会拿到 403 而永远显示 "—"。
   const mine = useMySubmissions(undefined, 1, 1)
   // 编辑部成员才查待审队列，普通读者不触发 403 请求。
-  const pending = usePendingSubmissions(1, 1)
+  const pending = usePendingSubmissions(1, 1, { enabled: isEditorial })
   const lists = useReadingLists(1, 5)
   const isMobile = useIsMobile()
 

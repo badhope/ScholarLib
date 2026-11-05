@@ -351,13 +351,20 @@ export function useReviewerCandidates(limit = 200) {
   })
 }
 
-export function usePendingSubmissions(page = 1, pageSize = 20) {
+export function usePendingSubmissions(
+  page = 1,
+  pageSize = 20,
+  options?: { enabled?: boolean },
+) {
   return useQuery<SubmissionListResponse>({
     queryKey: keys.submission.pending(page),
     queryFn: async () =>
       (await api.get<SubmissionListResponse>('/submissions/pending', {
         params: { page, page_size: pageSize },
       })).data,
+    // 待审队列是编辑接口（require_editor）：不校权就发请求，普通用户
+    // 只会拿到 403 噪音，控制台和日志都不干净。
+    enabled: options?.enabled ?? true,
   })
 }
 

@@ -50,14 +50,14 @@ async def test_score_endpoint_computes_weighted_total(
     reviewer = await _make_reviewer(client, admin_user, "score_rev")
     r = await client.post(
         "/api/quality/score",
-        json={"article_type": "research", "dimensions": _all(5)},
+        json={"article_type": "research", "dimensions": _all(100)},
         headers=auth_headers(reviewer),
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["score"] == 100.0
     assert body["grade"] == "A+"
-    assert body["rubric_version"] == "3.0"
+    assert body["rubric_version"] == "4.0"
 
 
 @pytest.mark.asyncio

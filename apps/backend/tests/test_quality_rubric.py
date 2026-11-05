@@ -111,7 +111,7 @@ def test_grade_bands_tolerate_fractions() -> None:
     """分数带按「下限」降序匹配，小数分必须落在正确档（历史 bug 防回归）。"""
     assert grade_for(96.9) == ("A", "顶尖")
     assert grade_for(79.5) == ("C+", "中等")
-    assert grade_for(71.0) == ("C", "中等")
+    assert grade_for(71.0) == ("C-", "中等")
     assert grade_for(59.9) == ("E+", "基础")
     assert grade_for(40.0) == ("F", "及格")
 
@@ -148,8 +148,8 @@ def test_grade_bands_contiguous() -> None:
         assert upper[2] == lower[3] + 1, f"{upper[0]} 与 {lower[0]} 之间有缝隙"
     assert ordered[0][2] == 97 and ordered[0][3] == 100
     assert ordered[-1][2] == 40
-    # 字母必须 ABCDEF 全覆盖
-    letters = {c[0] for c in ordered}
+    # 字母必须 ABCDEF 全覆盖（档位名形如 A+/A/A-，取首字母）
+    letters = {c[0][0] for c in ordered}
     assert letters == set("ABCDEF")
 
 
