@@ -27,6 +27,10 @@ _REPEAT_CLAUSE = re.compile(rf"([{_CJK}A-Za-z0-9]{{6,40}})[，,]\s*\1")
 _TOP_NUM = re.compile(r"^##\s+(\d+)[.、．]?\s+(\S.*)$")
 _CAPTION_LINE = re.compile(r"^(\s*)(图|表|附图|附表)\s*(\d+)\s*[：:.、]?\s*(.*)$")
 _NESTED_IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# `**关键词：**观鸟` —— 收尾的 ** 后面紧跟汉字，CommonMark 判定它不是
+# 右闭合适配符，于是整行原样输出，读者看到的就是 `**关键词：**观鸟`。
+# 补一个空格就能闭合，这个空格在行首段里不可见。
+_TIGHT_BOLD = re.compile(r"\*\*([^*\n]{1,14}[：:])\*\*(?=[^\s*])")
 
 
 def _fix_punct_space(md: str) -> tuple[str, int]:
@@ -135,6 +139,7 @@ def _fix_section_order(md: str) -> tuple[str, int]:
 def fix(md: str) -> tuple[str, dict[str, int]]:
     stats: dict[str, int] = {}
     md, stats["标点前空格"] = _fix_punct_space(md)
+    md, stats["紧贴加粗"] = _TIGHT_BOLD.subn(r"**\1** ", md)
     md, stats["重复段落"] = _fix_dup_paragraphs(md)
     md, stats["重复子句"] = _fix_repeat_clause(md)
     md, stats["图注吞正文"] = _fix_caption_swallow(md)

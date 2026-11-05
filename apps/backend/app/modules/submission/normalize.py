@@ -70,6 +70,11 @@ _SPACE_AFTER_CJK_PUNCT = re.compile(rf"([，。；：！？、）》」』】])[
 # 破折号被 PDF 拆成两个单横线：``— —`` → ``——``
 _BROKEN_EMDASH = re.compile(r"—[ \t]+—")
 
+# `**关键词：**观鸟`：收尾的 ** 后面紧跟汉字时，CommonMark 判定它不是右闭合
+# 适配符，整行原样输出——读者看到的是字面的两个星号。补一个空格即可闭合，
+# 这个空格出现在行首标签之后，视觉上看不出来。
+_TIGHT_BOLD = re.compile(r"\*\*([^*\n]{1,14}[：:])\*\*(?=[^\s*])")
+
 # --- 硬换行碎段复原 ---------------------------------------------------------
 
 # 句末标点。行尾是否有它，决定这处换行是「段落结束」还是「版心宽度到了」。
@@ -578,6 +583,7 @@ def normalize_markdown(md: str) -> str:
     body = _split_overlong_blocks(body)
     body = _merge_broken_table_rows(body)
     body = _BROKEN_EMDASH.sub("——", body)
+    body = _TIGHT_BOLD.sub(r"**\1** ", body)
     body = _SPACE_AFTER_CJK_PUNCT.sub(r"\1", body)
     body = _space_cjk_latin(body)
     body = _tidy_whitespace(body)
