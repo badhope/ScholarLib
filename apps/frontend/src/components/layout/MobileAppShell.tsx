@@ -129,8 +129,8 @@ export function MobileAppShell() {
   const [barHidden, setBarHidden] = useState(false)
 
   // 沉浸阅读：向下滚动藏起 Tab 栏，向上滚动或回到顶部时露出。
-  // 阅读页可能是 window 滚动（富文本），也可能是内部容器滚动（PDF），
-  // 两个源都要监听，否则其中一种模式下栏不会动。
+  // 阅读容器是异步渲染的，直接 querySelector 会扑空；scroll 事件不冒泡，
+  // 但捕获阶段的 window 监听能先于目标收到所有元素的滚动，一处监听全覆盖。
   useEffect(() => {
     if (!immersive) {
       setBarHidden(false)
@@ -149,12 +149,9 @@ export function MobileAppShell() {
       else if (dy < -14) setBarHidden(false)
       lastY = y
     }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    const inner = document.querySelector('[data-reader-scroll]')
-    inner?.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
     return () => {
-      window.removeEventListener('scroll', onScroll)
-      inner?.removeEventListener('scroll', onScroll)
+      window.removeEventListener('scroll', onScroll, { capture: true })
     }
   }, [immersive])
 

@@ -97,6 +97,8 @@ def _regions(lines: list[dict], rect, layout: dict) -> list[dict]:
     )
 
     out: list[dict] = []
+    if not lines:
+        return out
     prev = min(l["bbox"][1] for l in lines)
     for f in full:
         top = f["bbox"][1]

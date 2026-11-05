@@ -329,7 +329,8 @@ def lint(md: str, name: str = "") -> Report:
                 ref_paras.append(body)
         if len(ref_paras) < REFERENCE_MIN:
             rep.add("E012", "error", f"参考文献 {len(ref_paras)} 条（规范 ≥ {REFERENCE_MIN}）")
-        missing_type = [p for p in ref_paras if not re.search(r"\[[JMDCSRNP]\]", p)]
+        # [EB/OL]/[J/OL] 等复合标识也是 GB/T 7714 的合法类型标识
+        missing_type = [p for p in ref_paras if not re.search(r"\[[JMDCSRNP](/OL)?\]", p)]
         if missing_type:
             rep.add(
                 "E013",
