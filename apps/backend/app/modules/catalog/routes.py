@@ -1209,8 +1209,11 @@ async def export_resource_manuscript(
     except Exception:
         readable = f"rubbish-{resource.id}"
 
+    # "v2" 是产物版本：导出实现变了（字体子集化）必须让旧缓存失效，
+    # 否则用户还会拿到 2 MB 的旧 PDF。改实现时递增这个前缀。
     cache_key = hashlib.sha256(
-        f"{format}\x00{resource.title}\x00{byline}\x00".encode("utf-8") + md_text.encode("utf-8")
+        f"v2\x00{format}\x00{resource.title}\x00{byline}\x00".encode("utf-8")
+        + md_text.encode("utf-8")
     ).hexdigest()[:40]
     etag = f'W/"{cache_key}"'
 

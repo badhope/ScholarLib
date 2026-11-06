@@ -766,7 +766,7 @@ function HomePage() {
               variants={cardsWrap}
               initial="hidden"
               animate={statsReveal ? 'show' : 'hidden'}
-              className="mx-auto mt-12 grid max-w-4xl grid-cols-2 gap-4 lg:grid-cols-4"
+              className="mx-auto mt-6 grid max-w-4xl grid-cols-2 gap-2.5 sm:mt-12 sm:gap-4 lg:grid-cols-4"
             >
               {[
                 // 四项都必须回答读者/作者真正关心的问题：
@@ -800,13 +800,13 @@ function HomePage() {
                   variants={card}
                   animate={statsReveal ? 'show' : 'hidden'}
                   whileHover={{ y: -4 }}
-                  className="rounded-lg border bg-card/80 p-5 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/40"
+                  className="rounded-lg border bg-card/80 p-3.5 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/40 sm:p-5"
                 >
                   <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                     {s.label}
                   </p>
                   <p
-                    className="mt-2 text-4xl text-primary"
+                    className="mt-1 text-2xl text-primary sm:mt-2 sm:text-4xl"
                     style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}
                   >
                     {s.node}
