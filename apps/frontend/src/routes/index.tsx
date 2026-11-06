@@ -970,35 +970,31 @@ function HomePage() {
               description="编辑接受投稿后，论文会第一时间出现在这里。欢迎注册成为作者，投出第一稿。"
             />
           ) : (
-            <ol className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
-              {resources.map((r) => {
-                const categoryTag = contentCategoryLabel(r.content_category)
-                return (
-                  <li key={r.id}>
-                    <Link
-                      to="/catalog/$resourceId"
-                      params={{ resourceId: String(r.id) }}
-                      className="flex items-baseline gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:px-5"
-                    >
-                      <span className="w-20 shrink-0 text-xs tabular-nums text-muted-foreground sm:w-24">
-                        {fmtDate(r.created_at)}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {r.title}
-                      </span>
-                      {categoryTag ? (
-                        <Badge variant="outline" className="hidden shrink-0 rounded-full px-2 text-[10px] font-normal bg-primary/10 text-primary border-primary/25 sm:inline-flex">
-                          {categoryTag}
-                        </Badge>
-                      ) : null}
-                      <span className="hidden w-28 shrink-0 truncate text-right text-xs text-muted-foreground sm:block">
-                        {r.discipline}
-                      </span>
-                    </Link>
-                  </li>
-                )
-              })}
-            </ol>
+            <div>
+              {/* 横向滚动的封面卡条（v1.11）：首页最新发表从干列表升级为
+                  可扫读的封面流，一屏多卡；列表形态保留在目录页。 */}
+              <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+                {resources.map((r) => (
+                  <Link
+                    key={r.id}
+                    to="/catalog/$resourceId"
+                    params={{ resourceId: String(r.id) }}
+                    className="w-44 shrink-0 snap-start overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md sm:w-52"
+                  >
+                    <ArticleCover resource={r} className="aspect-[3/4] w-full" />
+                    <div className="space-y-1 p-3">
+                      <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
+                      <p className="text-xs text-muted-foreground">{fmtDate(r.created_at)}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <div className="mt-2 text-right">
+                <Link to="/catalog" className="text-xs text-muted-foreground hover:text-primary">
+                  查看全部 →
+                </Link>
+              </div>
+            </div>
           )}
         </section>
 
