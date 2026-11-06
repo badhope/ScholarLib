@@ -14,6 +14,7 @@ from fastapi import (
     Query,
     status,
 )
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -216,6 +217,85 @@ async def update_submission(
         setattr(entry, field, value)
     await db.commit()
     await db.refresh(entry)
+    return _to_response(entry)
+
+
+# ---------------------------------------------------------------------------
+# 在线正文编辑器（2.0）：作者不依赖 Word/PDF 上传也能直接写/改正文。
+# 正文以 Markdown 存入 storage（与上传转换产物同一条 markdown_path 通道），
+# 阅读页 / Word 下载件 / JATS 导出自动继承，无需额外发布步骤。
+# ---------------------------------------------------------------------------
+
+MAX_ONLINE_BODY_BYTES = 1_000_000
+_ONLINE_EDITABLE_STATUSES = ("pending", "major_revision", "minor_revision", "rework_requested")
+
+
+class OnlineMarkdownBody(BaseModel):
+    content: str = Field(min_length=1, max_length=MAX_ONLINE_BODY_BYTES)
+
+
+async def _editable_submission_or_error(
+    submission_id: int, current_user: User, db: AsyncSession
+) -> Submission:
+    entry = await _get_or_404(db, submission_id)
+    is_staff = current_user.is_admin or await user_has_role(db, current_user, ROLE_EDITOR)
+    if entry.submitted_by != current_user.id and not is_staff:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the submitter or editorial staff can access the body",
+        )
+    # 编辑部改稿不受状态限制；作者本人仅在可编辑状态开放。
+    if not is_staff and entry.status not in _ONLINE_EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot edit submission body in status '{entry.status}'",
+        )
+    return entry
+
+
+@router.get("/{submission_id}/markdown")
+async def get_submission_markdown(
+    submission_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """读取在线正文（作者本人 / 编辑部）。"""
+    entry = await _editable_submission_or_error(submission_id, current_user, db)
+    if not entry.markdown_path:
+        return {"content": ""}
+    from app.core.storage import get_storage
+
+    try:
+        data = await get_storage().load(entry.markdown_path)
+    except FileNotFoundError:
+        return {"content": ""}
+    return {"content": data.decode("utf-8", errors="replace")}
+
+
+@router.put("/{submission_id}/markdown")
+async def save_submission_markdown(
+    submission_id: int,
+    body: OnlineMarkdownBody,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionResponse:
+    """保存在线正文（作者可编辑状态 / 编辑部）。
+
+    与 update_submission 同一权限门。每次保存写入新 storage key 并替换
+    markdown_path，旧文件清理（与上传替换同一策略），避免孤儿对象。
+    """
+    from uuid import uuid4
+
+    entry = await _editable_submission_or_error(submission_id, current_user, db)
+    from app.core.storage import get_storage
+
+    rel_path = f"{entry.tenant_id}/{entry.id}/{uuid4().hex}.md"
+    await get_storage().save(rel_path, body.content.encode("utf-8"), content_type="text/markdown")
+    old_md = entry.markdown_path
+    entry.markdown_path = rel_path
+    await db.commit()
+    await db.refresh(entry)
+    await _try_delete_storage(old_md)
     return _to_response(entry)
 
 

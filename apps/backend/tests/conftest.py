@@ -33,6 +33,7 @@ os.environ.setdefault(
     os.path.join(tempfile.gettempdir(), "rubbish-test-uploads"),
 )
 
+import pytest
 import pytest_asyncio
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
@@ -86,6 +87,23 @@ def _reset_tenant_middleware_cache() -> None:
             current._single_mode_tenant_id = None  # type: ignore[attr-defined]
             return
         current = getattr(current, "app", None)
+
+
+@pytest.fixture(autouse=True)
+def _authorise_outbound_in_tests(monkeypatch: pytest.MonkeyPatch):
+    """测试环境显式授权投递路径（SMTP 全为 fake，不会外发）。
+
+    生产/开发默认关闭外发（settings.email_outbound_enabled=False）；这里
+    打开，是为了让既有的 SMTP 行为测试继续覆盖真实代码路径。护栏本身的
+    默认行为由 test_email_outbound_guard.py 单独验证。
+    """
+    from app.core import email as email_module
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "email_outbound_enabled", True, raising=False)
+    email_module.reset_email_sender()
+    yield
+    email_module.reset_email_sender()
 
 
 @pytest_asyncio.fixture(autouse=True)

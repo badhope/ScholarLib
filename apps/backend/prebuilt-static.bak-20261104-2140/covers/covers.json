@@ -1,0 +1,172 @@
+{
+ "computer-science": [
+  {
+   "file": "/covers/computer-science-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1517694712202-14dd9538aa97"
+  },
+  {
+   "file": "/covers/computer-science-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1555066931-4365d14bab8c"
+  },
+  {
+   "file": "/covers/computer-science-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1581092918056-0c4c3acd3789"
+  }
+ ],
+ "information-science": [
+  {
+   "file": "/covers/information-science-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1481627834876-b7833e8f5570"
+  },
+  {
+   "file": "/covers/information-science-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1524995997946-a1c2e315a42f"
+  },
+  {
+   "file": "/covers/information-science-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1512820790803-83ca734da794"
+  }
+ ],
+ "management": [
+  {
+   "file": "/covers/management-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1497366216548-37526070297c"
+  },
+  {
+   "file": "/covers/management-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1521737604893-d14cc237f11d"
+  },
+  {
+   "file": "/covers/management-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1552664730-d307ca884978"
+  }
+ ],
+ "psychology": [
+  {
+   "file": "/covers/psychology-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1507003211169-0a1dd7228f2d"
+  },
+  {
+   "file": "/covers/psychology-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1544005313-94ddf0286df2"
+  },
+  {
+   "file": "/covers/psychology-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1475113548554-5a36f1f523d6"
+  }
+ ],
+ "life-science": [
+  {
+   "file": "/covers/life-science-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1576086213369-97a306d36557"
+  },
+  {
+   "file": "/covers/life-science-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1532187863486-abf9dbad1b69"
+  },
+  {
+   "file": "/covers/life-science-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1581091226825-a6a2a5aee158"
+  }
+ ],
+ "physics": [
+  {
+   "file": "/covers/physics-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1462331940025-496dfbfc7564"
+  },
+  {
+   "file": "/covers/physics-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1446776811953-b23d57bd21aa"
+  },
+  {
+   "file": "/covers/physics-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1534796636912-3b95b3ab5986"
+  }
+ ],
+ "mathematics": [
+  {
+   "file": "/covers/mathematics-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1504384308090-c894fdcc538d"
+  },
+  {
+   "file": "/covers/mathematics-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1550859492-d5da9d8e45f3"
+  },
+  {
+   "file": "/covers/mathematics-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1454165804606-c3d57bc86b40"
+  }
+ ],
+ "humanities": [
+  {
+   "file": "/covers/humanities-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1543722530-d2c3201371e7"
+  },
+  {
+   "file": "/covers/humanities-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1513364776144-60967b0f800f"
+  },
+  {
+   "file": "/covers/humanities-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1493711662062-fa541adb3fc8"
+  }
+ ],
+ "ecology": [
+  {
+   "file": "/covers/ecology-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1441974231531-c6227db76b6e"
+  },
+  {
+   "file": "/covers/ecology-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1470071459604-3b5ec3a7fe05"
+  },
+  {
+   "file": "/covers/ecology-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1501785888041-af3ef285b470"
+  }
+ ],
+ "social-science": [
+  {
+   "file": "/covers/social-science-1.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1523240795612-9a054b0db644"
+  },
+  {
+   "file": "/covers/social-science-2.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1522202176988-66273c2fd55f"
+  },
+  {
+   "file": "/covers/social-science-3.jpg",
+   "credit": "Unsplash",
+   "photo_id": "1541339907198-e08756dedf3f"
+  }
+ ]
+}

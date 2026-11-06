@@ -123,7 +123,10 @@ def _score(reads: int, downloads: int, saves: int, maxima: tuple[int, int, int])
 def _quartile_bands(
     all_rows: list[Resource], all_raw: dict[int, tuple[int, int, int]], discipline: str
 ) -> dict[int, str]:
-    ids = [r.id for r in all_rows if r.discipline == discipline]
+    if discipline == "__global__":
+        ids = [r.id for r in all_rows]
+    else:
+        ids = [r.id for r in all_rows if r.discipline == discipline]
     if len(ids) < MIN_QUARTILE_SAMPLE:
         return {}
     values = [all_raw.get(rid, (0, 0, 0)) for rid in ids]
@@ -180,6 +183,8 @@ async def compute_engagement(db: AsyncSession, rows: list[Resource]) -> dict[int
     disciplines = {r.discipline for r in rows if r.discipline}
     maxima_by_discipline: dict[str, tuple[int, int, int]] = {}
     quartiles: dict[str, dict[int, str]] = {}
+    global_band: dict[int, str] = {}
+    global_maxima: tuple[int, int, int] = (0, 0, 0)
     if disciplines:
         all_rows = list(
             (
@@ -199,16 +204,39 @@ async def compute_engagement(db: AsyncSession, rows: list[Resource]) -> dict[int
         for discipline in disciplines:
             quartiles[discipline] = _quartile_bands(all_rows, all_raw, discipline)
 
+    # 2.0 主编口径：学科样本不足以支撑同学科分区时，退回**全刊池**计算
+    # 分区（仍是真实阅读/下载数据的百分位，只是池子更大），不再把大片
+    # 文章挂成「样本不足」。
+    global_rows = list(
+        (
+            await db.execute(
+                select(Resource).where(
+                    Resource.tenant_id == tenant_id, *public_conditions()
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    global_raw = await load_raw_engagement(db, [r.id for r in global_rows], tenant_id)
+    global_maxima = (
+        max((v[0] for v in global_raw.values()), default=0),
+        max((v[1] for v in global_raw.values()), default=0),
+        max((v[2] for v in global_raw.values()), default=0),
+    )
+    global_band = _quartile_bands(global_rows, global_raw, "__global__")
+
     result: dict[int, Engagement] = {}
     for row in rows:
         reads, downloads, saves = raw.get(row.id, (0, 0, 0))
         maxima = maxima_by_discipline.get(row.discipline, (0, 0, 0))
+        quartile = quartiles.get(row.discipline, {}).get(row.id) or global_band.get(row.id)
         result[row.id] = Engagement(
             reads=reads,
             downloads=downloads,
             saves=saves,
             r_index=_score(reads, downloads, saves, maxima),
-            quartile=quartiles.get(row.discipline, {}).get(row.id),
+            quartile=quartile,
         )
     return result
 

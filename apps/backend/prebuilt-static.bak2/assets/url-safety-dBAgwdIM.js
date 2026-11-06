@@ -1,0 +1,1 @@
+function e(e){if(!e)return!1;try{let t=new URL(e,window.location.origin);return t.protocol===`https:`||t.protocol===`http:`}catch{return!1}}function t(t){return e(t)?t:`#`}export{t as n,e as t};

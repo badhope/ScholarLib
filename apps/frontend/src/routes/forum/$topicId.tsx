@@ -3,14 +3,16 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Lock, MessageSquare, Pin, Send, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from '@/lib/api'
 import { extractError } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
+import { MarkdownEditor } from '@/components/common/markdown-editor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
 
 export const Route = createFileRoute('/forum/$topicId')({
   component: ForumTopicPage,
@@ -123,7 +125,11 @@ function ForumTopicPage() {
             {topic.author?.username ?? '已注销用户'} ·{' '}
             {new Date(topic.created_at).toLocaleString('zh-CN')}
           </p>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">{topic.body}</div>
+          {/* 展示形态改造（2.0）：主楼按 Markdown 渲染，与投稿/阅读页同一
+              排版语义（react-markdown 默认转义原始 HTML，XSS 面为零）。 */}
+          <div className="markdown-body text-sm leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{topic.body}</ReactMarkdown>
+          </div>
           {canDelete && (
             <div className="border-t pt-3">
               <Button
@@ -159,7 +165,9 @@ function ForumTopicPage() {
                   {r.author?.username ?? '已注销用户'} ·{' '}
                   {new Date(r.created_at).toLocaleString('zh-CN')}
                 </p>
-                <div className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed">{r.body}</div>
+                <div className="mt-1.5 markdown-body text-sm leading-relaxed">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.body}</ReactMarkdown>
+                </div>
               </CardContent>
             </Card>
           ))
@@ -175,11 +183,11 @@ function ForumTopicPage() {
           <CardContent className="space-y-2 py-4">
             {isAuthenticated ? (
               <>
-                <Textarea
+                <MarkdownEditor
                   value={reply}
-                  onChange={(e) => setReply(e.target.value)}
-                  rows={4}
-                  placeholder="写下你的回应…"
+                  onChange={setReply}
+                  minHeight={160}
+                  placeholder="写下你的回应…（支持 Markdown：加粗、列表、书名号等）"
                 />
                 <Button
                   onClick={() => replyMut.mutate()}

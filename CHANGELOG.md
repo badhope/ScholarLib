@@ -7,6 +7,45 @@
 `apps/backend/pyproject.toml`、`apps/frontend/package.json`、`apps/backend/app/__init__.py`
 四处完全一致，由 `scripts/check-version.sh` 守门。
 
+## [1.12.0] — 2026-11-06
+
+### Added
+- **JATS XML 全文导出**：新增 `export/jats.py`（Markdown → NISO JATS 1.3，标题层级/
+  行内标记/表格/列表全量转换）；`GET /api/export?format=jats`（书目级）与
+  `GET /api/catalog/resources/{id}/manuscript.jats`（全文级）双通道。
+- **批量重审引擎** `POST /api/quality/batch-rescore`：逐篇落库重打分（服务端
+  `evaluate` 重算）、荒诞指数（0–10 必填）、显式类别与处置建议（keep/rewrite/
+  reject/delete），全部写入审计；`/quality/rework-queue` 支持 `?include_published`。
+- **荒诞指数进审核流程**：评分表单（`/quality/form`）公开荒诞指数定义与三档
+  区间（审核必填事实，不进质量分、不参与排序，铁律不变）。
+- **每期固定 60 篇**：`POST /api/catalog/issues/rebalance`（管理员）按质量分
+  顺序把已发布资源重排为固定篇数刊期（默认 60/期，dry_run 预览）；存量 267 篇
+  已重排为 5 期（60/60/60/60/27）。
+- **在线正文编辑器**：投稿/修稿表单新增 Word 级 Markdown 编辑器
+  （标题一/二/三、加粗、斜体、书名号、中文引号、高亮、上下标、表格、代码块
+  工具栏 + 编辑/预览双栏 + Ctrl+B/I）；后端 `GET/PUT /api/submissions/{id}/markdown`
+  正文读写（作者可编辑状态/编辑部），正文直接进入阅读、Word 下载件与 JATS 导出。
+- **论坛展示形态改造**：发帖与回帖改用 Markdown 编辑器，主楼/回复按 Markdown
+  渲染；编辑部公告卡片突出展示；列表显示相对活跃时间。
+- **存量重审运维脚本** `scripts/apply_rescore.py`：评审 JSON 服务端重算落库 +
+  卷期重排，全程审计。
+
+### Changed
+- **267 篇存量逐篇重审落库**（RQS v4.0，宁严勿宽：均分 84.3→55.5，≥90 由 20 篇
+  降为 0 篇，<40 共 21 篇；荒诞指数 267/267 回填；类别重判 fun 230/academic 30/rant 7）。
+- **44 篇按作者思路重写**：编辑部改稿（补结构、修论证链），重写稿正文已上线并
+  按复审口径重新评分；原稿备份于服务器 `original-texts-before-rewrite-20261106.tar.gz`。
+- **2 篇恶搞无内容价值稿件下架**（251/259，published→draft），行数据与审计留痕，
+  物理删除待最终确认。
+- **原 PDF 归档清空**：292 个原稿 PDF 与 3089 个转换备份（共约 970MB）归档至
+  `pdf-archive-20261106.tar.gz`（3381 项完整校验）后清除；在线正文以 Markdown
+  与 Word 下载件承载，"看起来什么都没有"的 2 份原件经核实为 E2E 测试占位。
+
+### Security
+- **外发邮件总闸**（承接 1.11.0 后事件处置）：`RUBBISH_EMAIL_OUTBOUND_ENABLED`
+  默认 `false`——`get_email_sender`/SMTP 单账号/账号池/`smtp_configured`/SMTP 自检
+  五处受控，误配组邮箱授权码也不会向真实收件人投递；恢复真发信需双开关并显式授权。
+
 ## [1.11.0] — 2026-11-06
 
 ### Added

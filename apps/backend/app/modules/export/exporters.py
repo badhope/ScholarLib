@@ -305,6 +305,36 @@ def _resource_to_record(resource: Exportable) -> dict[str, Any]:
     }
 
 
+# --- JATS (bibliographic; full-text JATS lives in ``jats.py``) ---
+
+
+def to_jats(resources: list[Exportable]) -> str:
+    """Render resources as a NISO JATS 1.3 ``<article>`` set (one per resource).
+
+    书目级导出：每篇一个独立 ``<article>``，front 携带完整元数据；
+    正文由 ``manuscript.jats`` 端点按全文转换，这里不重复。
+    """
+    from app.modules.export.jats import JatsMeta, markdown_to_jats
+
+    articles: list[str] = []
+    for resource in resources:
+        meta = JatsMeta(
+            title=resource.title,
+            authors=_author_list(resource),
+            abstract=resource.abstract or "",
+            keywords=_keywords(resource),
+            journal=resource.venue or "Rubbish",
+            volume=resource.volume or "",
+            issue=resource.issue or "",
+            pages=resource.pages or "",
+            doi=resource.doi or "",
+            year=resource.year,
+            article_id=str(resource.id),
+        )
+        articles.append(markdown_to_jats("", meta))
+    return "\n".join(articles)
+
+
 # --- Dispatch ---
 
 
@@ -313,6 +343,7 @@ EXPORTERS: dict[str, Callable[[list[Exportable]], str]] = {
     "ris": to_ris,
     "csv": to_csv,
     "json": to_json,
+    "jats": to_jats,
 }
 
 MIME_TYPES: dict[str, str] = {
@@ -320,6 +351,7 @@ MIME_TYPES: dict[str, str] = {
     "ris": "application/x-research-info-systems",
     "csv": "text/csv",
     "json": "application/json",
+    "jats": "application/xml",
 }
 
 FILE_EXTENSIONS: dict[str, str] = {
@@ -327,6 +359,7 @@ FILE_EXTENSIONS: dict[str, str] = {
     "ris": "ris",
     "csv": "csv",
     "json": "json",
+    "jats": "xml",
 }
 
 
@@ -349,6 +382,7 @@ __all__ = [
     "export_resources",
     "to_bibtex",
     "to_csv",
+    "to_jats",
     "to_json",
     "to_ris",
 ]

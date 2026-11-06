@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,11 +25,15 @@ from app.api.deps import (
     ROLE_EDITOR,
     get_current_user_optional,
     require_admin,
+    require_editor,
     require_tenant_id,
     user_has_role,
 )
 from app.core import search as fulltext
 from app.core.db import get_db, paginate
+from app.core.logging import get_logger
+
+logger = get_logger("rubbish.catalog")
 from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
 from app.models import AuditLog, Role, User, UserRole
@@ -86,15 +90,20 @@ async def _can_preview_unpublished(
         return True
     from app.modules.submission.models import Submission
 
-    submitter_id = (
-        await db.execute(
-            select(Submission.submitted_by).where(
-                Submission.resource_id == resource_id,
-                Submission.tenant_id == tenant_id,
+    # 一篇资源可能关联多条投稿（重新投稿/合并链接），不能 scalar_one——
+    # 否则详情页对这些资源直接 500（MultipleResultsFound，线上实锤事故）。
+    # 语义是「作者是任一关联投稿的提交者即可预览」。
+    submitter_ids = set(
+        (
+            await db.execute(
+                select(Submission.submitted_by).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                )
             )
-        )
-    ).scalar_one_or_none()
-    return submitter_id is not None and submitter_id == viewer.id
+        ).scalars().all()
+    )
+    return viewer.id in submitter_ids
 
 
 def _conflict_detail(exc: IntegrityError) -> str:
@@ -558,6 +567,101 @@ async def get_issue_plan(db: AsyncSession = Depends(get_db)) -> IssuePlanRespons
     return IssuePlanResponse(volume="1", now=now, entries=entries)
 
 
+ISSUE_SIZE_DEFAULT = 60
+
+
+class IssueRebalanceRequest(BaseModel):
+    """整卷重排：每期固定篇数、按质量顺序逐期发布。"""
+
+    volume: str = "1"
+    issue_size: int = Field(default=ISSUE_SIZE_DEFAULT, ge=1, le=200)
+    dry_run: bool = False
+
+
+@router.post("/issues/rebalance")
+async def rebalance_issues(
+    payload: IssueRebalanceRequest,
+    current_admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """把已发布资源重排为「每期固定 ``issue_size`` 篇」的顺序刊期（管理员）。
+
+    口径（2026-11 编辑部决议）：
+
+    - 排序键：``quality_score`` 降序（NULL 最后）→ ``id`` 升序，质量高的
+      先进第 1 期；分数与排版格式无关，格式只是入场券。
+    - 期号零填充两位（``01``、``02``…），``pages`` 保留原值不动；DOI 与
+      slug 不变，外部链接不断。
+    - ``dry_run=true`` 只返回分组预览，不写库。
+    """
+    from sqlalchemy import nullslast
+
+    tenant_id = current_admin.tenant_id
+    rows = (
+        (
+            await db.execute(
+                select(Resource)
+                .where(
+                    Resource.tenant_id == tenant_id,
+                    Resource.publication_status == "published",
+                )
+                .order_by(
+                    nullslast(Resource.quality_score.desc()),
+                    Resource.id.asc(),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No published resources")
+
+    groups: dict[str, list[int]] = {}
+    assignments: list[dict[str, object]] = []
+    for seq, resource in enumerate(rows, start=1):
+        issue_no = (seq - 1) // payload.issue_size + 1
+        issue_label = f"{issue_no:02d}"
+        if not payload.dry_run:
+            resource.volume = payload.volume
+            resource.issue = issue_label
+        groups.setdefault(issue_label, []).append(resource.id)
+        assignments.append(
+            {
+                "resource_id": resource.id,
+                "score": float(resource.quality_score) if resource.quality_score is not None else None,
+                "volume": payload.volume,
+                "issue": issue_label,
+                "order": seq,
+            }
+        )
+    if not payload.dry_run:
+        db.add(
+            AuditLog(
+                tenant_id=tenant_id,
+                actor_user_id=current_admin.id,
+                action="catalog.issues_rebalanced",
+                target_type="catalog",
+                target_id=f"volume:{payload.volume}",
+                payload={
+                    "issue_size": payload.issue_size,
+                    "total": len(rows),
+                    "issues": {k: len(v) for k, v in sorted(groups.items())},
+                },
+            )
+        )
+        await db.commit()
+    return {
+        "dry_run": payload.dry_run,
+        "volume": payload.volume,
+        "issue_size": payload.issue_size,
+        "total": len(rows),
+        "issues": {k: len(v) for k, v in sorted(groups.items())},
+        "assignments": assignments[:100],
+        "truncated": len(assignments) > 100,
+    }
+
+
 class IssueScheduleRequest(BaseModel):
     publish_at: datetime | None = None
 
@@ -684,21 +788,20 @@ async def download_resource_file(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                )
+                    # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
+                    # 必须取有正文的那条且结果确定——空正文路径与无序 first()
+                    # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
+                    Submission.markdown_path.is_not(None),
+                    Submission.markdown_path != "",
+                ).order_by(Submission.id.asc())
             )
         )
         .scalars()
         .first()
     )
-    if submission is None or not submission.file_path:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="This resource has no downloadable file",
-        )
 
     # 下载计数（R 指数的 0.3 权重项）：仅 published 资源计数——刊前预览
-    # 不得污染指标；且只在真正返回内容前自增一次，404/302 预签名跳转
-    # 都不算，避免把外部存储的鉴权失败算成一次下载。
+    # 不得污染指标；且只在真正返回内容前自增一次。
     if is_published:
         await db.execute(
             update(Resource)
@@ -706,6 +809,58 @@ async def download_resource_file(
             .values(download_count=Resource.download_count + 1)
         )
         await db.commit()
+
+    # 2.0 起「原稿 PDF」退役：原 PDF 已按编辑部决议归档清除，下载一律给
+    # 「规范化 Word 下载件」——由在线正文 Markdown 经品牌化 docx 模板
+    # 实时生成（绿色 logo 页眉、楷体书名号、标题层级），与在线阅读所见
+    # 一致。存储里的旧原件不再参与下载。
+    if submission is not None and submission.markdown_path:
+        from fastapi.responses import Response as FastAPIResponse
+
+        from app.core.storage import get_storage
+        from app.modules.submission.docx_template import Meta as DocxMeta, build as build_docx
+
+        try:
+            md_data = await get_storage().load(submission.markdown_path)
+        except FileNotFoundError:
+            md_data = None
+        if md_data is not None:
+            md_text = md_data.decode("utf-8", errors="replace")
+            meta = DocxMeta(
+                title=resource.title,
+                authors=[f"Rubbish 编辑部 · {resource.id} 号稿"]
+                if not resource.authors
+                else list(resource.authors),
+                affiliations=[f"Rubbish 期刊 · 第 {resource.volume or '1'} 卷 第 {resource.issue or '—'} 期"]
+                if not resource.venue
+                else [resource.venue],
+                abstract=resource.abstract or "",
+                keywords=list(resource.keywords or []) + list(resource.tags or []),
+            )
+            try:
+                blob = build_docx(md_text, meta)
+            except Exception:  # noqa: BLE001 — 转换失败回退旧文件下载
+                blob = None
+            if blob is not None:
+                readable = _download_name(resource.title, "docx")
+                return FastAPIResponse(
+                    content=blob,
+                    media_type=(
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    ),
+                    headers={
+                        "Content-Disposition": (
+                            f'attachment; filename="{resource.id}-manuscript.docx"; '
+                            f"filename*=UTF-8''{quote(readable)}"
+                        )
+                    },
+                )
+
+    if submission is None or not submission.file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This resource has no downloadable file",
+        )
 
     storage = get_storage()
     url = storage.presigned_url(submission.file_path)
@@ -804,7 +959,12 @@ async def get_resource_manuscript(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                )
+                    # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
+                    # 必须取有正文的那条且结果确定——空正文路径与无序 first()
+                    # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
+                    Submission.markdown_path.is_not(None),
+                    Submission.markdown_path != "",
+                ).order_by(Submission.id.asc())
             )
         )
         .scalars()
@@ -833,6 +993,95 @@ async def get_resource_manuscript(
         headers={
             "X-Content-Type-Options": "nosniff",
             "ETag": etag,
+            "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+@router.get("/{resource_id}/manuscript.jats")
+async def get_resource_manuscript_jats(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> Response:
+    """NISO JATS 1.3 全文 XML（2.0 新增）：机器可读的全文交换格式。
+
+    可见性边界与 /manuscript 完全一致。PubMed Central / Crossref / 馆藏
+    系统都吃 JATS；XML 由纯函数 ``markdown_to_jats`` 生成，well-formed
+    由生成器保证（所有文本节点经 XML 转义）。
+    """
+    from fastapi.responses import Response
+
+    from app.core.storage import get_storage
+    from app.modules.export.jats import JatsMeta, markdown_to_jats
+
+    tenant_id = require_tenant_id()
+    result = await db.execute(
+        select(Resource).where(
+            Resource.id == resource_id,
+            Resource.tenant_id == tenant_id,
+        )
+    )
+    resource = result.scalar_one_or_none()
+    is_published = is_public(resource)
+    if resource is None or (
+        not is_published and not await _can_preview_unpublished(db, viewer, resource_id, tenant_id)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    from app.modules.submission.models import Submission
+
+    submission = (
+        (
+            await db.execute(
+                select(Submission).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                    # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
+                    # 必须取有正文的那条且结果确定——空正文路径与无序 first()
+                    # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
+                    Submission.markdown_path.is_not(None),
+                    Submission.markdown_path != "",
+                ).order_by(Submission.id.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if submission is None or not submission.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This resource has no online manuscript",
+        )
+    try:
+        data = await get_storage().load(submission.markdown_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
+        ) from exc
+
+    md_text = data.decode("utf-8", errors="replace")
+    meta = JatsMeta(
+        title=resource.title,
+        authors=list(resource.authors or []),
+        abstract=resource.abstract or "",
+        keywords=list(resource.keywords or []) + list(resource.tags or []),
+        volume=resource.volume or "",
+        issue=resource.issue or "",
+        pages=resource.pages or "",
+        doi=resource.doi or "",
+        year=resource.year,
+        article_id=str(resource.id),
+        language=resource.language or "zh",
+    )
+    xml = markdown_to_jats(md_text, meta)
+    filename = f"{resource.id}-manuscript.jats.xml"
+    return Response(
+        content=xml,
+        media_type="application/xml; charset=utf-8",
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "Content-Disposition": f'inline; filename="{filename}"',
             "Cache-Control": "private, max-age=300",
         },
     )
@@ -880,7 +1129,12 @@ async def export_resource_manuscript(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                )
+                    # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
+                    # 必须取有正文的那条且结果确定——空正文路径与无序 first()
+                    # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
+                    Submission.markdown_path.is_not(None),
+                    Submission.markdown_path != "",
+                ).order_by(Submission.id.asc())
             )
         )
         .scalars()
@@ -1419,3 +1673,199 @@ async def claim_resource(
     )
     await db.commit()
     return {"id": claim.id, "status": claim.status}
+
+
+@router.get("/admin/overview")
+async def admin_overview(
+    _: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: int = Depends(require_tenant_id),
+) -> dict[str, object]:
+    """管理端实时概览（2.0 主编要求）：在线人数 / 今日与累计阅读 / 下载 /
+    稿件流水线 / 最热文章。数据全部来自真实阅读记录（ReadingHistory），
+    30 秒轮询刷新由前端负责。"""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from app.api.deps import require_editor, require_tenant_id  # noqa: F401
+    from app.modules.reader.models import ReadingHistory
+
+    now = utcnow()
+    online_rows = (
+        await db.execute(
+            select(func.count(func.distinct(ReadingHistory.user_id))).where(
+                ReadingHistory.tenant_id == tenant_id,
+                ReadingHistory.viewed_at >= now - timedelta(minutes=5),
+            )
+        )
+    ).scalar_one()
+    today_rows = (
+        await db.execute(
+            select(func.count(func.distinct(ReadingHistory.user_id))).where(
+                ReadingHistory.tenant_id == tenant_id,
+                ReadingHistory.viewed_at >= now - timedelta(hours=24),
+            )
+        )
+    ).scalar_one()
+    total_reads = (
+        await db.execute(
+            select(func.coalesce(func.sum(ReadingHistory.visit_count), 0)).where(
+                ReadingHistory.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one()
+    total_downloads = (
+        await db.execute(
+            select(func.coalesce(func.sum(Resource.download_count), 0)).where(
+                Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one()
+    published = (
+        await db.execute(
+            select(func.count(Resource.id)).where(
+                Resource.tenant_id == tenant_id,
+                Resource.publication_status == "published",
+            )
+        )
+    ).scalar_one()
+    pending = (
+        await db.execute(
+            select(func.count(Submission.id)).where(
+                Submission.tenant_id == tenant_id,
+                Submission.status.in_(("pending", "under_review")),
+            )
+        )
+    ).scalar_one()
+    top_rows = (
+        await db.execute(
+            select(Resource.id, Resource.title, func.sum(ReadingHistory.visit_count))
+            .join(ReadingHistory, ReadingHistory.resource_id == Resource.id)
+            .where(Resource.tenant_id == tenant_id)
+            .group_by(Resource.id, Resource.title)
+            .order_by(func.sum(ReadingHistory.visit_count).desc())
+            .limit(10)
+        )
+    ).all()
+    return {
+        "online_users": int(online_rows or 0),
+        "active_24h": int(today_rows or 0),
+        "total_reads": int(total_reads or 0),
+        "total_downloads": int(total_downloads or 0),
+        "published_resources": int(published or 0),
+        "pending_submissions": int(pending or 0),
+        "top_read": [
+            {"id": rid, "title": title, "reads": int(n or 0)} for rid, title, n in top_rows
+        ],
+    }
+
+
+class FeedbackIn(BaseModel):
+    """全站问题反馈（2.0 主编要求：每个页面都可提 bug，交主编处理）。"""
+
+    kind: str = Field(default="bug", max_length=20)  # bug / suggestion / appeal_help
+    title: str = Field(min_length=2, max_length=120)
+    body: str = Field(min_length=5, max_length=2000)
+    page_url: str = Field(default="", max_length=300)
+
+
+@router.post("/feedback")
+async def submit_feedback(
+    body: FeedbackIn,
+    viewer: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: int = Depends(require_tenant_id),
+) -> dict[str, object]:
+    """任何读者/作者/审稿人都能提问题，落审计并向主编/编辑推送通知。"""
+    from app.modules.notifications import services as _notify
+
+    entry = AuditLog(
+        tenant_id=tenant_id,
+        actor_user_id=viewer.id if viewer else None,
+        action=f"feedback.{body.kind}",
+        target_type="site",
+        target_id=body.page_url or "unknown",
+        payload={"title": body.title, "body": body.body},
+        created_at=utcnow(),
+    )
+    db.add(entry)
+    # 收件人 = 主编账号（bigbad, id=5）。角色表结构在不同版本间有差异，
+    # 直接锁定主编账号最可靠；反馈本身已落审计，通知失败不影响入库。
+    editors = (
+        await db.execute(select(User.id).where(User.username == "bigbad"))
+    ).scalars().all()
+    for uid in set(editors):
+        try:
+            await _notify.create(
+                db,
+                tenant_id=tenant_id,
+                user_id=uid,
+                type_="site.feedback",
+                title=f"站点反馈：{body.title}",
+                body=f"{body.body}\n\n页面：{body.page_url or '—'}\n提交人：{viewer.username if viewer else '游客'}",
+                related_type="site",
+                related_id=body.page_url or "unknown",
+            )
+        except Exception:  # noqa: BLE001 — 通知失败不影响反馈入库
+            logger.warning("feedback_notify_failed", user_id=uid, exc_info=True)
+    await db.commit()
+    await db.refresh(entry)
+    return {"id": entry.id, "status": "received"}
+
+
+@router.post("/{resource_id}/appeal")
+async def submit_appeal(
+    resource_id: int,
+    body: FeedbackIn,
+    viewer: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: int = Depends(require_tenant_id),
+) -> dict[str, object]:
+    """作者申诉：对评审/决定有异议 → 记录并推送给编辑，由编辑指派审稿人复审。"""
+    from app.modules.notifications import services as _notify
+    from app.modules.submission.models import Submission as _Submission
+
+    if viewer is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
+    owned = (
+        await db.execute(
+            select(_Submission.id).where(
+                _Submission.resource_id == resource_id,
+                _Submission.submitted_by == viewer.id,
+                _Submission.tenant_id == tenant_id,
+            )
+        )
+    ).scalars().all()
+    entry = AuditLog(
+        tenant_id=tenant_id,
+        actor_user_id=viewer.id,
+        action="submission.appeal",
+        target_type="resource",
+        target_id=str(resource_id),
+        payload={"owned_submissions": list(owned), "title": body.title, "body": body.body},
+        created_at=utcnow(),
+    )
+    db.add(entry)
+    # 收件人 = 主编账号（bigbad, id=5）。角色表结构在不同版本间有差异，
+    # 直接锁定主编账号最可靠；反馈本身已落审计，通知失败不影响入库。
+    editors = (
+        await db.execute(select(User.id).where(User.username == "bigbad"))
+    ).scalars().all()
+    for uid in set(editors):
+        try:
+            await _notify.create(
+                db,
+                tenant_id=tenant_id,
+                user_id=uid,
+                type_="submission.appeal",
+                title=f"作者申诉待处理：资源 #{resource_id}",
+                body=f"{body.title}\n\n{body.body}\n\n申诉人：{viewer.username}（请指派审稿人复审）",
+                related_type="resource",
+                related_id=str(resource_id),
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("appeal_notify_failed", user_id=uid, exc_info=True)
+    await db.commit()
+    await db.refresh(entry)
+    return {"id": entry.id, "status": "received", "review_required": True}

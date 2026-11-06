@@ -1,5 +1,7 @@
 import {
   Children,
+  Fragment,
+  cloneElement,
   isValidElement,
   useEffect,
   useRef,
@@ -232,6 +234,37 @@ function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
   return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />
 }
 
+// 中文出版符号在阅读页也要「看得出是什么」：书名号走楷体 + 品牌绿，
+// 中文引号走楷体；与 Word 下载件的 docx_template._add_inline 口径一致。
+// 只处理文本节点，KaTeX / 图片等结构化节点原样放行，避免破坏公式。
+const CN_INLINE_TOKENS = /(《[^》]{1,80}》|「[^」]{1,80}」|“[^”]{1,80}”)/g
+
+function decorateInline(nodes: ReactNode): ReactNode {
+  return Children.map(nodes, (node) => {
+    if (typeof node === 'string') {
+      const parts = node.split(CN_INLINE_TOKENS)
+      if (parts.length === 1) return node
+      return parts.map((part, idx) => {
+        if (!part) return null
+        if (part.startsWith('《')) {
+          return <span key={idx} className="md-book-title">{part}</span>
+        }
+        if (part.startsWith('「') || part.startsWith('“')) {
+          return <span key={idx} className="md-quote-cn">{part}</span>
+        }
+        return <Fragment key={idx}>{part}</Fragment>
+      })
+    }
+    if (isValidElement<{ children?: ReactNode; className?: string }>(node)) {
+      const { children, className } = node.props
+      if (children === undefined || children === null) return node
+      if (typeof className === 'string' && className.includes('katex')) return node
+      return cloneElement(node, undefined, decorateInline(children))
+    }
+    return node
+  })
+}
+
 const markdownComponents: Components = {
   a: ({ href, children }) => (
     <a href={href} target="_blank" rel="noopener noreferrer nofollow">
@@ -244,7 +277,7 @@ const markdownComponents: Components = {
     typeof src === 'string' && src ? (
       <ManuscriptImage src={src} alt={alt ?? ''} />
     ) : null,
-  p: ({ children }) => <p className={paragraphClass(children)}>{children}</p>,
+  p: ({ children }) => <p className={paragraphClass(children)}>{decorateInline(children)}</p>,
   table: ({ children }) => (
     <div className="md-table-wrap">
       <table>{children}</table>

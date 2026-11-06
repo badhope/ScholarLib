@@ -35,7 +35,7 @@ EXPORT_MAX_IDS = 500
 @router.get("", response_class=Response)
 async def export_endpoint(
     ids: list[int] = Query(default_factory=list),
-    format: str = Query(default="json", pattern=r"^(bibtex|ris|csv|json)$"),
+    format: str = Query(default="json", pattern=r"^(bibtex|ris|csv|json|jats)$"),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download the given resources as a BibTeX / RIS / CSV / JSON file.

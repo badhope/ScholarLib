@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { MessageSquare, Pin, Plus, Lock } from 'lucide-react'
+import { Megaphone, MessageSquare, Pin, Plus, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { extractError } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
+import { MarkdownEditor } from '@/components/common/markdown-editor'
 import { Pagination } from '@/components/common/pagination'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/forum/')({
@@ -68,6 +68,20 @@ const CATEGORY_LABEL: Record<string, string> = {
   suggestion: '建议',
   question: '求助',
   notice: '公告',
+}
+
+/** 相对时间：讨论列表的活跃信号比绝对时间更直观。 */
+function fmtRelative(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const minutes = Math.floor((Date.now() - t) / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes} 分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} 天前`
+  return new Date(iso).toLocaleDateString('zh-CN')
 }
 
 function ForumListPage() {
@@ -163,7 +177,14 @@ function ForumListPage() {
       ) : (
         <div className="space-y-2">
           {topics.map((t) => (
-            <Card key={t.id} className="transition-colors hover:bg-muted/30">
+            <Card
+              key={t.id}
+              className={cn(
+                'transition-colors hover:bg-muted/30',
+                // 编辑部公告用左侧主色条突出：公告不是普通帖子
+                t.category === 'notice' && 'border-l-4 border-l-primary',
+              )}
+            >
               <CardContent className="flex items-start gap-3 py-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -173,9 +194,16 @@ function ForumListPage() {
                         置顶
                       </Badge>
                     )}
-                    <Badge variant="outline" className={CATEGORY_STYLE[t.category]}>
-                      {CATEGORY_LABEL[t.category] ?? t.category}
-                    </Badge>
+                    {t.category === 'notice' ? (
+                      <Badge className="gap-1 border border-transparent bg-primary text-primary-foreground">
+                        <Megaphone className="h-3 w-3" />
+                        编辑部公告
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className={CATEGORY_STYLE[t.category]}>
+                        {CATEGORY_LABEL[t.category] ?? t.category}
+                      </Badge>
+                    )}
                     {t.is_locked && (
                       <Badge variant="secondary" className="gap-1">
                         <Lock className="h-3 w-3" />
@@ -192,8 +220,8 @@ function ForumListPage() {
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{t.body}</p>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {t.author?.username ?? '已注销用户'} ·{' '}
-                    {new Date(t.last_reply_at ?? t.created_at).toLocaleString('zh-CN')}
+                    {t.author?.username ?? '已注销用户'} · 最后活跃{' '}
+                    {fmtRelative(t.last_reply_at ?? t.created_at)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
@@ -250,13 +278,11 @@ function ForumListPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="t-body">内容</Label>
-              <Textarea
-                id="t-body"
+              <MarkdownEditor
                 value={form.body}
-                onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))}
-                rows={8}
-                maxLength={20000}
-                placeholder="支持换行。说清背景、你的判断、以及希望得到什么回应。"
+                onChange={(body) => setForm((p) => ({ ...p, body }))}
+                minHeight={180}
+                placeholder="支持 Markdown。说清背景、你的判断、以及希望得到什么回应。"
               />
             </div>
           </div>

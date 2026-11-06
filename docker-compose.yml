@@ -60,6 +60,10 @@ services:
       # 事务邮件：SMTP 账号池与深链前缀。全部从 .env 透传，
       # 未配置时自动降级为日志输出，注册/找回密码等流程不会中断。
       RUBBISH_EMAIL_BACKEND: ${RUBBISH_EMAIL_BACKEND:-console}
+      # 外发总闸默认关闭：容器化部署同样受护栏保护，需显式开启才真发信。
+      RUBBISH_EMAIL_OUTBOUND_ENABLED: ${RUBBISH_EMAIL_OUTBOUND_ENABLED:-false}
+      # 录用恭喜邮件独立开关（主编授权：发布成功要发祝贺邮件）。
+      RUBBISH_EMAIL_CONGRAT_ENABLED: ${RUBBISH_EMAIL_CONGRAT_ENABLED:-false}
       RUBBISH_EMAIL_SMTP_ACCOUNTS: ${RUBBISH_EMAIL_SMTP_ACCOUNTS:-}
       RUBBISH_EMAIL_SMTP_HOST: ${RUBBISH_EMAIL_SMTP_HOST:-}
       RUBBISH_EMAIL_SMTP_PORT: ${RUBBISH_EMAIL_SMTP_PORT:-465}

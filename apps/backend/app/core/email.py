@@ -136,6 +136,18 @@ class SMTPEmailSender:
         body: str,
         html: str | None = None,
     ) -> None:
+        # 外发总闸：默认拦截一切真实投递。实例可携带 _bypass_outbound_guard
+        # （仅恭喜邮件通道由主编显式授权使用），其余路径一律受闸。
+        if not settings.email_outbound_enabled and not getattr(
+            self, "_bypass_outbound_guard", False
+        ):
+            logger.warning(
+                "email_outbound_blocked",
+                to=to,
+                subject=subject,
+                reason="RUBBISH_EMAIL_OUTBOUND_ENABLED=false",
+            )
+            return
         msg = self._build_message(to, subject, body, html)
         last_error: Exception | None = None
         for attempt in range(self._retries + 1):
@@ -159,6 +171,7 @@ class SMTPEmailSender:
 
 
 _sender: EmailSender | None = None
+_congrat_sender: EmailSender | None = None
 
 
 @dataclass(frozen=True)
@@ -338,6 +351,16 @@ class SmtpPoolEmailSender:
         body: str,
         html: str | None = None,
     ) -> None:
+        if not settings.email_outbound_enabled and not getattr(
+            self, "_bypass_outbound_guard", False
+        ):
+            logger.warning(
+                "email_outbound_blocked",
+                to=to,
+                subject=subject,
+                reason="RUBBISH_EMAIL_OUTBOUND_ENABLED=false",
+            )
+            return
         last_error: Exception | None = None
         order = self._order(time.monotonic())
         for account in order:
@@ -353,6 +376,10 @@ class SmtpPoolEmailSender:
                 timeout=self._timeout,
                 retries=self._retries,
             )
+            # 内层实例必须继承外层的外发许可：否则恭喜通道（外层 bypass）
+            # 会被内层 guard 静默拦截，且 guard 静默 return 会让 pool 误记成功。
+            if getattr(self, "_bypass_outbound_guard", False):
+                sender._bypass_outbound_guard = True  # noqa: SLF001 — 模块内私有约定
             try:
                 await sender.send(to=to, subject=subject, body=body, html=html)
                 self._record_success(account)
@@ -377,13 +404,30 @@ class SmtpPoolEmailSender:
 
 
 def smtp_configured() -> bool:
-    """True when the operator has supplied enough env for real delivery."""
-    return bool(settings.email_backend == "smtp" and configured_accounts())
+    """True only when real delivery is both configured **and** authorised."""
+    return bool(
+        settings.email_outbound_enabled
+        and settings.email_backend == "smtp"
+        and configured_accounts()
+    )
 
 
 def get_email_sender() -> EmailSender:
-    """Return the configured sender (lazily constructed, test-swappable)."""
+    """Return the configured sender (lazily constructed, test-swappable).
+
+    Hard guard: outbound delivery is OFF unless the operator explicitly
+    enables it. A stray group-mailbox SMTP credential in .env must never
+    turn a development box into a mass-mailer.
+    """
     global _sender
+    if not settings.email_outbound_enabled:
+        if not isinstance(_sender, ConsoleEmailSender):
+            logger.warning(
+                "email_outbound_disabled",
+                reason="RUBBISH_EMAIL_OUTBOUND_ENABLED=false",
+            )
+            _sender = ConsoleEmailSender()
+        return _sender
     if _sender is not None:
         return _sender
 
@@ -438,6 +482,62 @@ def reset_email_sender() -> None:
     _sender = None
 
 
+def get_congrat_sender() -> EmailSender:
+    """录用祝贺专用通道（主编单独授权，不受外发总闸约束）。
+
+    ``RUBBISH_EMAIL_CONGRAT_ENABLED=true`` 且 SMTP 配置完整时走真实投递；
+    否则降级 console——与 get_email_sender 的护栏语义一致，只是开关独立。
+    """
+    global _congrat_sender
+    if not settings.email_congrat_enabled:
+        if not isinstance(_congrat_sender, ConsoleEmailSender):
+            logger.warning(
+                "congrat_email_disabled",
+                reason="RUBBISH_EMAIL_CONGRAT_ENABLED=false",
+            )
+            _congrat_sender = ConsoleEmailSender()
+        return _congrat_sender
+    if _congrat_sender is not None and not isinstance(_congrat_sender, ConsoleEmailSender):
+        return _congrat_sender
+    accounts = configured_accounts()
+    if not accounts:
+        logger.warning("congrat_email_no_smtp_fallback_console")
+        _congrat_sender = ConsoleEmailSender()
+        return _congrat_sender
+    if len(accounts) > 1:
+        _congrat_sender = SmtpPoolEmailSender(
+            accounts,
+            timeout=settings.email_smtp_timeout,
+            retries=min(settings.email_smtp_retries, 1),
+            breaker_threshold=settings.email_smtp_breaker_threshold,
+            breaker_cooldown=settings.email_smtp_breaker_cooldown,
+        )
+    else:
+        account = accounts[0]
+        _congrat_sender = SMTPEmailSender(
+            host=account.host,
+            port=account.port,
+            username=account.username,
+            password=account.password,
+            from_addr=account.from_address,
+            from_name=account.from_name,
+            use_tls=settings.email_smtp_use_tls,
+            starttls=settings.email_smtp_starttls,
+            timeout=settings.email_smtp_timeout,
+            retries=settings.email_smtp_retries,
+        )
+    # 主编已通过 CONGRAT 开显式授权录用祝贺邮件：该实例旁路外发总闸。
+    _congrat_sender._bypass_outbound_guard = True  # noqa: SLF001 — 模块内私有约定
+    logger.info("congrat_sender_ready", accounts=len(accounts))
+    return _congrat_sender
+
+
+def reset_congrat_sender() -> None:
+    """Test helper: clear the cached congrat sender."""
+    global _congrat_sender
+    _congrat_sender = None
+
+
 async def verify_smtp_connection() -> tuple[bool, str]:
     """Startup/ops self-check: probe every configured account.
 
@@ -445,6 +545,8 @@ async def verify_smtp_connection() -> tuple[bool, str]:
     answers, so a single throttled mailbox does not read as "mail is down".
     Never raises — callers log the result.
     """
+    if not settings.email_outbound_enabled:
+        return False, "外发总闸已关闭（RUBBISH_EMAIL_OUTBOUND_ENABLED=false），不探测 SMTP"
     accounts = configured_accounts()
     if not accounts:
         return False, "SMTP 未配置（email_backend=console 或缺少 host/from）"

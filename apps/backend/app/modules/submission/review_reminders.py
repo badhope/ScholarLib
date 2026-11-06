@@ -77,10 +77,19 @@ async def send_assignment_email(
 async def send_decision_email(
     author: User, *, submission_title: str, decision: str, note: str | None
 ) -> None:
-    """Best-effort decision email to the author."""
+    """Best-effort decision email to the author.
+
+    录用/接收（accept / approved）走**恭喜邮件专用通道**（主编单独授权，
+    不受外发总闸约束）；其余决定仍受总闸管控（总闸关闭时只写日志）。
+    """
     if not smtp_configured():
-        return
+        # smtp_configured 受总闸约束；恭喜通道绕过它，单独判断 SMTP 配置
+        from app.core.email import configured_accounts
+
+        if decision not in ("accept", "approved") or not configured_accounts():
+            return
     base = settings.frontend_base_url.rstrip("/")
+    is_accept = decision in ("accept", "approved")
     subject, text, html = decision_notice(
         author.username,
         submission_title,
@@ -88,6 +97,20 @@ async def send_decision_email(
         note,
         f"{base}/submissions",
     )
+    if is_accept:
+        # 主编口径：录用即恭喜，主题突出祝贺
+        subject = f"🎉 恭喜！您的稿件《{submission_title[:60]}》已被 Rubbish 录用并发布"
+        try:
+            from app.core.email import get_congrat_sender
+
+            await get_congrat_sender().send(
+                to=author.email, subject=subject, body=text, html=html
+            )
+            logger.info("congrat_email_sent", author_id=author.id, decision=decision)
+            return
+        except Exception:
+            logger.warning("congrat_email_failed", author_id=author.id, exc_info=True)
+            return
     try:
         await get_email_sender().send(to=author.email, subject=subject, body=text, html=html)
     except Exception:

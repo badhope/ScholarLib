@@ -603,6 +603,7 @@ async def email_status(
         "reachable": ok,
         "detail": detail,
         "backend": settings.email_backend,
+        "outbound_enabled": settings.email_outbound_enabled,
         # 发件身份列表：只回地址与主机，绝不回授权码。
         "accounts": [
             {"from_address": a.from_address, "host": a.host, "port": a.port} for a in accounts

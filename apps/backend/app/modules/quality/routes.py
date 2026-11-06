@@ -26,6 +26,7 @@ from app.api.deps import get_current_user, require_admin, require_editor, requir
 from app.core.db import get_db
 from app.core.logging import get_logger
 from app.models import AuditLog, User
+from app.modules.quality.batch import BatchRequest, MAX_BATCH_ITEMS, apply_review_items
 from app.modules.quality.review_form import form_payload, prompt_payload, score_answers
 from app.modules.quality.rubric import (
     RUBRIC_VERSION,
@@ -62,6 +63,9 @@ class DimensionInput(BaseModel):
 class ScoreRequest(BaseModel):
     article_type: Literal["research", "review", "essay", "note"] = "research"
     dimensions: list[DimensionInput] = Field(min_length=7, max_length=7)
+    # 0–10 风格坐标（荒诞指数）：审核流程的必填事实。不进质量分、
+    # 不参与排序（铁律）；这里可选——仅实时预览时可省略，落库必须给。
+    absurdity_index: float | None = Field(default=None, ge=0, le=10)
 
 
 class AnswersRequest(BaseModel):
@@ -123,11 +127,38 @@ async def compute_score(
         scores = [
             DimensionScore(key=d.key, score=d.score, reason=d.reason) for d in payload.dimensions
         ]
-        return evaluate(scores, article_type=payload.article_type)
+        result = evaluate(scores, article_type=payload.article_type)
+        result["absurdity_index"] = payload.absurdity_index
+        return result
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+
+
+@router.post("/batch-rescore")
+async def batch_rescore(
+    payload: BatchRequest,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """存量逐篇重审落库（管理员）。
+
+    一条 = 一篇：七维分数 + 荒诞指数（必填）+ 可选显式类别与处置建议。
+    分数经 ``evaluate`` 重算（口径唯一），荒诞指数只落库不打分，处置
+    建议只写审计不直接执行。单批 ≤ ``MAX_BATCH_ITEMS`` 条。
+    """
+    if len(payload.items) > MAX_BATCH_ITEMS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Batch too large: {len(payload.items)} > {MAX_BATCH_ITEMS}",
+        )
+    return await apply_review_items(
+        db,
+        tenant_id=current_user.tenant_id,
+        actor_user_id=current_user.id,
+        items=payload.items,
+    )
 
 
 @router.post("/override")
@@ -164,6 +195,7 @@ async def override_score(
 
 @router.get("/rework-queue")
 async def rework_queue(
+    include_published: bool = Query(default=False),
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
@@ -172,17 +204,22 @@ async def rework_queue(
     读未刊出且总分低于 40（不合格，rubric v3.0 的 ``rejected`` 语义）的
     条目。编辑部在通知栏看到的「待处理」就是这一批——不合格不是终点，
     是"必须有人推进"的状态。
+
+    ``?include_published=true``：存量重审时已发布稿件也可能被判 <40
+    （复核发现旧口径虚高），编辑需要看到完整处置面；默认仍只看未刊出。
     """
     from app.modules.catalog.models import Resource
 
+    conditions = [
+        Resource.tenant_id == current_user.tenant_id,
+        Resource.quality_score < 40,
+    ]
+    if not include_published:
+        conditions.append(Resource.publication_status != "published")
     rows = (
         await db.execute(
             select(Resource.id, Resource.title, Resource.quality_score, Resource.quality_grade)
-            .where(
-                Resource.tenant_id == current_user.tenant_id,
-                Resource.quality_score < 40,
-                Resource.publication_status != "published",
-            )
+            .where(*conditions)
             .order_by(Resource.updated_at.desc())
             .limit(100)
         )

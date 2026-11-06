@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>使用帮助 · Rubbish</title>
+<style>
+  :root{--bg:#f7f9fc;--card:#fff;--ink:#1b2430;--muted:#5b6b7c;--brand:#2c5aa0;--line:#e3eaf2}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  header{background:linear-gradient(135deg,#2c5aa0,#4a7fc1);color:#fff;padding:44px 20px 38px}
+  .wrap{max-width:900px;margin:0 auto}
+  header h1{margin:0 0 8px;font-size:30px;letter-spacing:.5px}
+  header p{margin:0;opacity:.9}
+  main{padding:28px 20px 60px}
+  nav{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 26px}
+  nav a{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:7px 15px;color:var(--brand);text-decoration:none;font-size:14px}
+  nav a:hover{background:#eef4fb}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 24px;margin:0 0 18px;box-shadow:0 1px 2px rgba(20,40,70,.04)}
+  h2{margin:0 0 12px;font-size:20px;color:var(--brand)}
+  h3{margin:18px 0 6px;font-size:16px}
+  ol,ul{margin:8px 0 0;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#eef2f7;border-radius:5px;padding:1px 6px;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin:10px 0 0;font-size:15px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#f2f6fb;font-weight:600}
+  .tip{background:#f0f7ff;border-left:4px solid var(--brand);padding:12px 14px;border-radius:8px;margin:14px 0 0;font-size:15px}
+  .warn{background:#fff7ed;border-left:4px solid #d97706;padding:12px 14px;border-radius:8px;margin:14px 0 0;font-size:15px}
+  footer{color:var(--muted);font-size:14px;text-align:center;padding:0 20px 40px}
+  a{color:var(--brand)}
+  @media print{header{background:#fff;color:#000}nav{display:none}section{box-shadow:none;break-inside:avoid}}
+</style>
+</head>
+<body>
+<div style="background:#eef4fb;border-bottom:1px solid #e3eaf2;padding:10px 16px;font-size:13.5px;text-align:center">
+  更多指南：
+  <a href="/authors" style="color:#2c5aa0">作者指南与收录标准</a> ·
+  <a href="/policies" style="color:#2c5aa0">期刊政策与社区规范</a> ·
+  <a href="/about" style="color:#2c5aa0">关于本刊</a> ·
+  <a href="/journal-metrics" style="color:#2c5aa0">期刊指标</a>
+</div>
+<header>
+  <div class="wrap">
+    <h1>Rubbish 使用帮助</h1>
+    <p>开放学术出版平台 · 投稿 · 审稿 · 出版 · 阅读</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav>
+    <a href="#start">快速开始</a>
+    <a href="#author">作者</a>
+    <a href="#reviewer">审稿人</a>
+    <a href="#editor">编辑</a>
+    <a href="#reader">读者</a>
+    <a href="#security">账号安全</a>
+    <a href="#rules">投稿规范</a>
+    <a href="#reviewer-rules">审稿人守则</a>
+    <a href="#editor-rules">编辑规范</a>
+    <a href="#levels">等级与升级</a>
+    <a href="#faq">常见问题</a>
+  </nav>
+
+  <section id="start">
+    <h2>一、快速开始</h2>
+    <h3>注册账号</h3>
+    <ol>
+      <li>打开首页，点击右上角「注册」。</li>
+      <li>填写邮箱、用户名和密码（密码建议 12 位以上，含大小写字母、数字和符号）。</li>
+      <li>注册成功后会直接登录；如需邮箱验证，请查收验证邮件。</li>
+    </ol>
+    <h3>登录</h3>
+    <p>用 <strong>用户名或邮箱</strong> + 密码登录（邮箱不分大小写）。如果账号开启了双因素认证（TOTP），登录后还需输入验证器 App 里的 6 位动态码。</p>
+    <div class="tip">平台的角色：读者、作者、审稿人、编辑、栏目编辑，管理员（is_admin）另算且拥有全部权限。同一账号可以拥有多个角色，实际能看到的菜单由角色决定：审稿人可见「审稿工作台」，编辑与栏目编辑可见「编辑工作台」，管理员额外可见「用户管理 / 角色申请 / 审计日志」等站点管理项。</div>
+    <h3>个人简介</h3>
+    <p>登录后进入「账号设置 → 资料」，可以写一句 ≤200 字的个人简介，展示在你的个人中心等级卡上。</p>
+  </section>
+
+  <section id="author">
+    <h2>二、作者：投稿与修订</h2>
+    <table>
+      <tr><th>步骤</th><th>操作</th></tr>
+      <tr><td>1. 新建投稿</td><td>登录后进入「我的投稿」→「新建投稿」，填写标题、类型（论文 / 图书 / 数据集 / 教程）、作者、年份、学科、关键词和摘要。</td></tr>
+      <tr><td>2. 上传文件</td><td>保存后进入稿件详情，上传 PDF 全文。系统会保存每个版本的快照，历史版本随时可查。</td></tr>
+      <tr><td>3. 跟踪状态</td><td>稿件状态：待审 → 外审中 → 大修 / 小修 → 录用 / 拒稿。每次状态变化都会收到站内通知。</td></tr>
+      <tr><td>4. 修订重投</td><td>收到修改意见后，在稿件页提交新版本（可附说明），编辑会看到完整版本链。</td></tr>
+    </table>
+    <div class="tip">双盲评审时，审稿人看到的是匿名化的稿件信息，作者身份不会泄露。</div>
+  </section>
+
+  <section id="reviewer">
+    <h2>三、审稿人：接单与提交意见</h2>
+    <ol>
+      <li>进入「审稿工作台」，可以看到指派给你的审稿任务。</li>
+      <li>点「接受」开始审稿（如与作者有利益冲突，可选「拒绝」并说明原因）。</li>
+      <li>阅读稿件（支持浏览器内直接看 PDF），填写评分与意见：
+        <ul>
+          <li><strong>给作者的意见</strong>：会匿名转达给作者；</li>
+          <li><strong>给编辑的意见</strong>：仅编辑可见；</li>
+          <li><strong>审稿建议</strong>：录用 / 小修 / 大修 / 拒稿。</li>
+        </ul>
+      </li>
+      <li>提交后任务完成，可在工作台查看历史记录。</li>
+    </ol>
+  </section>
+
+  <section id="editor">
+    <h2>四、编辑：指派与裁决</h2>
+    <ol>
+      <li>「编辑工作台」列出所有待处理稿件，可按状态筛选。</li>
+      <li>为稿件指派 1–3 名审稿人，可设置截止日期。</li>
+      <li>审稿意见回来后，在稿件页做裁决：录用 / 小修 / 大修 / 拒稿，并填写编辑备注。</li>
+      <li>录用后稿件会自动进入公开目录，读者可检索与在线阅读。</li>
+    </ol>
+    <div class="tip">编辑还可以在「期刊 / 卷 / 期」管理中维护出版物结构，在「批量导入」里用 BibTeX / RIS / CSV / DOI / arXiv 导入已有文献。</div>
+  </section>
+
+  <section id="reader">
+    <h2>五、读者：检索与阅读</h2>
+    <ul>
+      <li><strong>目录检索</strong>：首页或「资源目录」支持关键词、学科、类型筛选。</li>
+      <li><strong>在线阅读</strong>：详情页内置 pdf.js 阅读器，无需下载即可阅读，支持翻页与缩放。</li>
+      <li><strong>阅读进度</strong>：登录后自动记录每篇文章读到第几页，换设备也能接着读。</li>
+      <li><strong>关注作者</strong>：在作者页点「关注」，该作者有新作时会收到通知。</li>
+      <li><strong>通知订阅</strong>：在「通知」页管理订阅，可选择邮件或站内提醒。</li>
+      <li><strong>收藏夹</strong>：「我的图书馆」可建立多个收藏列表，按主题整理文献。</li>
+    </ul>
+  </section>
+
+  <section id="security">
+    <h2>六、账号安全</h2>
+    <ul>
+      <li><strong>修改密码</strong>：右上角头像 → 账号设置 → 安全。</li>
+      <li><strong>开启双因素（推荐）</strong>：安全页 → 绑定 TOTP，用 Google Authenticator / 微软 Authenticator / 1Password 扫码，之后登录需输入 6 位动态码。</li>
+      <li><strong>通行密钥（WebAuthn）</strong>：支持指纹 / 面容 / 安全密钥登录，比密码更安全。</li>
+      <li><strong>登录设备</strong>：修改密码后，其他设备上的登录会被强制失效。</li>
+    </ul>
+    <div class="warn">请勿把账号借给他人使用。审稿人账号涉及未发表稿件，泄露可能造成学术不端风险。</div>
+  </section>
+
+  <section id="rules">
+    <h2>七、投稿规范</h2>
+    <table>
+      <tr><th>项目</th><th>要求</th></tr>
+      <tr><td>稿件格式</td><td>PDF 全文；正文中/英文均可；建议使用宋体 / Times New Roman，字号不小于 10pt。</td></tr>
+      <tr><td>篇幅</td><td>研究论文建议 6–20 页；短文 / 数据集描述 2–6 页。</td></tr>
+      <tr><td>摘要</td><td>200–500 字，包含研究问题、方法、结果与结论四要素。</td></tr>
+      <tr><td>关键词</td><td>3–6 个，用分号分隔，按重要性排序。</td></tr>
+      <tr><td>参考文献</td><td>采用 GB/T 7714 或 APA 格式，文内引用与文末列表一一对应。</td></tr>
+      <tr><td>署名</td><td>作者名单投稿后不可随意增删；署名单位写到二级机构；通讯作者需标注邮箱。</td></tr>
+      <tr><td>伦理声明</td><td>涉及人体 / 动物实验需提供审批号；引用他人成果必须注明出处，一稿多投将被拒稿并记录。</td></tr>
+      <tr><td>利益冲突</td><td>存在利益冲突时需在稿件末页声明；审稿人与作者有合作关系时应主动回避。</td></tr>
+    </table>
+    <div class="tip">示例（摘要开头）：“本文以……为对象，从……四个维度进行比较分析，结果显示……”——四要素缺一不可。</div>
+  </section>
+
+  <section id="reviewer-rules">
+    <h2>八、审稿人守则</h2>
+    <ol>
+      <li><strong>时限</strong>：接受任务后 2–3 周内提交意见；无法按时完成请提前拒单并说明。</li>
+      <li><strong>保密</strong>：稿件内容、数据与结论在发表前不得向任何第三方透露，不得使用 AI 工具代写评审意见。</li>
+      <li><strong>回避</strong>：与作者有合作、师生、竞争关系时应拒绝该任务。</li>
+      <li><strong>评审要点</strong>：原创性、方法严谨性、数据与结论一致性、表达清晰度——按四维评分并给出可操作的具体意见。</li>
+      <li><strong>意见写法</strong>：给作者的意见要具体到节 / 页（例：“第 3 节缺少 baseline 对比，建议补充表 X”），避免只有“质量不行”这类空泛结论。</li>
+      <li><strong>独立性</strong>：意见由本人独立形成，不受编辑或其他审稿人影响。</li>
+    </ol>
+  </section>
+
+  <section id="editor-rules">
+    <h2>九、编辑与出版规范</h2>
+    <ol>
+      <li><strong>初审</strong>：编辑部在 5 个工作日内完成形式审查（格式、范围、伦理），不合格直接退回。</li>
+      <li><strong>送审</strong>：每篇稿件指派 2–3 名审稿人，审稿模式（单盲 / 双盲）由期刊设置统一决定。</li>
+      <li><strong>裁决</strong>：收齐意见后 5 个工作日内做出录用 / 小修 / 大修 / 拒稿决定，并附编辑备注。</li>
+      <li><strong>修订</strong>：大修稿件作者须在 30 天内重投；编辑核对逐条回应后方可录用。</li>
+      <li><strong>发布</strong>：录用稿件进入公开目录，元数据（年份 / 学科 / 关键词）必须完整，以便检索与引用。</li>
+      <li><strong>申诉</strong>：作者对裁决有异议可邮件申诉，由主编组织第三方复审，结果为终局。</li>
+    </ol>
+  </section>
+
+  <section id="levels">
+    <h2>十、等级与升级</h2>
+    <h3>每日签到</h3>
+    <p>「等级与规范」页顶部可以每日签到：每天 +2 XP，连续每满 7 天额外 +5 XP。签到是免费的，断签只影响连签奖励，不清空已有 XP。</p>
+    <table>
+      <tr><th>等级</th><th>怎么达到</th></tr>
+      <tr><td>L1 小白读者</td><td>注册即是（注册登录后即可投稿）。</td></tr>
+      <tr><td>L2 注册读者</td><td>个人中心确认社区规范（+30 XP），解锁评论 / 关注 / 收藏。</td></tr>
+      <tr><td>L3 作者</td><td>确认《投稿规范》（+120 XP）——这也是投稿的唯一前置，确认完就能投。</td></tr>
+      <tr><td>L4 常驻作者</td><td><strong>投稿并录用</strong>后自动获得（积分还需满 400——只攒积分不投稿升不了级）。</td></tr>
+      <tr><td>L5 审稿人</td><td><strong>申请制</strong>：至少 1 篇稿件被本刊录用，且最高质量分（RQS）≥ 60。到「等级与规范」页提交申请，编辑部批准后解锁审稿工作台。</td></tr>
+      <tr><td>L6 资深审稿人</td><td><strong>申请制</strong>：已是审稿人（L5）且完成审稿 ≥ 5 份。同一页面申请。</td></tr>
+      <tr><td>L7–L9 编辑职</td><td>不开放申请，由编辑部根据审稿质量与贡献直接提拔。</td></tr>
+    </table>
+    <div class="tip">注册账号默认是普通级别（L1 读者），注册登录后即可投稿（首次投稿需确认《投稿规范》）；L4 起看投稿硬指标——录用才是升级的重磅，只攒积分升不了级；职员角色（审稿人 L5/L6）走「申请 → 编辑部审批」，编辑职（L7 以上）只接受管理提拔。资格进度在「等级与规范」页实时可见，差多少一目了然。</div>
+  </section>
+
+  <section id="faq">
+    <h2>十一、常见问题</h2>
+    <h3>忘记密码怎么办？</h3>
+    <p>登录页点「忘记密码」，通过邮箱重置。若邮箱不可用，请联系管理员。</p>
+    <h3>投稿后多久有结果？</h3>
+    <p>取决于编辑指派审稿人的速度，通常 2–6 周。状态变化会通过站内通知告知。</p>
+    <h3>能投稿非 PDF 格式吗？</h3>
+    <p>目前稿件全文需为 PDF。图片、数据集可作为补充材料单独上传。</p>
+    <h3>稿件被拒还能再投吗？</h3>
+    <p>可以。按意见修改后作为新投稿提交，并在 cover letter 中说明与前次投稿的关系。</p>
+    <h3>阅读时 PDF 加载不出来？</h3>
+    <p>先刷新页面；若仍失败，请确认文件已成功上传（详情页应显示文件大小），或联系管理员。</p>
+    <h3>需要帮助？</h3>
+    <p>联系平台管理员：<a href="mailto:admin@argjiemi.cn">admin@argjiemi.cn</a></p>
+  </section>
+</main>
+
+<footer>
+  Rubbish · 开放获取期刊 · 本页可打印或另存为 PDF 分发
+</footer>
+</body>
+</html>

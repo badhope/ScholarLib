@@ -35,15 +35,26 @@ from pathlib import Path
 from docx import Document
 from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
+# 字体全部落在国内 Office/WPS 必带的系统字体上，不引用任何 Google Fonts：
+# 正文宋体、标题黑体、作者与书名号楷体、西文 Times New Roman。
 BODY_FONT = "宋体"
 HEAD_FONT = "黑体"
 AUTHOR_FONT = "楷体"
 LATIN_FONT = "Times New Roman"
+
+# 品牌色：Rubbish = 回收与再生，绿色是身份色。深墨绿用于正文标题与表格线，
+# 亮绿用于页眉刊名与强调标记（与 favicon 的 #1F7A4D 一致）。
+BRAND_DARK = RGBColor(0x2E, 0x5E, 0x4A)
+BRAND_GREEN = RGBColor(0x1F, 0x7A, 0x4D)
+BRAND_HEX = "2E5E4A"
+
+# 页眉左上角图形标：回收箭头 + 纸堆/瓶子的绿色单色稿。
+LOGO_PATH = Path(__file__).with_name("assets") / "brand-mark.png"
 
 BODY_PT = 10.5  # 五号
 CAPTION_PT = 9.0  # 小五
@@ -63,8 +74,10 @@ class Meta:
     pages: str = ""
 
 
-def _set_font(run, *, name: str, size: float, bold: bool = False, italic: bool = False) -> None:
-    run.font.name = LATIN_FONT if not re.search(r"[\u4e00-\u9fff]", run.text or "") else name
+def _set_font(run, *, name: str, size: float, bold: bool = False, italic: bool = False,
+              latin: str | None = None) -> None:
+    latin_font = latin or LATIN_FONT
+    run.font.name = latin_font if not re.search(r"[\u4e00-\u9fff]", run.text or "") else name
     run.font.size = Pt(size)
     run.bold = bold
     run.italic = italic
@@ -75,8 +88,8 @@ def _set_font(run, *, name: str, size: float, bold: bool = False, italic: bool =
         rpr.append(fonts)
     # 中西文分开指定：只设 w:ascii 时 Word 会用主题字体接管中文，宋体就丢了
     fonts.set(qn("w:eastAsia"), name)
-    fonts.set(qn("w:ascii"), LATIN_FONT)
-    fonts.set(qn("w:hAnsi"), LATIN_FONT)
+    fonts.set(qn("w:ascii"), latin_font)
+    fonts.set(qn("w:hAnsi"), latin_font)
 
 
 def _para(doc, *, align=WD_ALIGN_PARAGRAPH.JUSTIFY, indent_chars=0.0, before=0.0, after=0.0,
@@ -107,6 +120,40 @@ def _page_number_footer(section) -> None:
     _set_font(run, name=BODY_FONT, size=CAPTION_PT)
 
 
+def _green_rule(paragraph, *, size: str = "8") -> None:
+    """给段落加一条回收绿下边线（页眉、篇名用）。"""
+    ppr = paragraph._p.get_or_add_pPr()
+    borders = OxmlElement("w:pBdr")
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), size)
+    bottom.set(qn("w:space"), "4")
+    bottom.set(qn("w:color"), BRAND_HEX)
+    borders.append(bottom)
+    ppr.append(borders)
+
+
+def _brand_header(section, title: str) -> None:
+    """页眉：绿色回收标 + 绿色刊名 + 篇名，下方一条品牌细线。
+
+    logo 缺失时静默退化为纯文字刊头，绝不让下载接口因素材问题 500。
+    """
+    p = section.header.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    if LOGO_PATH.exists():
+        try:
+            p.add_run().add_picture(str(LOGO_PATH), width=Cm(0.72))
+        except Exception:
+            pass
+    hr = p.add_run("　RUBBISH")
+    _set_font(hr, name=HEAD_FONT, size=9, bold=True)
+    hr.font.color.rgb = BRAND_GREEN
+    hr2 = p.add_run("　" + (title or "")[:40])
+    _set_font(hr2, name=BODY_FONT, size=9)
+    hr2.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    _green_rule(p)
+
+
 def _three_line_table(table) -> None:
     """三线表：顶线与底线 1.5pt，表头下 0.75pt，其余不画。"""
     tbl = table._tbl
@@ -116,7 +163,7 @@ def _three_line_table(table) -> None:
         el = OxmlElement(f"w:{edge}")
         el.set(qn("w:val"), "single")
         el.set(qn("w:sz"), str(sz))
-        el.set(qn("w:color"), "000000")
+        el.set(qn("w:color"), BRAND_HEX)
         borders.append(el)
     for edge in ("left", "right", "insideH", "insideV"):
         el = OxmlElement(f"w:{edge}")
@@ -133,22 +180,36 @@ def _three_line_table(table) -> None:
             bottom = OxmlElement("w:bottom")
             bottom.set(qn("w:val"), "single")
             bottom.set(qn("w:sz"), "6")
-            bottom.set(qn("w:color"), "000000")
+            bottom.set(qn("w:color"), BRAND_HEX)
             tcBorders.append(bottom)
             tcPr.append(tcBorders)
 
 
 _MD_IMAGE = re.compile(r"!\[([^\]]*)\]\((data:image/[a-z+]+;base64,[^)]+|[^)\s]+)\)")
-_INLINE = re.compile(r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|~~[^~]+~~)")
-# PDF/Word 转换会在正文里留下裸 HTML（<mark>、<u>、<br>），Word 里不该出现标签
-_HTML_TAG = re.compile(r"</?(?:mark|u|em|i|b|strong|span|sub|sup|div|p|font)[^>]*>", re.I)
+# 行内标记：加粗 / 斜体 / 行内码 / 删除线，以及中文出版物特有的书名号、
+# 中文引号，与 PDF 转换残留的 u / mark / sup / sub 语义标签。
+_INLINE = re.compile(
+    r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|~~[^~]+~~"
+    r"|《[^》]{1,80}》|「[^」]{1,80}」|“[^”]{1,80}”"
+    r"|<(?:u|mark|sup|sub)>.*?</(?:u|mark|sup|sub)>)",
+    re.I | re.S,
+)
+# PDF/Word 转换会在正文里留下裸 HTML，Word 里不该印出标签；
+# 但 u/mark/sup/sub 承载真实排版语义，保留给 _INLINE 解析。
+_HTML_TAG = re.compile(r"</?(mark|u|em|i|b|strong|span|sub|sup|div|p|font)[^>]*>", re.I)
+_SEMANTIC_TAGS = frozenset({"u", "mark", "sup", "sub"})
 _BR = re.compile(r"<br\s*/?>", re.I)
 _MATH_DOLLAR = re.compile(r"(?<!\\)\$([^$]{1,200})\$")
+_TAG_INNER = re.compile(r"^<([a-z]+)>(.*)</\1>$", re.I | re.S)
 
 
 def _clean_inline(text: str) -> str:
     text = _BR.sub(" ", text)
-    text = _HTML_TAG.sub("", text)
+
+    def _strip_or_keep(m: re.Match[str]) -> str:
+        return m.group(0) if m.group(1).lower() in _SEMANTIC_TAGS else ""
+
+    text = _HTML_TAG.sub(_strip_or_keep, text)
     return _MATH_DOLLAR.sub(r"\1", text)
 
 
@@ -163,7 +224,25 @@ def _add_inline(p, text: str, *, size: float = BODY_PT, name: str = BODY_FONT) -
         elif part.startswith("~~") and part.endswith("~~"):
             r = p.add_run(part[2:-2]); _set_font(r, name=name, size=size); r.font.strike = True
         elif part.startswith("`") and part.endswith("`"):
-            r = p.add_run(part[1:-1]); _set_font(r, name="Consolas", size=size)
+            # 行内码：西文也要等宽，不能被 _set_font 的 Times New Roman 回退吃掉。
+            r = p.add_run(part[1:-1]); _set_font(r, name="Consolas", size=size, latin="Consolas")
+        elif part.startswith(("《", "「", "“")):
+            # 书名号/中文引号：按国内出版惯例走楷体，不用西文斜体硬套中文；
+            # 书名额外用品牌墨绿点出，与页面上的「书名」语义一致。
+            r = p.add_run(part); _set_font(r, name=AUTHOR_FONT, size=size)
+            if part.startswith("《"):
+                r.font.color.rgb = BRAND_DARK
+        elif (tag := _TAG_INNER.match(part)):
+            kind, inner = tag.group(1).lower(), tag.group(2)
+            r = p.add_run(inner); _set_font(r, name=name, size=size)
+            if kind == "u":
+                r.font.underline = True
+            elif kind == "mark":
+                r.font.highlight_color = WD_COLOR_INDEX.YELLOW
+            elif kind == "sup":
+                r.font.superscript = True
+            elif kind == "sub":
+                r.font.subscript = True
         else:
             r = p.add_run(part); _set_font(r, name=name, size=size)
 
@@ -199,20 +278,15 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
     sec.different_first_page_header_footer = False
     _page_number_footer(sec)
 
-    header = sec.header.paragraphs[0]
-    header.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    hr = header.add_run("RUBBISH")
-    _set_font(hr, name=HEAD_FONT, size=9, bold=True)
-    hr.font.color.rgb = RGBColor(0x2E, 0x5E, 0x4A)
-    hr2 = header.add_run("　　" + (meta.title or "")[:40])
-    _set_font(hr2, name=BODY_FONT, size=9)
-    hr2.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    _brand_header(sec, meta.title)
 
     # --- 篇名 / 作者 / 单位 ---
     if meta.title:
-        p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER, before=12, after=8, line=1.2)
+        p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER, before=12, after=10, line=1.2)
         r = p.add_run(meta.title)
         _set_font(r, name=HEAD_FONT, size=TITLE_PT, bold=True)
+        r.font.color.rgb = BRAND_DARK
+        _green_rule(p, size="12")
 
     if meta.authors:
         p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER, before=0, after=2, line=1.2)
@@ -227,12 +301,14 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
         p = _para(doc, indent_chars=0, before=4, after=2, line=1.4)
         r = p.add_run("摘要：")
         _set_font(r, name=HEAD_FONT, size=BODY_PT, bold=True)
+        r.font.color.rgb = BRAND_DARK
         _add_inline(p, meta.abstract.replace("\n", " "), size=BODY_PT)
 
     if meta.keywords:
         p = _para(doc, indent_chars=0, before=0, after=10, line=1.4)
         r = p.add_run("关键词：")
         _set_font(r, name=HEAD_FONT, size=BODY_PT, bold=True)
+        r.font.color.rgb = BRAND_DARK
         _add_inline(p, "；".join(meta.keywords), size=BODY_PT)
 
     # --- 正文 ---
@@ -306,19 +382,24 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
             # 编辑部改完要回传系统，入库走 mammoth，它只认样式。直接格式化
             # 的标题回读后一律变成 <p><strong>，章节结构全丢——这正是上一批
             # 旧稿「没有标题」的来源。
-            style = "Heading 1" if level <= 2 else ("Heading 2" if level == 3 else "Heading 3")
+            # Markdown 层级与 Word Heading 一一对应：# → H1、## → H2、### → H3。
+            # 旧实现把 # 与 ## 都压成 Heading 1，编辑回传后二级结构全丢，
+            # 正是「编辑器里有标题一标题二、浏览时看不出来」的根因。
+            style = f"Heading {min(level, 4)}"
             try:
                 p = doc.add_paragraph(style=style)
             except KeyError:
                 p = doc.add_paragraph()
             pf = p.paragraph_format
             p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            pf.space_before = Pt(12 if level <= 2 else 8)
-            pf.space_after = Pt(6 if level <= 2 else 4)
+            pf.space_before = Pt(12 if level == 1 else (8 if level == 2 else 6))
+            pf.space_after = Pt(6 if level == 1 else 4)
             pf.line_spacing = 1.3
             run = p.add_run(text)
-            _set_font(run, name=HEAD_FONT, size=14 if level <= 2 else BODY_PT, bold=True)
-            run.font.color.rgb = RGBColor(0, 0, 0)
+            heading_size = 14 if level == 1 else (12 if level == 2 else BODY_PT)
+            _set_font(run, name=HEAD_FONT, size=heading_size, bold=True)
+            # 一级/二级标题用品牌墨绿，更深层保持黑色，避免整页飘绿影响阅读。
+            run.font.color.rgb = BRAND_DARK if level <= 2 else RGBColor(0, 0, 0)
             i += 1
             continue
 

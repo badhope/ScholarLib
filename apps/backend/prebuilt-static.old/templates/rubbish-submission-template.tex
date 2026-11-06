@@ -1,0 +1,98 @@
+% Rubbish 投稿模板（LaTeX 版）· 2026-11 修订
+% 使用说明：xelatex 编译两次（中文需要）；替换「」内容后删除本注释与下一段。
+% 本模板对应《Rubbish 编辑规范》的结构规范；与 Markdown 模板等价，任选其一。
+\documentclass[12pt,a4paper]{article}
+\usepackage[margin=3cm]{geometry}
+\usepackage{ctex}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{setspace}
+
+\captionsetup{font=small,labelsep=quad}
+\onehalfspacing
+
+\title{\textbf{「论文标题」：主标题给出判断，副标题交代对象与范围}\\
+{\large 正经赛道（Serious Track）／荒诞赛道（Absurd Track）——二选一删另一个}}
+\author{「第一作者」\quad 「合作者」\\
+{\small 「单位 / 独立研究者」\quad \texttt{「邮箱」}}}
+\date{「投稿日期」}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+「200--350 字。按『问题---方法---结果---结论』四段压缩，直接写做了什么、发现了什么。
+荒诞研究同样要有完整论证闭环。」\\[0.8em]
+\textbf{关键词：}「4--6 个，分号分隔」\\
+\textbf{JEL/MSC 分类：}「可选」
+\end{abstract}
+
+\section{引言}
+「三段式：① 现象或问题是什么；② 已有研究做到哪一步、缺口在哪；③ 本文做什么、
+贡献是什么（建议显式写「本文的贡献有三」）。」
+
+\section{相关工作}
+「按两到三条脉络分组，每组说明它做到了什么、没解决什么，最后落到本文的位置。」
+
+\section{方法}
+「正经研究：数据来源、样本量、变量定义、模型设定、识别策略、稳健性检验。
+荒诞研究：论证框架、材料来源、编码方案。涉及人的调查须说明知情同意与伦理审查。」
+
+\begin{equation}
+R = 100 \times \left( 0.5\,r + 0.3\,d + 0.2\,s \right)
+\label{eq:index}
+\end{equation}
+
+\section{结果}
+「按「总—分」结构，每小节对应一张图表，图表须自明并在正文引用（如「见表~\ref{tab:demo}」）。」
+
+\begin{table}[htbp]
+\centering
+\caption{「表标题（放表上方，三线表，不用竖线）」}
+\label{tab:demo}
+\begin{tabular}{lcc}
+\toprule
+「条件」 & 「指标 A」 & 「指标 B」 \\
+\midrule
+「对照组」 & 0.00 & 0.00 \\
+「实验组」 & 0.00 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+\centering
+% \includegraphics[width=0.8\textwidth]{figure.png}
+\caption{「图标题（放图下方），末尾写数据来源」}
+\label{fig:demo}
+\end{figure}
+
+\section{讨论}
+「三件事：结果意味着什么、局限是什么、对实践或政策有什么含义。
+荒诞研究请诚实讨论『荒诞在哪里』。」
+
+\section{结论}
+「4--6 句：重申核心发现、点明含义、指出后续方向。不引入新数据。」
+
+\section*{致谢}
+「基金资助（编号）、AI 辅助声明（工具与用途）、提供帮助的人。」
+
+\section*{数据与代码可用性}
+「三选一：已公开（给仓库/DOI）／可向通讯作者索取／因伦理或商业限制不可公开（说明原因）。」
+
+\section*{作者贡献}
+「按 CRediT 分类：概念化、方法学、软件、验证、形式分析、调查、资源、数据管理、
+写作—初稿、写作—审阅编辑、可视化、监督、项目管理、经费获取。」
+
+\section*{利益冲突声明}
+「无则写「作者声明无利益冲突」；与编辑部有隶属关系必须声明。」
+
+\begin{thebibliography}{99}
+\bibitem{ref1} 「作者 A, 作者 B. 题名[J]. 刊名, 年, 卷(期): 起止页码. DOI: 10.xxxx/xxxxx.」
+\bibitem{ref2} 「作者. 书名[M]. 出版地: 出版社, 年. DOI: 10.xxxx/xxxxx.」
+\end{thebibliography}
+
+\end{document}

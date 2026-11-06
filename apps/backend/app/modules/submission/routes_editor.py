@@ -808,8 +808,10 @@ async def request_rework(
     2. **给作者**：列出逐条修改要求，让作者知道该改什么，而不是
        只收到一句"不合格"。
 
-    状态置为 ``rework_requested``（新增状态），编辑在队列里能看到
-    「待处理」，直到审稿人补交意见或作者提交修改。
+    状态置为 ``under_review``（2.0 主编口径：打回**先打回给审稿人**，不直接
+    通知作者——审稿人补审/说明后，编辑部再凭任一复审意见做最终决定
+    （录用发布或要求作者修改）；此时才需要作者出面。作者侧在复审结束前
+    不感知打回，避免"被退稿"的误伤。
     """
     if len(body.requirements) < 3:
         raise HTTPException(
@@ -825,11 +827,13 @@ async def request_rework(
             detail=f"Cannot request rework in terminal status '{entry.status}'",
         )
 
-    entry.status = "rework_requested"
+    # 2.0 主编口径：打回先回到审稿环节（under_review），由审稿人复审；
+    # 只有复审确认需要作者修改时，才经由 decide(major/minor) 通知作者。
+    entry.status = "under_review"
     entry.editor_note = body.note
     requirements_text = "\n".join(f"{i + 1}. {r}" for i, r in enumerate(body.requirements))
 
-    # 1) 通知审稿人：该稿被打回，需要补审或说明
+    # 通知审稿人：该稿被打回，需要补审或说明（这是打回此刻的唯一外发通知）
     from app.modules.review.models import ReviewAssignment
 
     reviewers = (
@@ -859,21 +863,24 @@ async def request_rework(
             related_id=str(entry.id),
         )
 
-    # 2) 通知作者：逐条修改要求
-    await notifications.create(
-        db,
-        tenant_id=entry.tenant_id,
-        user_id=entry.submitted_by,
-        type_="submission.rework_requested",
-        title=f"稿件需要修改：{entry.title}",
-        body=(
-            f"您的稿件 #{entry.id} 经评审后被要求修改。\n"
-            f"请逐条处理后重新提交：\n{requirements_text}"
-            + (f"\n\n编辑备注：{body.note}" if body.note else "")
-        ),
-        related_type="submission",
-        related_id=str(entry.id),
-    )
+    # 若该稿还没有任何审稿指派，编辑部需要先指派审稿人复审——写一条
+    # 提醒给当前编辑，避免稿件卡在无人可审的状态。
+    if not reviewers:
+        await notifications.create(
+            db,
+            tenant_id=entry.tenant_id,
+            user_id=current_user.id,
+            type_="review.rework_needs_assignment",
+            title=f"打回稿件尚无审稿人，请先指派复审：{entry.title}",
+            body=(
+                f"稿件 #{entry.id} 已按主编口径转入复审（under_review），"
+                "但还没有任何审稿指派。\n请先在审稿管理页指派一名或多名审稿人"
+                "（可多人同审，任一复审意见即可支撑最终决定）。\n\n"
+                f"需要补审的方面：\n{requirements_text}"
+            ),
+            related_type="submission",
+            related_id=str(entry.id),
+        )
 
     db.add(
         AuditLog(

@@ -259,6 +259,31 @@ h4 {
   text-indent: 0;
 }
 .markdown-body strong { font-weight: 700; }
+/* 行内语义：斜体 / 删除线 / 高亮 / 上下标，与 Word 下载件同一套口径。
+   编辑器里标了什么，阅读页就要看得见什么。 */
+.markdown-body em { font-style: italic; font-synthesis: style; }
+.markdown-body del {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.72;
+}
+.markdown-body mark {
+  padding: 0 0.15em;
+  border-radius: 0.2em;
+  background: color-mix(in oklab, var(--color-primary) 20%, transparent);
+  color: var(--color-foreground);
+}
+.markdown-body sup,
+.markdown-body sub { font-size: 0.72em; line-height: 0; }
+.markdown-body sup { vertical-align: super; }
+.markdown-body sub { vertical-align: sub; }
+/* 书名号 / 中文引号：楷体，不用西文斜体硬套中文；书名号点出品牌绿。 */
+.markdown-body .md-book-title,
+.markdown-body .md-quote-cn {
+  font-family: "KaiTi", "STKaiti", "楷体", "Kaiti SC", var(--font-serif);
+  font-style: normal;
+}
+.markdown-body .md-book-title { color: var(--color-primary); }
 .markdown-body a {
   color: var(--color-primary);
   text-decoration: underline;

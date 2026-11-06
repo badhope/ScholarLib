@@ -27,12 +27,15 @@ import {
   useDeleteSubmission,
   useMySubmissions,
   useResubmitSubmission,
+  useSaveSubmissionMarkdown,
+  useSubmissionMarkdown,
   useSubmissionReports,
   useSubmissionVersions,
   useUpdateSubmission,
   useUploadSubmissionCover,
   useUploadSubmissionFile,
 } from '@/hooks/api/use-modules'
+import { MarkdownEditor } from '@/components/common/markdown-editor'
 import type {
   IngestResource,
   ReviewReportResponse,
@@ -276,6 +279,7 @@ function SubmissionsPage() {
   const uploadCoverMut = useUploadSubmissionCover()
   const resubmitMut = useResubmitSubmission()
   const updateMut = useUpdateSubmission()
+  const saveBodyMut = useSaveSubmissionMarkdown()
 
   const [createOpen, setCreateOpen] = useState(false)
   // 投稿表单"更多信息（选填）"折叠区：新建默认收起（先填必填项），
@@ -292,6 +296,18 @@ function SubmissionsPage() {
   // 必须放在 detail useState 之后，否则 TS2448/2454 报"使用先于声明"。
   const reportsQ = useSubmissionReports(detail?.id ?? 0)
   const versionsQ = useSubmissionVersions(detail?.id ?? 0, detail !== null)
+  // 在线正文（Word 级编辑器）：编辑模式由后端回填，新建从空白开始；
+  // 提交时随表单一并 PUT（正文与书目字段同一事务语义）。
+  const [bodyDraft, setBodyDraft] = useState('')
+  const bodyLoadedRef = useRef<number | null>(null)
+  const bodyQ = useSubmissionMarkdown(editingId ?? 0, editingId !== null && createOpen)
+  useEffect(() => {
+    if (editingId === null) return
+    if (bodyQ.data && bodyLoadedRef.current !== editingId) {
+      bodyLoadedRef.current = editingId
+      setBodyDraft(bodyQ.data.content)
+    }
+  }, [bodyQ.data, editingId])
 
   const onUploadFile = async (file: File) => {
     if (!detail) return
@@ -338,6 +354,7 @@ function SubmissionsPage() {
     if (!detail) return
     setForm(submissionToForm(detail))
     setEditingId(detail.id)
+    bodyLoadedRef.current = null // 允许重新加载该稿正文
     setMoreOpen(true)
     setCreateOpen(true)
   }
@@ -393,10 +410,18 @@ function SubmissionsPage() {
       if (editingId !== null) {
         // 编辑模式：PATCH 全量字段（表单已回填原值，未动的字段等值覆盖无副作用）
         const updated = await updateMut.mutateAsync({ id: editingId, body })
+        // 正文编辑器有内容（或被清空）时一并保存，作者不必再单独点保存
+        if (bodyDraft.trim() !== '') {
+          await saveBodyMut.mutateAsync({ id: editingId, content: bodyDraft })
+        }
         setDetail(updated)
         toast.success('稿件已更新')
       } else {
         const created = await createMut.mutateAsync(body)
+        // 在线正文：非空时创建后立即保存（在线编辑器与文件上传互为补充）
+        if (bodyDraft.trim() !== '') {
+          await saveBodyMut.mutateAsync({ id: created.id, content: bodyDraft })
+        }
         // 新建时若已选好稿件文件，直接一并上传，作者不必再进详情页补传
         if (form.file) {
           await uploadMut.mutateAsync({ id: created.id, file: form.file })
@@ -407,6 +432,7 @@ function SubmissionsPage() {
       }
       setCreateOpen(false)
       setEditingId(null)
+      setBodyDraft('')
       setForm(EMPTY_FORM)
     } catch (err) {
       // 投稿 403 rules_ack_required：作者没确认当版《投稿规范》。
@@ -449,6 +475,8 @@ function SubmissionsPage() {
             onClick={() => {
               setForm(EMPTY_FORM)
               setMoreOpen(false)
+              setEditingId(null)
+              setBodyDraft('') // 新建从空白正文开始
               setCreateOpen(true)
             }}
           >
@@ -1087,6 +1115,19 @@ function SubmissionsPage() {
                 value={form.abstract}
                 onChange={(e) => set('abstract', e.target.value)}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="body-editor">正文（在线编辑，支持标题层级 / 加粗 / 斜体 / 书名号等）</Label>
+              <p className="text-xs text-muted-foreground">
+                与上传文件互为补充：这里写好的正文会直接进入在线阅读、Word 下载件与 JATS 导出。
+              </p>
+              <MarkdownEditor
+                value={bodyDraft}
+                onChange={setBodyDraft}
+                minHeight={300}
+                placeholder={'# 1 引言\n\n写下正文……（Markdown 语法，工具栏可插入标题、加粗、书名号等）'}
+                testId="submission-body-editor"
               />
             </div>
             <div className="space-y-2">

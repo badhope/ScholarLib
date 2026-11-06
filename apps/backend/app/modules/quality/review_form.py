@@ -162,6 +162,22 @@ def form_payload() -> dict[str, object]:
             {"value": "na", "label": "不适用"},
         ],
         "score_anchors": [{"score": s, "meaning": m} for s, m in SCORE_ANCHORS],
+        # 2.0：荒诞指数是审核必填事实（0–10 风格坐标）。它不是第七个质量
+        # 维度——不进总分、不参与排序（铁律），但每篇审核必须明确给出，
+        # 编辑部据此做类别判定（显式指定 > 指数折算 > 类型兜底）。
+        "absurdity_index": {
+            "required": True,
+            "range": [0, 10],
+            "definition": "风格坐标：这篇内容站在『学术↔吐槽』光谱的哪里。0 = 纯学术，"
+            "2.5–7.5 = 娱乐向，≥7.5 = 吐槽向。描述风格，不评价好坏。",
+            "bands": [
+                {"min": 0, "max": 2.5, "label": "学术"},
+                {"min": 2.5, "max": 7.5, "label": "娱乐"},
+                {"min": 7.5, "max": 10, "label": "吐槽"},
+            ],
+            "goes_into_score": False,
+            "used_for": "content_category 判定（编辑部显式指定 > 荒诞指数折算 > 类型兜底）",
+        },
     }
 
 

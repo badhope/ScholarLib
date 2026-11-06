@@ -151,6 +151,15 @@ class Settings(BaseSettings):
     # Mailgun / SendGrid / SES / Postmark all expose an SMTP relay, so this
     # one backend covers every mainstream transactional provider.
     email_backend: Literal["console", "smtp"] = "console"
+    # 外发总闸（开发阶段护栏）：默认 **关闭**。即便误填了真实的组邮箱
+    # SMTP 授权码，也只把邮件写进日志，绝不投递到真实收件人。
+    # 只有运维显式设置 RUBBISH_EMAIL_OUTBOUND_ENABLED=true 才允许真实发信；
+    # 上线前请确认收件人范围、并取得负责人同意后再打开。
+    email_outbound_enabled: bool = False
+    # 恭喜邮件独立开关：录用/接收后的作者祝贺邮件不受总闸约束，由主编
+    # 单独授权（2026-11-06 主编指令：发布成功要发恭喜邮件）。其余类型
+    # （验证码/催审/裁决/补审）仍受 email_outbound_enabled 管控。
+    email_congrat_enabled: bool = False
     email_from_address: str = "no-reply@rubbish.local"
     email_from_name: str = "Rubbish"
     email_smtp_host: str = ""

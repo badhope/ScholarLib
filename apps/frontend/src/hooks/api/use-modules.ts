@@ -518,9 +518,33 @@ export function useSubmissionVersions(id: number, enabled = true) {
   })
 }
 
-// 作者上传稿件文件
-export function useUploadSubmissionFile() {
+// 在线正文（2.0）：读取/保存在线 Markdown 正文（作者可编辑状态 / 编辑部）
+export function useSubmissionMarkdown(id: number, enabled: boolean) {
+  return useQuery<{ content: string }>({
+    queryKey: ['submissions', 'markdown', id],
+    queryFn: async () =>
+      (await api.get<{ content: string }>(`/submissions/${id}/markdown`)).data,
+    enabled: enabled && id > 0,
+  })
+}
+
+export function useSaveSubmissionMarkdown() {
   const qc = useQueryClient()
+  return useMutation<SubmissionResponse, Error, { id: number; content: string }>({
+    mutationFn: async ({ id, content }) =>
+      (
+        await api.put<SubmissionResponse>(`/submissions/${id}/markdown`, { content })
+      ).data,
+    onSuccess: (data, { id }) => {
+      qc.setQueryData(keys.submission.detail(id), data)
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
+      void qc.invalidateQueries({ queryKey: ['submissions', 'markdown', id] })
+    },
+  })
+}
+
+// 作者上传稿件文件
+export function useUploadSubmissionFile() {  const qc = useQueryClient()
   return useMutation<SubmissionResponse, Error, { id: number; file: File }>({
     mutationFn: async ({ id, file }) => {
       const form = new FormData()
