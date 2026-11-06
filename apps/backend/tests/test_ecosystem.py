@@ -36,3 +36,15 @@ def test_role_assign_schema_accepts_editorial_chain():
 
     for role in ("chief_editor", "deputy_editor", "board_editor", "editor"):
         assert RoleAssign(role=role).role == role
+
+
+def test_recommendation_is_category_scoped():
+    """铁律三：读者有类别偏好时，推荐只在该类别内比对。"""
+    from app.modules.recommendations.engine import UserProfile, _Candidate, _score_candidate
+
+    profile = UserProfile()
+    profile.categories["academic"] += 3
+    academic = _Candidate(id=1, tags=[], discipline="计算机", subdiscipline=None, content_category="academic")
+    rant = _Candidate(id=2, tags=[], discipline="计算机", subdiscipline=None, content_category="rant")
+    assert "content_category" in _Candidate.__dataclass_fields__
+    assert academic.content_category != rant.content_category

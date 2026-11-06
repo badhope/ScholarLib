@@ -52,6 +52,7 @@ class _Candidate:
     tags: list[str]
     discipline: str
     subdiscipline: str | None
+    content_category: str | None = None
 
 
 @dataclass
@@ -61,6 +62,8 @@ class UserProfile:
     tags: Counter[str] = field(default_factory=Counter)
     disciplines: Counter[str] = field(default_factory=Counter)
     subdisciplines: Counter[str] = field(default_factory=Counter)
+    # 内容类别偏好计数（v1.11）：同类别才可比对。
+    categories: Counter[str] = field(default_factory=Counter)
 
 
 @dataclass
@@ -106,6 +109,11 @@ def _build_profile(read_resources: list[Resource]) -> UserProfile:
     """
     profile = UserProfile()
     for r in read_resources:
+        # 内容类别分域（v1.11 铁律三）：读者偏好按类别累计，推荐只在
+        # 读者最常读的那一类里做同类别比对，避免「学术稿推荐吐槽稿」。
+        cat = getattr(r, "content_category", None)
+        if cat:
+            profile.categories[cat] = profile.categories.get(cat, 0) + 1
         for tag in r.tags or []:
             profile.tags[tag] += 1
         if r.discipline:
@@ -224,6 +232,7 @@ async def recommend(
                 Resource.tags,
                 Resource.discipline,
                 Resource.subdiscipline,
+                Resource.content_category,
             )
             .where(
                 ~Resource.id.in_(read_ids),
@@ -252,7 +261,14 @@ async def recommend(
             tags=row[1] or [],
             discipline=row[2],
             subdiscipline=row[3],
+            content_category=row[4],
         )
+        # 类别分域（铁律三）：读者有明确类别偏好时，只在该类别内比对。
+        # 无偏好（未读过任何带类别的内容）时不设限，保证冷启动可用。
+        preferred = profile.categories.most_common(1)
+        if preferred and candidate.content_category:
+            if candidate.content_category != preferred[0][0]:
+                continue
         score, reason = _score_candidate(candidate, profile)
         ranked.append((score, candidate.id, reason))
     ranked.sort(key=lambda r: (-r[0], r[1]))
