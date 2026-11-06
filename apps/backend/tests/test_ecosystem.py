@@ -28,3 +28,11 @@ def test_category_from_track():
 def test_role_chain_constants():
     assert deps.CHIEF_ROLES == ("chief_editor", "deputy_editor")
     assert "board_editor" in deps.EDITORIAL_ROLES and "chief_editor" in deps.EDITORIAL_ROLES
+
+
+def test_role_assign_schema_accepts_editorial_chain():
+    """v1.11 职权链角色必须能通过 API 校验（此前 Literal 未同步会 422）。"""
+    from app.schemas import RoleAssign
+
+    for role in ("chief_editor", "deputy_editor", "board_editor", "editor"):
+        assert RoleAssign(role=role).role == role
