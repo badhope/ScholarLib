@@ -566,13 +566,16 @@ html {
 body {
   text-rendering: optimizeLegibility;
 }
-img,
-svg {
-  max-width: 100%;
-}
-/* 图片未加载前占位，避免布局偏移（与 aspect 容器配合） */
-img {
-  height: auto;
+/* 放进 @layer base：原先写在层外，会盖掉组件上的 h-full——
+   实测列表缩略图（容器 84px）里的图片被压成 63px，下半截留白。 */
+@layer base {
+  img,
+  svg {
+    max-width: 100%;
+  }
+  img {
+    height: auto;
+  }
 }
 /* 统一交互过渡：颜色 150ms、位移 200ms，全部走同一缓动 */
 a,
