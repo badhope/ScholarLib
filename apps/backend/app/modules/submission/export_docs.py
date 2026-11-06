@@ -182,11 +182,44 @@ def _story_html(body_html: str, title: str, byline: str | None = None) -> str:
     return head + body_html
 
 
+_DATA_URI_IMG = re.compile(r"data:image/(png|jpeg|jpg);base64,([A-Za-z0-9+/=\s]+)", re.I)
+
+
+def _shrink_data_uri_images(html: str, max_width: int = 900) -> str:
+    """把正文里内嵌的超大位图降采样后重新编码。
+
+    线上实测：单篇导出 PDF 13 MB，其中 8.7 MB 是两张图——pymupdf 排版时
+    会把图片按原始像素写进 PDF，A4 版心根本用不到这么多像素。
+    这里按 2 倍降采样（像素降到 1/4），仍用 PNG（图表带透明通道）。
+    """
+    import base64
+
+    import pymupdf
+
+    def _repl(m: re.Match[str]) -> str:
+        raw = base64.b64decode(m.group(2), validate=False)
+        try:
+            pix = pymupdf.Pixmap(raw)
+            if pix.width <= max_width:
+                return m.group(0)
+            # PyMuPDF 1.24+ 的 shrink() 原地修改、返回 None；
+            # 写成 pix = pix.shrink(f) 会拿到 None，压缩会静默失效。
+            pix.shrink(2)
+            out = pix.tobytes("png")
+        except Exception:
+            # 解不开就原样保留——导出宁可大一点，也不能因为一张图挂掉
+            return m.group(0)
+        return "data:image/png;base64," + base64.b64encode(out).decode("ascii")
+
+    return _DATA_URI_IMG.sub(_repl, html)
+
+
 def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
     """pymupdf Story 渲染 A4 PDF。data URI 图片在分块时逐块绘制。"""
     import pymupdf
 
     html = _story_html(_style_captions(_classify_images(body_html)), title, byline)
+    html = _shrink_data_uri_images(html)
     story = pymupdf.Story(html=html, user_css=_CSS, em=11)
     buf = io.BytesIO()
     writer = pymupdf.DocumentWriter(buf)
@@ -199,7 +232,12 @@ def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
         story.draw(dev)
         writer.end_page()
     writer.close()
-    return buf.getvalue()
+    # DocumentWriter 写出的流默认不压缩：8 页中文稿 4.7 MB，大半是未压缩的
+    # 字体与内容流。重压缩后 2.1 MB（整篇 13.2 MB → 2.1 MB），耗时 +0.2s。
+    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+    packed = io.BytesIO()
+    doc.save(packed, deflate=True, garbage=4, deflate_images=True, deflate_fonts=True)
+    return packed.getvalue()
 
 
 # --- Markdown → docx（python-docx） ------------------------------------------

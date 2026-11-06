@@ -116,6 +116,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("database_engine_disposed")
 
 
+# --- SPA 回落白名单 ---------------------------------------------------------
+# 只有这些顶层路由才回落到 index.html。没有白名单时，任何拼错的地址
+# （/this-page-does-not-exist）都会拿到 200 + 首页，搜索引擎会当有效页收录。
+_RESERVED_SOFT_404 = frozenset({"docs", "openapi.json", "redoc", "docs/oauth2-redirect"})
+_SPA_ROUTE_PREFIXES = frozenset({
+    "403", "about", "account", "admin", "archive", "auth", "authors", "browse",
+    "catalog", "dashboard", "follows", "forgot-password", "forum", "ingest",
+    "journal-metrics", "levels", "library", "login", "notifications", "policies",
+    "profile", "reader", "recommendations", "register", "reset-password", "review",
+    "settings", "submissions", "support", "verify-email",
+})
+
 app = FastAPI(
     title=settings.app_name,
     version=__version__,
@@ -311,8 +323,16 @@ if _static_dir_env:
             request: Request,
             db: AsyncSession = Depends(get_db),
         ) -> Response:
-            # API 未匹配到的路径保持 404 JSON，避免前端把错误页当数据处理。
-            if full_path.startswith("api/") or full_path == "api":
+            # API / 文档 / 上传目录未命中时必须是真 404；SPA 只对真实存在的
+            # 顶层路由回退，拼错地址不再返回 200 + 首页（软 404）。
+            top_segment = full_path.split("/", 1)[0]
+            if (
+                full_path.startswith("api/")
+                or full_path == "api"
+                or full_path.startswith("uploads/")
+                or full_path in _RESERVED_SOFT_404
+                or (top_segment and top_segment not in _SPA_ROUTE_PREFIXES)
+            ):
                 raise HTTPException(status_code=404, detail="Not Found")
             candidate = (_static_root / full_path).resolve()
             # 防目录穿越：candidate 必须仍在静态根内。

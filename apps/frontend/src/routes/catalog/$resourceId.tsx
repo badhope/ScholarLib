@@ -407,7 +407,7 @@ function CatalogDetailPage() {
                   <Button asChild variant="outline" className="w-full">
                     <a href={`/api/catalog/${id}/file`} download>
                       <Download className="h-4 w-4" />
-                      原稿 PDF
+                      原稿文件
                     </a>
                   </Button>
                 )}

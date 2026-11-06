@@ -9,7 +9,10 @@ on every query) AND by RLS in production.
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 from uuid import UUID
@@ -1087,9 +1090,40 @@ async def get_resource_manuscript_jats(
     )
 
 
+# 导出件缓存：PDF 生成线上实测 40s/13MB，同一篇第二次点下载不该再烧 CPU。
+# 缓存键 = 内容哈希，正文/标题/署名任一变化都会自然失效。
+_EXPORT_CACHE_TTL_SECONDS = 14 * 24 * 3600
+
+
+def _export_cache_root() -> Path:
+    root = Path(
+        os.environ.get("RUBBISH_EXPORT_CACHE_DIR")
+        or (Path(tempfile.gettempdir()) / "rubbish-export-cache")
+    )
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _export_cache_path(cache_key: str, ext: str) -> Path:
+    return _export_cache_root() / f"{cache_key}.{ext}"
+
+
+def _prune_export_cache(root: Path) -> None:
+    import time
+
+    cutoff = time.time() - _EXPORT_CACHE_TTL_SECONDS
+    try:
+        for f in root.iterdir():
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 @router.get("/{resource_id}/export")
 async def export_resource_manuscript(
     resource_id: int,
+    request: Request,
     format: str = Query(default="pdf", pattern="^(pdf|docx)$"),
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
@@ -1152,27 +1186,19 @@ async def export_resource_manuscript(
             status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
         ) from exc
 
-    md_text = data.decode("utf-8", errors="replace")
+    from app.modules.submission.export_docs import (
+        html_to_pdf,
+        md_to_docx,
+        md_to_html,
+        preprocess_md,
+    )
 
-    def _convert():
-        from app.modules.submission.export_docs import (
-            html_to_pdf,
-            md_to_docx,
-            md_to_html,
-            preprocess_md,
-        )
-
-        md_text = preprocess_md(data.decode("utf-8", errors="replace"))
-        # 署名行：作者 · 发表日期（来自 Resource 元数据，bigbad 等在列）
-        authors_str = "、".join(resource.authors or [])
-        pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
-        date_str = pub_date.strftime("%Y 年 %-m 月 %-d 日") if pub_date else ""
-        byline = " · ".join(x for x in (authors_str, date_str) if x) or None
-        if format == "docx":
-            return md_to_docx(md_text, resource.title, byline)
-        return html_to_pdf(md_to_html(md_text), resource.title, byline)
-
-    payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
+    md_text = preprocess_md(data.decode("utf-8", errors="replace"))
+    # 署名行：作者 · 发表日期（来自 Resource 元数据）
+    authors_str = "、".join(resource.authors or [])
+    pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
+    date_str = pub_date.strftime("%Y 年 %-m 月 %-d 日") if pub_date else ""
+    byline = " · ".join(x for x in (authors_str, date_str) if x) or None
 
     ext = "pdf" if format == "pdf" else "docx"
     media = "application/pdf" if format == "pdf" else (
@@ -1182,19 +1208,44 @@ async def export_resource_manuscript(
         readable = _download_name(resource.title, ext)
     except Exception:
         readable = f"rubbish-{resource.id}"
-    etag = f'W/"{hashlib.sha256(payload).hexdigest()[:32]}"'
-    return Response(
-        content=payload,
-        media_type=media,
-        headers={
-            "Content-Disposition": (
-                f'attachment; filename="{resource.id}-formatted.{ext}"; '
-                f"filename*=UTF-8''{quote(readable)}"
-            ),
-            "ETag": etag,
-            "Cache-Control": "private, max-age=300",
-        },
-    )
+
+    cache_key = hashlib.sha256(
+        f"{format}\x00{resource.title}\x00{byline}\x00".encode("utf-8") + md_text.encode("utf-8")
+    ).hexdigest()[:40]
+    etag = f'W/"{cache_key}"'
+
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{resource.id}-formatted.{ext}"; '
+            f"filename*=UTF-8''{quote(readable)}"
+        ),
+        "ETag": etag,
+        "Cache-Control": "private, max-age=86400",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+
+    cache_path = _export_cache_path(cache_key, ext)
+    if cache_path.is_file():
+        payload = cache_path.read_bytes()
+        headers["X-Export-Cache"] = "hit"
+    else:
+        def _convert():
+            if format == "docx":
+                return md_to_docx(md_text, resource.title, byline)
+            return html_to_pdf(md_to_html(md_text), resource.title, byline)
+
+        payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
+        tmp_path = cache_path.with_suffix(cache_path.suffix + f".{os.getpid()}.tmp")
+        try:
+            tmp_path.write_bytes(payload)
+            tmp_path.replace(cache_path)
+            _prune_export_cache(cache_path.parent)
+        except OSError:
+            tmp_path.unlink(missing_ok=True)
+        headers["X-Export-Cache"] = "miss"
+
+    return Response(content=payload, media_type=media, headers=headers)
 
 
 @router.get("/{resource_id}", response_model=ResourceResponse)
