@@ -29,7 +29,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       {/* 提示放在表格上方：放下面时，长表格要滑到最底才看得到，
           等于没有。 */}
       {overflowing ? (
-        <p className="mb-1 flex items-center justify-end gap-1 text-[11px] text-muted-foreground sm:hidden">
+        <p className="mb-1 flex items-center justify-end gap-1 text-[11px] text-muted-foreground lg:hidden">
           <span aria-hidden>⇠</span> 左右滑动查看全部列 <span aria-hidden>⇢</span>
         </p>
       ) : null}

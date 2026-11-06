@@ -263,10 +263,12 @@ function CatalogListPage() {
                       />
                     </TableHead>
                   )}
-                  <TableHead>标题</TableHead>
-                  <TableHead>作者</TableHead>
-                  <TableHead className="w-16">年份</TableHead>
-                  <TableHead>学科</TableHead>
+                  <TableHead className="w-[45%] lg:w-auto">标题</TableHead>
+                  <TableHead className="w-[30%] lg:w-auto">作者</TableHead>
+                  {/* 平板（768–1023）放不下 6 列：年份/学科先让位，
+                      否则整表被裁成「标题 + 作者」两列，读者以为坏了。 */}
+                  <TableHead className="hidden w-16 lg:table-cell">年份</TableHead>
+                  <TableHead className="hidden lg:table-cell">学科</TableHead>
                   <TableHead className="w-20">类型</TableHead>
                 </TableRow>
               </TableHeader>
@@ -302,8 +304,8 @@ function CatalogListPage() {
                       <TableCell className="max-w-[180px] truncate text-muted-foreground">
                         {authors}
                       </TableCell>
-                      <TableCell>{r.year}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">
+                      <TableCell className="hidden lg:table-cell">{r.year}</TableCell>
+                      <TableCell className="hidden max-w-[200px] truncate lg:table-cell">
                         {r.discipline}
                       </TableCell>
                       <TableCell>
