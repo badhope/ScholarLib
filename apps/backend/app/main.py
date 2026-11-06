@@ -341,9 +341,24 @@ if _static_dir_env:
                 if media_type is None and candidate.suffix.lower() == ".webp":
                     media_type = "image/webp"
                 return FileResponse(str(candidate), media_type=media_type)
-            if full_path in _RESERVED_SOFT_404 or (top_segment and top_segment not in _SPA_ROUTE_PREFIXES):
-                raise HTTPException(status_code=404, detail="Not Found")
             index_file = _static_root / "index.html"
+            # 未知的页面路径：状态码必须是 404（爬虫不能把拼错地址当首页），
+            # 但浏览器里直接甩 problem+json 很难看。这里对「接受 HTML 的请求」
+            # 返回 404 + 应用自己的 NotFound 页面，API 调用方仍拿 JSON。
+            if top_segment and top_segment not in _SPA_ROUTE_PREFIXES:
+                accepts_html = "text/html" in request.headers.get("accept", "")
+                if full_path not in _RESERVED_SOFT_404 and accepts_html and index_file.is_file():
+                    html_text, _status = await seo.build_index_html(
+                        index_file.read_text(encoding="utf-8"), full_path, request, db
+                    )
+                    return Response(
+                        content=html_text,
+                        status_code=404,
+                        media_type="text/html; charset=utf-8",
+                    )
+                raise HTTPException(status_code=404, detail="Not Found")
+            if full_path in _RESERVED_SOFT_404:
+                raise HTTPException(status_code=404, detail="Not Found")
             if index_file.is_file():
                 # Per-route <title>/description/OG/citation tags: the SPA has
                 # a single HTML shell, so crawlers would otherwise see the

@@ -382,24 +382,28 @@ function CatalogFilterFields({
   search,
   updateSearch,
   className,
+  hideSearch = false,
 }: {
   search: CatalogSearch
   updateSearch: (patch: Partial<CatalogSearch>) => void
   className: string
+  hideSearch?: boolean
 }) {
   const { data: stats } = useCatalogStats()
   const facetDisciplines = Object.keys(stats?.by_discipline ?? {})
   return (
     <div className={className}>
-      <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">
-          搜索（输入即搜，回车立即）
-        </label>
-        <DebouncedSearchInput
-          initial={search.q ?? ''}
-          onCommit={(q) => updateSearch({ q: q || undefined, page: 1 })}
-        />
-      </div>
+      {hideSearch ? null : (
+        <div className="space-y-1.5">
+          <label className="text-xs text-muted-foreground">
+            搜索（输入即搜，回车立即）
+          </label>
+          <DebouncedSearchInput
+            initial={search.q ?? ''}
+            onCommit={(q) => updateSearch({ q: q || undefined, page: 1 })}
+          />
+        </div>
+      )}
       <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">类型</label>
         <Select
@@ -484,7 +488,12 @@ function MobileFilters({
   ].filter(Boolean).length
 
   return (
-    <div className="mb-4">
+    <div className="mb-4 space-y-2">
+      {/* 搜索是目录页的第一动作，不再藏进「筛选」里：手机用户不用先展开面板 */}
+      <DebouncedSearchInput
+        initial={search.q ?? ''}
+        onCommit={(q) => updateSearch({ q: q || undefined, page: 1 })}
+      />
       <Button
         type="button"
         variant="outline"
@@ -511,6 +520,7 @@ function MobileFilters({
             search={search}
             updateSearch={updateSearch}
             className="mt-3 space-y-3"
+            hideSearch
           />
         </div>
       )}

@@ -14,6 +14,9 @@ interface ArticleCoverProps {
   /** 是否显示左下角学科标签（卡片与详情页可不同） */
   showDiscipline?: boolean
   priority?: boolean
+  /** 叠加暗色渐层：只有「文字压在图上」的场景才需要；
+   *  列表缩略图里开会把照片下半截压成灰块，看起来像加载失败。 */
+  overlay?: boolean
 }
 
 export function ArticleCover({
@@ -21,6 +24,7 @@ export function ArticleCover({
   className,
   showDiscipline = true,
   priority = false,
+  overlay = false,
 }: ArticleCoverProps) {
   const hasImage = Boolean(resource.cover_image)
   return (
@@ -61,13 +65,15 @@ export function ArticleCover({
           </span>
         </div>
       ) : null}
-      {/* 可读性渐层：只压下半部，不整张变灰 */}
-      <div
-        aria-hidden
-        className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent"
-      />
+      {/* 可读性渐层：仅 overlay 场景（文字压在图上）才开；默认关闭 */}
+      {overlay ? (
+        <div
+          aria-hidden
+          className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent"
+        />
+      ) : null}
       {showDiscipline && resource.discipline ? (
-        <span className="absolute bottom-2.5 left-3 rounded-full bg-black/35 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white/90 backdrop-blur-sm">
+        <span className="absolute bottom-2.5 left-3 rounded-full bg-black/45 px-2 py-0.5 text-[10px] font-medium tracking-wide text-white/90 backdrop-blur-sm">
           {resource.discipline}
         </span>
       ) : null}

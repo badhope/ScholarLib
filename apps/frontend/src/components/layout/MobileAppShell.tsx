@@ -179,12 +179,12 @@ export function MobileAppShell() {
   if (location.pathname === '/' || AUTH_FACADE.includes(location.pathname)) {
     return (
       <div className="min-h-screen bg-background">
+        <CookieBanner />
         <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
           <PageTransition>
             <Outlet />
           </PageTransition>
         </ModuleErrorBoundary>
-        <CookieBanner />
       </div>
     )
   }
@@ -236,6 +236,8 @@ export function MobileAppShell() {
         )}
       >
         <div className="mx-auto w-full max-w-screen-sm px-4 py-4">
+          {/* Cookie 横幅走正常文档流：手机上是页面第一行，不覆盖标题与列表 */}
+          <CookieBanner />
           {/* 页面级错误边界：崩溃时底部 Tab 栏仍可用，换页自动复位 */}
           <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
             <PageTransition>
@@ -244,11 +246,6 @@ export function MobileAppShell() {
           </ModuleErrorBoundary>
         </div>
       </main>
-
-      {/* 文章详情等带自有底部操作条的页面原来不渲染 Cookie 横幅：
-          用户从未被问过，且移动端根本没出现过同意入口。放在 main 之后，
-          横幅走「贴顶」定位，不压底部 CTA。 */}
-      <CookieBanner />
 
       {/* 悬浮按钮：仅登录用户、且在浏览类页面可见，跳导入（创建类操作）。
           放在右下角而不是水平居中：居中时它正好压住信息流卡片的标题与
