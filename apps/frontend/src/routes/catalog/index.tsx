@@ -250,7 +250,9 @@ function CatalogListPage() {
         // 桌面端：表格
         <Card>
           <CardContent className="p-0">
-            <Table>
+            {/* 平板宽度下必须 table-fixed：auto 布局会用 min-content 撑宽，
+                truncate/max-w 全部失效，整表又被裁掉。桌面恢复 auto。 */}
+            <Table className="table-fixed lg:table-auto">
               <TableHeader>
                 <TableRow>
                   {isAuthenticated && (
