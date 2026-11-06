@@ -170,10 +170,25 @@ async def get_current_user_optional(
 
 
 # 预定义角色名（与 Role 表保持一致；bootstrap 创建时用此 slug）
+# 编辑职权链（v1.11）：主编 > 副主编 > 编委（栏目编辑）> 执行编辑 > 审稿人。
+# 主编/副主编持有终审权（四元决定）；编委与执行编辑负责初筛、送审与推荐。
 ROLE_REVIEWER = "reviewer"
 ROLE_SENIOR_REVIEWER = "senior_reviewer"
 ROLE_EDITOR = "editor"
 ROLE_SECTION_EDITOR = "section_editor"
+ROLE_BOARD_EDITOR = "board_editor"
+ROLE_DEPUTY_EDITOR = "deputy_editor"
+ROLE_CHIEF_EDITOR = "chief_editor"
+# 有终审权的角色集合（require_chief_editor 使用）
+CHIEF_ROLES = (ROLE_CHIEF_EDITOR, ROLE_DEPUTY_EDITOR)
+# 有编辑部职权（初筛/送审/推荐/工作台读）的角色集合（require_editor 使用）
+EDITORIAL_ROLES = (
+    ROLE_EDITOR,
+    ROLE_SECTION_EDITOR,
+    ROLE_BOARD_EDITOR,
+    ROLE_DEPUTY_EDITOR,
+    ROLE_CHIEF_EDITOR,
+)
 
 
 async def _user_has_role(db: AsyncSession, user: User, role_name: str) -> bool:
@@ -252,13 +267,12 @@ async def require_editor(
     注意职权分离：**四元最终决定（录用/修回/拒稿）是 L8 执行编辑的
     职权**，见 :func:`require_chief_editor`。
     """
-    if await _user_has_role(db, current_user, ROLE_EDITOR) or await _user_has_role(
-        db, current_user, ROLE_SECTION_EDITOR
-    ):
-        return current_user
+    for role in EDITORIAL_ROLES:
+        if await _user_has_role(db, current_user, role):
+            return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Editor role required",
+        detail="Editorial role required",
     )
 
 
@@ -266,14 +280,16 @@ async def require_chief_editor(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """要求当前用户拥有 editor 角色或 admin（L8 执行编辑 / L9 主编）。
+    """要求当前用户拥有终审权角色：主编（chief_editor）、副主编
+    （deputy_editor）或 admin。
 
-    用于稿件四元决定端点。section_editor（L7 栏目编辑）按 ladder 契约
-    只做初审、送审与**推荐**录用，没有最终裁决权；此前 require_editor
-    让 L7 也能直接作出录用/拒稿决定，与等级体系的分工承诺不符。
+    用于稿件四元决定端点。编委（board_editor/section_editor，L7）与
+    执行编辑（editor）按职权链只做初筛、送审与推荐，没有最终裁决权；
+    终审权集中在主编/主编级——决策可问责、口径统一。
     """
-    if await _user_has_role(db, current_user, ROLE_EDITOR):
-        return current_user
+    for role in CHIEF_ROLES:
+        if await _user_has_role(db, current_user, role):
+            return current_user
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Chief editor role required",

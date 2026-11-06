@@ -6,7 +6,7 @@ import { useCatalogStats } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceStats } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { ArticleCover } from '@/components/common/article-cover'
-import { absurdityLevel, qualityGrade } from '@/lib/resource-labels'
+import { contentCategoryLabel } from '@/lib/resource-labels'
 import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -96,22 +96,16 @@ function BrowsePage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {(featuredQ.data?.data ?? []).map((r) => {
-              const grade = qualityGrade(r.quality_grade)
-              const level = absurdityLevel(r.absurdity_index)
+              const categoryTag = contentCategoryLabel(r.content_category)
               return (
                 <Link key={r.id} to="/catalog/$resourceId" params={{ resourceId: String(r.id) }}>
                   <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                     <ArticleCover resource={r} className="h-32 w-full" />
                     <CardContent className="space-y-2 p-4">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {level && (
-                          <Badge variant={level.variant} className="text-[10px]">
-                            {level.label}
-                          </Badge>
-                        )}
-                        {grade && (
-                          <Badge variant="outline" className={grade.className}>
-                            {grade.label}
+                        {categoryTag && (
+                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
+                            {categoryTag}
                           </Badge>
                         )}
                       </div>

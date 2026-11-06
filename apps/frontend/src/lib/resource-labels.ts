@@ -75,7 +75,8 @@ export function recommendationReason(reason: string | null | undefined): string 
 }
 
 // ---------------------------------------------------------------------------
-// 荒诞指数（编辑部评定，0–10）：界面只呈现等级与数值，不呈现评定口径。
+// 风格光谱（荒诞指数 0–10）：这是「类别光谱」不是等级——用于告诉读者
+// 这篇内容的风格位置（学术/娱乐/吐槽），同一光谱内才参与同类比对。
 // ---------------------------------------------------------------------------
 
 export interface AbsurdityLevel {
@@ -87,12 +88,12 @@ export interface AbsurdityLevel {
 export function absurdityLevel(index: number | null | undefined): AbsurdityLevel | null {
   if (index == null) return null
   if (index < 2.5)
-    return { label: '正经', description: '严肃研究', variant: 'outline' }
+    return { label: '学术', description: '严肃研究', variant: 'outline' }
   if (index < 5)
-    return { label: '轻诞', description: '略带荒诞色彩', variant: 'secondary' }
+    return { label: '轻娱乐', description: '略带娱乐色彩的研究', variant: 'secondary' }
   if (index < 7.5)
-    return { label: '荒诞', description: '明显的荒诞研究', variant: 'default' }
-  return { label: '离谱', description: '编辑部认证的离谱研究', variant: 'destructive' }
+    return { label: '娱乐', description: '娱乐向研究', variant: 'default' }
+  return { label: '吐槽', description: '吐槽向内容', variant: 'destructive' }
 }
 
 export function absurdityLabel(index: number | null | undefined): string {
@@ -100,10 +101,10 @@ export function absurdityLabel(index: number | null | undefined): string {
 }
 
 // ---------------------------------------------------------------------------
-// 质量评分（RQS v3.0）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
-// v3.0 是 14 档带加减号的严厉客观制：A+（95–100）是典范水准、刻意极少
-// 达到，多数稿子落在 C/D；F（40–54）= 合格、仍可发表；只有总分 <40 才
-// 不合格（不予发表）。
+// 质量评分（RQS v4.0）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
+// v4.0 是 16 档 ABCDEF 全字母制：A+（97–100）对标顶刊、刻意稀缺；
+// F（40–49）= 及格可发表；<40 = 不合格（打回）。等级仅作为评审信息
+// 呈现，不构成内容的公开分层。
 // ---------------------------------------------------------------------------
 
 export interface QualityGrade {
@@ -113,79 +114,24 @@ export interface QualityGrade {
 }
 
 const QUALITY_GRADES: Record<string, QualityGrade> = {
-  'A+': {
-    label: 'A+ 极佳',
-    description: '典范水准（95–100），编辑部范例级，极少达到',
-    className: 'bg-amber-300 text-amber-950 border-amber-400/70',
-  },
-  A: {
-    label: 'A 极佳',
-    description: '极佳水准（90–94），可直接发表',
-    className: 'bg-amber-200/80 text-amber-950 border-amber-300/60',
-  },
-  'A-': {
-    label: 'A- 优秀',
-    description: '优秀（85–89），小修即可',
-    className: 'bg-amber-100 text-amber-900 border-amber-200',
-  },
-  'B+': {
-    label: 'B+ 良好',
-    description: '良好（82–84），有发表价值',
-    className: 'bg-primary/15 text-primary border-primary/30',
-  },
-  B: {
-    label: 'B 良好',
-    description: '良好（78–81），个别维度有可修正的缺口',
-    className: 'bg-primary/10 text-primary border-primary/20',
-  },
-  'B-': {
-    label: 'B- 良好',
-    description: '良好偏弱（75–77），建议小修',
-    className: 'bg-primary/10 text-primary border-primary/20',
-  },
-  'C+': {
-    label: 'C+ 中等',
-    description: '中等（72–74），内容成立但需编辑加工',
-    className: 'bg-muted text-foreground border-border',
-  },
-  C: {
-    label: 'C 中等',
-    description: '中等（68–71），引用或表达需要编辑加工',
-    className: 'bg-muted text-foreground border-border',
-  },
-  'C-': {
-    label: 'C- 中等',
-    description: '中等偏弱（65–67），多处需修订',
-    className: 'bg-muted text-foreground border-border',
-  },
-  'D+': {
-    label: 'D+ 较弱',
-    description: '较弱（62–64），结构或论证有明显缺口',
-    className: 'bg-muted text-muted-foreground border-border',
-  },
-  D: {
-    label: 'D 较弱',
-    description: '较弱（58–61），仍可发表但需较大修改',
-    className: 'bg-muted text-muted-foreground border-border',
-  },
-  'D-': {
-    label: 'D- 较弱（边缘）',
-    description: '边缘稿（55–57）：可发表，编辑部处理时请谨慎',
-    className: 'bg-muted text-muted-foreground border-border',
-  },
-  F: {
-    label: 'F 合格',
-    description: '合格（40–54）：可以阅读，仍可发表',
-    className: 'bg-muted text-foreground border-border',
-  },
-}
-
-// 兜底：未知/历史档位（含 <40 的"不合格"记录，字母仍记为 F）不崩徽章——
-// 显示原始代号 + 中性样式，绝不让 switch/字典缺键变成空白或报错。
-const GRADE_FALLBACK: QualityGrade = {
-  label: '',
-  description: '',
-  className: 'bg-muted text-foreground border-border',
+  // RQS v4.0 十六档口径（与 /api/quality/rubric 一致）。等级属于评审
+  // 信息元数据，不属于内容分层：界面只在评审区呈现，不进列表排序。
+  'A+': { label: 'A+ 典范', description: '97–100，领域范本，编辑部极少量授予', className: 'bg-amber-300 text-amber-950 border-amber-400/70' },
+  'A': { label: 'A 顶尖', description: '93–96，可直接发表', className: 'bg-amber-200/80 text-amber-950 border-amber-300/60' },
+  'A-': { label: 'A- 优秀', description: '90–92，小修即可', className: 'bg-amber-100 text-amber-900 border-amber-200' },
+  'B+': { label: 'B+ 良好', description: '87–89，有发表价值', className: 'bg-primary/15 text-primary border-primary/30' },
+  'B': { label: 'B 良好', description: '83–86，个别维度有可修正缺口', className: 'bg-primary/10 text-primary border-primary/20' },
+  'B-': { label: 'B- 良好', description: '80–82，建议小修', className: 'bg-primary/10 text-primary border-primary/20' },
+  'C+': { label: 'C+ 中等', description: '77–79，内容成立但需编辑加工', className: 'bg-muted text-foreground border-border' },
+  'C': { label: 'C 中等', description: '73–76，引用或表达需编辑加工', className: 'bg-muted text-foreground border-border' },
+  'C-': { label: 'C- 中等', description: '70–72，多处需修订', className: 'bg-muted text-foreground border-border' },
+  'D+': { label: 'D+ 达标', description: '67–69，达标线以上，明显修订', className: 'bg-muted text-foreground border-border' },
+  'D': { label: 'D 达标', description: '63–66，达标线以上，需大幅修订', className: 'bg-muted text-foreground border-border' },
+  'D-': { label: 'D- 达标', description: '60–62，borderline，可发表但需逐条修回', className: 'bg-muted text-foreground border-border' },
+  'E+': { label: 'E+ 基础', description: '57–59，基础层级，建议撤回重组', className: 'bg-muted text-muted-foreground border-border' },
+  'E': { label: 'E 基础', description: '53–56，基础层级', className: 'bg-muted text-muted-foreground border-border' },
+  'E-': { label: 'E- 基础', description: '50–52，borderline 基础', className: 'bg-muted text-muted-foreground border-border' },
+  'F': { label: 'F 及格', description: '40–49，及格可发表，按意见修订', className: 'bg-muted text-muted-foreground border-border' },
 }
 
 export function qualityGrade(grade: string | null | undefined): QualityGrade | null {
@@ -194,3 +140,18 @@ export function qualityGrade(grade: string | null | undefined): QualityGrade | n
   if (known) return known
   return { ...GRADE_FALLBACK, label: grade, description: `评级 ${grade}` }
 }
+
+// ---------------------------------------------------------------------------
+// 内容类别（v1.11）：academic / fun / rant——类别不是等级，是编辑部
+// 评定的一等公民属性；目录筛选、排行分域都按类别走。
+// ---------------------------------------------------------------------------
+const CATEGORY_LABELS: Record<string, string> = {
+  academic: '学术研究',
+  fun: '娱乐向',
+  rant: '吐槽向',
+}
+
+export function contentCategoryLabel(category: string | null | undefined): string {
+  return (category && CATEGORY_LABELS[category]) || ''
+}
+

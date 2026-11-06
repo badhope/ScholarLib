@@ -36,7 +36,7 @@ import {
   useAnnouncementPortal,
 } from '@/components/common/announcement-dialog'
 import { BrandMark } from '@/components/common/brand-mark'
-import { qualityGrade } from '@/lib/resource-labels'
+import { contentCategoryLabel } from '@/lib/resource-labels'
 import { issueTitle } from '@/lib/issue-meta'
 import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -972,7 +972,7 @@ function HomePage() {
           ) : (
             <ol className="divide-y overflow-hidden rounded-xl border bg-card shadow-sm">
               {resources.map((r) => {
-                const grade = qualityGrade(r.quality_grade)
+                const categoryTag = contentCategoryLabel(r.content_category)
                 return (
                   <li key={r.id}>
                     <Link
@@ -986,13 +986,9 @@ function HomePage() {
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">
                         {r.title}
                       </span>
-                      {grade ? (
-                        <Badge
-                          variant="outline"
-                          className={`hidden shrink-0 rounded-full px-2 text-[10px] font-normal sm:inline-flex ${grade.className}`}
-                          title={`RQS ${r.quality_score ?? ''} / 100`}
-                        >
-                          {grade.label}
+                      {categoryTag ? (
+                        <Badge variant="outline" className="hidden shrink-0 rounded-full px-2 text-[10px] font-normal bg-primary/10 text-primary border-primary/25 sm:inline-flex">
+                          {categoryTag}
                         </Badge>
                       ) : null}
                       <span className="hidden w-28 shrink-0 truncate text-right text-xs text-muted-foreground sm:block">

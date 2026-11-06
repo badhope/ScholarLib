@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { FileDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ArticleCover } from '@/components/common/article-cover'
-import { absurdityLevel, qualityGrade, typeLabel } from '@/lib/resource-labels'
+import { contentCategoryLabel, typeLabel } from '@/lib/resource-labels'
 import { formatAuthors } from '@/lib/utils'
 import type { ResourceResponse } from '@/lib/types'
 
@@ -14,8 +14,7 @@ import type { ResourceResponse } from '@/lib/types'
 // 封面高度锁定 84px，图片懒加载也不会引起滚动跳动。
 export function ResourceCard({ resource }: { resource: ResourceResponse }) {
   const authors = formatAuthors(resource.authors)
-  const level = absurdityLevel(resource.absurdity_index)
-  const grade = qualityGrade(resource.quality_grade)
+  const categoryTag = contentCategoryLabel(resource.content_category)
 
   return (
     <Link
@@ -40,22 +39,9 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
             <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
               {typeLabel(resource.type)}
             </Badge>
-            {grade ? (
-              <Badge
-                variant="outline"
-                className={`px-1.5 py-0 text-[10px] ${grade.className}`}
-                title={`RQS ${resource.quality_score ?? ''} / 100 · ${grade.description}`}
-              >
-                {grade.label}
-              </Badge>
-            ) : null}
-            {level ? (
-              <Badge
-                variant={level.variant}
-                className="px-1.5 py-0 text-[10px]"
-                title={`荒诞指数 ${resource.absurdity_index} / 10 · ${level.description}`}
-              >
-                {level.label}
+            {categoryTag ? (
+              <Badge variant="outline" className="bg-primary/10 px-1.5 py-0 text-[10px] text-primary border-primary/25">
+                {categoryTag}
               </Badge>
             ) : null}
             {resource.has_file ? <FileDown className="h-3 w-3" /> : null}

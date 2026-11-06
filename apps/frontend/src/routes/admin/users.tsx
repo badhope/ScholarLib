@@ -37,6 +37,9 @@ const PAGE_SIZE = 50
 // 作者/读者是"身份"不是"角色"：读者=注册即得、作者=确认《投稿规范》
 // 即得，不由管理员手工分配（2026-11 收窄口径，授权只管编辑线）。
 const ASSIGNABLE_ROLES: AssignableRole[] = [
+  'chief_editor',
+  'deputy_editor',
+  'board_editor',
   'reviewer',
   'senior_reviewer',
   'editor',
@@ -44,6 +47,9 @@ const ASSIGNABLE_ROLES: AssignableRole[] = [
 ]
 
 const ROLE_LABELS: Record<AssignableRole, string> = {
+  chief_editor: '主编',
+  deputy_editor: '副主编',
+  board_editor: '编委',
   reviewer: '审稿人',
   senior_reviewer: '资深审稿人',
   editor: '编辑',

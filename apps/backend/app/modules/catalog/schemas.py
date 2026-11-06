@@ -54,6 +54,9 @@ class AuthorMeta(BaseModel):
 # Resource type enum; may grow per deployment.
 ResourceType = Literal["paper", "book", "dataset", "tutorial"]
 PublicationStatus = Literal["published", "in_review", "draft"]
+# 内容类别（v1.11）：类别不是等级——内容不分等级，层级只与创作者经验
+# 挂钩；排行/推荐只允许同类别内容互相比对。
+ContentCategory = Literal["academic", "fun", "rant"]
 
 
 class ResourceBase(BaseModel):
@@ -63,6 +66,9 @@ class ResourceBase(BaseModel):
     # 赛道：历史字段，已下线（见 core/tracks.py）。仅保留 serious 一档，
     # 旧客户端传 absurd 等值由 before-validator 归一为 serious，不 422。
     track: Track = "serious"
+    # 内容类别：academic（学术研究）/ fun（娱乐向）/ rant（吐槽向）。
+    # 可空：历史数据由迁移 019 回填，新发布由物化流程折算，编辑部可改口。
+    content_category: ContentCategory | None = None
     title: str = Field(min_length=1, max_length=1000)
     authors: Authors = Field(min_length=1, max_length=200)
     year: int = Field(ge=-3000, le=2100)

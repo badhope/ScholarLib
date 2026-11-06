@@ -8,7 +8,7 @@ import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { ArticleCover } from '@/components/common/article-cover'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { qualityGrade } from '@/lib/resource-labels'
+import { contentCategoryLabel } from '@/lib/resource-labels'
 import { cn } from '@/lib/utils'
 import type { IssuePlanEntry } from '@/lib/types'
 
@@ -142,7 +142,7 @@ function ArchivePage() {
           ) : (
             <ol className="divide-y">
               {items.map((r, idx) => {
-                const grade = qualityGrade(r.quality_grade)
+                const categoryTag = contentCategoryLabel(r.content_category)
                 return (
                   <li key={r.id}>
                     <Link
@@ -158,13 +158,9 @@ function ArchivePage() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {grade ? (
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] ${grade.className}`}
-                              title={`RQS ${r.quality_score ?? ''} / 100`}
-                            >
-                              {grade.label}
+                          {categoryTag ? (
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
+                              {categoryTag}
                             </Badge>
                           ) : null}
                           <Badge variant="outline" className="text-[10px]">

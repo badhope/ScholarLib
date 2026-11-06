@@ -7,8 +7,9 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { exportResources, useCatalogStats, useResources } from '@/hooks/api/use-modules'
 import type { ResourceType } from '@/lib/types'
 import { extractError, formatAuthors, cn } from '@/lib/utils'
-import { absurdityLevel, qualityGrade, typeLabel } from '@/lib/resource-labels'
+import { contentCategoryLabel, typeLabel } from '@/lib/resource-labels'
 import { PageHeader } from '@/components/common/page-header'
+import { ArticleCover } from '@/components/common/article-cover'
 import { EmptyState, ErrorState } from '@/components/common/state'
 import { Pagination } from '@/components/common/pagination'
 import { Badge } from '@/components/ui/badge'
@@ -46,9 +47,11 @@ export const Route = createFileRoute('/catalog/')({
 interface CatalogSearch {
   q?: string
   type?: ResourceType
+  category?: 'academic' | 'fun' | 'rant'
   discipline?: string
   year?: number
   page?: number
+  view?: 'list' | 'grid'
 }
 
 const TYPE_OPTIONS: { value: ResourceType | 'all'; label: string }[] = [
@@ -70,6 +73,7 @@ function CatalogListPage() {
   const params = {
     q: search.q || undefined,
     type: search.type,
+    category: search.category || undefined,
     discipline: search.discipline || undefined,
     year: search.year,
     page: search.page || 1,
@@ -78,6 +82,7 @@ function CatalogListPage() {
 
   const { data, isLoading, isError, refetch } = useResources(params)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const viewMode: 'list' | 'grid' = search.view === 'grid' ? 'grid' : 'list' 
 
   // 筛选条件写到 URL，replace 避免每次筛选都污染历史。
   // 顺带清空勾选：翻页/改筛选后旧 id 已经不在页面上，留着会让「导出」
@@ -143,7 +148,28 @@ function CatalogListPage() {
 
       {/* 桌面端：筛选常驻卡片（md 及以上） */}
       {!isMobile && (
-        <DesktopFilters search={search} updateSearch={updateSearch} />
+        {/* 视图切换（v1.11）：列表=管理与速览，九宫格=封面浏览。 */}
+      {!isMobile && (
+        <div className="mb-3 flex justify-end">
+          <div className="inline-flex rounded-md border p-0.5 text-xs">
+            {(['list', 'grid'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => updateSearch({ view: v })}
+                className={
+                  (viewMode === v ? 'bg-primary text-primary-foreground ' : 'text-muted-foreground ') +
+                  'rounded px-3 py-1 transition-colors'
+                }
+              >
+                {v === 'list' ? '列表' : '九宫格'}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DesktopFilters search={search} updateSearch={updateSearch} />
       )}
 
       {/* 移动端：筛选收进可折叠面板，默认收起，避免挤占浏览空间 */}
@@ -188,6 +214,33 @@ function CatalogListPage() {
         <ErrorState message="加载资源失败" onRetry={() => refetch()} />
       ) : !data || data.data.length === 0 ? (
         <EmptyState title="暂无资源" description="尝试调整筛选条件。" />
+      ) : viewMode === 'grid' ? (
+        // 九宫格封面视图（v1.11）：封面优先的浏览形态，适合翻刊找感觉；
+        // 批量管理操作仍回列表视图使用。
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+          {data.data.map((r) => (
+            <Link
+              key={r.id}
+              to="/catalog/$resourceId"
+              params={{ resourceId: String(r.id) }}
+              className="group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md"
+            >
+              <ArticleCover resource={r} className="aspect-[3/4] w-full" />
+              <div className="space-y-1.5 p-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {r.content_category ? (
+                    <Badge variant="outline" className="bg-primary/10 text-[10px] text-primary border-primary/25">
+                      {contentCategoryLabel(r.content_category)}
+                    </Badge>
+                  ) : null}
+                  <Badge variant="secondary" className="text-[10px]">{typeLabel(r.type)}</Badge>
+                </div>
+                <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
+                <p className="line-clamp-1 text-xs text-muted-foreground">{r.authors.join('、')}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
       ) : isMobile ? (
         // 移动端：卡片列表（独立设计，无批量勾选）
         <div className="space-y-3">
@@ -258,30 +311,14 @@ function CatalogListPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Badge variant="secondary">{typeLabel(r.type)}</Badge>
-                          {(() => {
-                            const grade = qualityGrade(r.quality_grade)
-                            return grade ? (
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] ${grade.className}`}
-                                title={`RQS ${r.quality_score ?? ''} / 100 · ${grade.description}`}
-                              >
-                                {grade.label}
-                              </Badge>
-                            ) : null
-                          })()}
-                          {(() => {
-                            const level = absurdityLevel(r.absurdity_index)
-                            return level ? (
-                              <Badge
-                                variant={level.variant}
-                                className="text-[10px]"
-                                title={`荒诞指数 ${r.absurdity_index} / 10 · ${level.description}`}
-                              >
-                                {level.label}
-                              </Badge>
-                            ) : null
-                          })()}
+                          {/* 内容类别（非等级）：academic/fun/rant 是编辑部
+                              评定的一等公民属性；RQS 等级与风格光谱不再
+                              上卡片分层内容，只在详情页评审区呈现。 */}
+                          {r.content_category ? (
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
+                              {contentCategoryLabel(r.content_category)}
+                            </Badge>
+                          ) : null}
                           {r.has_file ? (
                             <span
                               className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
@@ -389,9 +426,29 @@ function CatalogFilterFields({
               </SelectItem>
             ))}
           </SelectContent>
+        </Select>        </Select>
+        <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">类别</label>
+        <Select
+          value={search.category ?? 'all'}
+          onValueChange={(v) =>
+            updateSearch({
+              category: v === 'all' ? undefined : (v as CatalogSearch['category']),
+              page: 1,
+            })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">全部类别</SelectItem>
+            <SelectItem value="academic">学术研究</SelectItem>
+            <SelectItem value="fun">娱乐向</SelectItem>
+            <SelectItem value="rant">吐槽向</SelectItem>
+          </SelectContent>
         </Select>
-      </div>
-      <div className="space-y-1.5">
+        </div>  <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">学科</label>
         <Select
           value={search.discipline ?? 'all'}

@@ -47,6 +47,9 @@ ASSIGNABLE_ROLES = {
     "senior_reviewer",
     "editor",
     "section_editor",
+    "board_editor",
+    "deputy_editor",
+    "chief_editor",
 }
 
 

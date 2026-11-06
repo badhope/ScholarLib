@@ -115,8 +115,11 @@ def _conflict_detail(exc: IntegrityError) -> str:
 @router.get("", response_model=ResourceListResponse)
 async def list_resources(
     type: str | None = None,
-    # 赛道筛选已随赛道下线移除（见 core/tracks.py）：文章气质由
-    # absurdity_index 表达，目录页不再提供 track 过滤。
+    # 内容类别筛选（v1.11）：academic/fun/rant。「同类别才可比对」——
+    # 类别是目录的一等筛选维度，取代已下线的赛道过滤。
+    category: str | None = Query(
+        default=None, pattern=r"^(academic|fun|rant)$"
+    ),
     discipline: str | None = None,
     year: int | None = None,
     volume: str | None = None,
@@ -195,6 +198,8 @@ async def list_resources(
             stmt = stmt.where(condition)
     if type is not None:
         stmt = stmt.where(Resource.type == type)
+    if category is not None:
+        stmt = stmt.where(Resource.content_category == category)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
@@ -355,6 +360,7 @@ async def get_volume_stats(
 @router.get("/facets", response_model=ResourceFacets)
 async def get_facets(
     type: str | None = None,
+    category: str | None = Query(default=None, pattern=r"^(academic|fun|rant)$"),
     discipline: str | None = None,
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
@@ -369,6 +375,8 @@ async def get_facets(
             stmt = stmt.where(condition)
     if type is not None:
         stmt = stmt.where(Resource.type == type)
+    if category is not None:
+        stmt = stmt.where(Resource.content_category == category)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
 

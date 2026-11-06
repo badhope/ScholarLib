@@ -41,6 +41,7 @@ import { extractError, formatDateTime, parseListField } from '@/lib/utils'
 import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import {
   absurdityLevel,
+  contentCategoryLabel,
   languageLabel,
   qualityGrade,
   statusLabel,
@@ -167,14 +168,19 @@ function CatalogDetailPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            {/* 赛道徽章已随赛道下线移除：文章气质由荒诞指数徽章表达。 */}
+            {/* 类别徽章（非等级）：RQS 与风格光谱只在评审信息区呈现。 */}
             <Badge variant="secondary">{typeLabel(data.type)}</Badge>
+            {data.content_category ? (
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25">
+                {contentCategoryLabel(data.content_category)}
+              </Badge>
+            ) : null}
             {(() => {
               const level = absurdityLevel(data.absurdity_index)
               return level ? (
                 <Badge
                   variant={level.variant}
-                  title={`荒诞指数 ${data.absurdity_index} / 10 · ${level.description}`}
+                  title={`风格光谱 ${data.absurdity_index} / 10 · ${level.description}`}
                 >
                   {level.label} {data.absurdity_index?.toFixed(1)}
                 </Badge>
@@ -259,8 +265,8 @@ function CatalogDetailPage() {
 
           {/* R 指数：只有真实事件才算数；分区样本不足时明确写出来，
               不用一个看着漂亮的字母糊弄读者。 */}
-          {/* 质量评分：RQS v3.0 七维明细（口径公开在 /levels） */}
-          <FoldCard title="质量评分（RQS v3.0）" defaultOpen={!isMobile}>
+          {/* 评审信息：RQS v4.0 七维明细（评审元数据，不作内容分层） */}
+          <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
             <CardContent>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 {(() => {

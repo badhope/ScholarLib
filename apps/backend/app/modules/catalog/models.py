@@ -121,6 +121,11 @@ class Resource(Base, TenantScopedMixin):
     # 封面：主题图本地化的相对路径（/assets/covers/xxx.jpg）。
     # 为空时前端回退到生成的纸面卡（CoverArt），不会出现破图。
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # 内容类别（v1.11）：编辑部评定的一等公民属性——academic（学术研究）/
+    # fun（娱乐向）/ rant（吐槽向）。这是「类别」而不是「等级」：内容不分
+    # 等级，层级只与创作者经验挂钩；同类别内容才能互相比对（排行/推荐
+    # 均按本字段分域）。发布时必填（无值由发布流程按荒诞指数折算回填）。
+    content_category: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # 归类键：封面主题、专题聚合使用（如 universe / lab / ocean / society）。
     cover_theme: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

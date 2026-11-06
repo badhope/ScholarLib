@@ -18,6 +18,7 @@ from app.api.deps import require_tenant_id
 from app.core import search as fulltext
 from app.core.db import paginate
 from app.core.tracks import normalize_track
+from app.modules.catalog import cover_defaults
 from app.modules.catalog.models import Resource as ResourceORM
 from app.modules.submission.models import Submission, SubmissionVersion
 from app.modules.submission.schemas import SubmissionListResponse, SubmissionResponse
@@ -121,8 +122,18 @@ async def _materialize_resource_from_submission(
         # jel_codes 不在此物化——catalog.Resource 没有该列（功能未落地），
         # 此处不声称不存在的字段对齐。
         keywords=submission.keywords or None,
-        # 封面随物化带到目录；空则由前端按学科回退默认封面。
-        cover_image=submission.cover_image,
+        # 封面随物化带到目录；空则按学科回填默认封面——「已发布必有封面」
+        # 是 v1.11 生态规范的硬约束，无封面的内容不允许以裸态上线。
+        cover_image=submission.cover_image
+        or cover_defaults.default_cover_for(
+            submission.discipline,
+            seed=sum(ord(c) for c in (submission.title or "x")),
+        ),
+        # 内容类别（v1.11）：类别是一等公民属性，物化时先按赛道折算
+        # （serious→学术，absurd→娱乐向），编辑部可在目录后台改口。
+        content_category=_category_from_track(
+            normalize_track(getattr(submission, "track", None))
+        ),
     )
     db.add(resource)
     await db.flush()
@@ -134,6 +145,11 @@ async def _materialize_resource_from_submission(
     # 搜索路由按 id 回读 DB，查不到的命中会被静默丢弃。
     await fulltext.index_resource(resource)
     return resource
+
+
+def _category_from_track(track: str | None) -> str:
+    """赛道折算内容类别：serious→学术，absurd→娱乐向。吐槽向由编辑部改口。"""
+    return "fun" if (track or "serious") == "absurd" else "academic"
 
 
 def _to_response(entry: Submission) -> SubmissionResponse:

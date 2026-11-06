@@ -55,6 +55,9 @@ export type AssignableRole =
   | 'senior_reviewer'
   | 'editor'
   | 'section_editor'
+  | 'board_editor'
+  | 'deputy_editor'
+  | 'chief_editor'
   | 'author'
   | 'reader'
 
@@ -183,6 +186,7 @@ export interface ResourceBase {
   /** 质量评分（RQS v3.0，0–100）与 14 档等级 A+~F */
   quality_score?: number | null
   quality_grade?: string | null
+  content_category?: "academic" | "fun" | "rant" | null
   // 编辑部评语挂在 quality_breakdown.comment（额外键，读取处自行收窄类型）
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null
   /** 主题封面图（/covers/xx.jpg）；为空时回退生成式封面 */
@@ -384,6 +388,7 @@ export interface SubmissionResponse {
   /** 质量评分（物化后的资源上读取；投稿阶段可能为空） */
   quality_score?: number | null
   quality_grade?: string | null
+  content_category?: "academic" | "fun" | "rant" | null
 }
 
 export interface SubmissionListResponse {
