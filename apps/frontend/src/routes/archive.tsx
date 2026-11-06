@@ -159,7 +159,7 @@ function ArchivePage() {
                         {idx + 1}
                       </span>
                       <div className="hidden w-32 shrink-0 sm:block">
-                        <ArticleCover resource={r} showDiscipline={false} />
+                        <ArticleCover resource={r} showDiscipline={false} aspect="aspect-[16/9]" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">

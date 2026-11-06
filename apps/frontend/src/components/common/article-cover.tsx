@@ -14,6 +14,8 @@ interface ArticleCoverProps {
   /** 是否显示左下角学科标签（卡片与详情页可不同） */
   showDiscipline?: boolean
   priority?: boolean
+  /** 宽度以外的比例类：默认 16:9；缩略图传空串交给外层高度控制 */
+  aspect?: string
   /** 叠加暗色渐层：只有「文字压在图上」的场景才需要；
    *  列表缩略图里开会把照片下半截压成灰块，看起来像加载失败。 */
   overlay?: boolean
@@ -25,14 +27,16 @@ export function ArticleCover({
   showDiscipline = true,
   priority = false,
   overlay = false,
+  aspect = '',
 }: ArticleCoverProps) {
   const hasImage = Boolean(resource.cover_image)
   return (
     <div
       className={cn(
-        'relative isolate overflow-hidden bg-muted',
-        // 固定 16:9，避免图片加载前后高度变化引起的版面抖动（CLS）。
-        'aspect-[16/9] w-full',
+        'relative isolate overflow-hidden bg-muted w-full',
+        // 比例由调用方显式传入：同一元素上同时存在两个 aspect-* 时，
+        // 编译后的 CSS 谁生效不确定，实测缩略图只填了上半截、下面留白。
+        aspect,
         className,
       )}
     >

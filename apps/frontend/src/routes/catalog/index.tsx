@@ -223,7 +223,7 @@ function CatalogListPage() {
               params={{ resourceId: String(r.id) }}
               className="group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md"
             >
-              <ArticleCover resource={r} className="aspect-[3/4] w-full" />
+              <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" />
               <div className="space-y-1.5 p-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {r.content_category ? (

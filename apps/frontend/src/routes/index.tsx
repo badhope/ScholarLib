@@ -982,7 +982,7 @@ function HomePage() {
                     params={{ resourceId: String(r.id) }}
                     className="w-44 shrink-0 snap-start overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md sm:w-52"
                   >
-                    <ArticleCover resource={r} className="aspect-[3/4] w-full" />
+                    <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" />
                     <div className="space-y-1 p-3">
                       <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
                       <p className="text-xs text-muted-foreground">{fmtDate(r.created_at)}</p>

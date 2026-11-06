@@ -26,7 +26,8 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
         <ArticleCover
           resource={resource}
           showDiscipline={false}
-          className="aspect-auto h-full w-full"
+          aspect=""
+          className="h-full w-full"
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
