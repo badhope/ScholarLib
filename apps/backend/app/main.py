@@ -326,18 +326,13 @@ if _static_dir_env:
             # API / 文档 / 上传目录未命中时必须是真 404；SPA 只对真实存在的
             # 顶层路由回退，拼错地址不再返回 200 + 首页（软 404）。
             top_segment = full_path.split("/", 1)[0]
-            if (
-                full_path.startswith("api/")
-                or full_path == "api"
-                or full_path.startswith("uploads/")
-                or full_path in _RESERVED_SOFT_404
-                or (top_segment and top_segment not in _SPA_ROUTE_PREFIXES)
-            ):
+            if full_path.startswith("api/") or full_path == "api" or full_path.startswith("uploads/"):
                 raise HTTPException(status_code=404, detail="Not Found")
             candidate = (_static_root / full_path).resolve()
-            # 防目录穿越：candidate 必须仍在静态根内。
-            # 用 is_relative_to 精确判断，避免 ../static-dev 之类同级目录被
-            # startswith 误判为命中（前缀绕过）。
+            # 先看是不是真实存在的静态文件（/covers/*.jpg、favicon、help.html
+            # 都在静态根下）。这一步必须排在「未知顶层路由一律 404」之前，
+            # 否则 /covers/** 会被当成未知路由 404 掉——线上表现为 278 篇
+            # 文章的封面全部加载失败（列表缩略图空白、详情页大图变灰）。
             if full_path and candidate.is_file() and candidate.is_relative_to(_static_root):
                 # WebP 不在 Python 的 mimetypes 默认表里（容器内没有
                 # /etc/mime.types 时尤其如此），明示一次，否则浏览器会
@@ -346,6 +341,8 @@ if _static_dir_env:
                 if media_type is None and candidate.suffix.lower() == ".webp":
                     media_type = "image/webp"
                 return FileResponse(str(candidate), media_type=media_type)
+            if full_path in _RESERVED_SOFT_404 or (top_segment and top_segment not in _SPA_ROUTE_PREFIXES):
+                raise HTTPException(status_code=404, detail="Not Found")
             index_file = _static_root / "index.html"
             if index_file.is_file():
                 # Per-route <title>/description/OG/citation tags: the SPA has
