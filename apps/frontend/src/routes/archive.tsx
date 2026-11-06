@@ -115,7 +115,12 @@ function ArchivePage() {
                 <CalendarDays className="h-4 w-4 text-primary" />
                 第 1 卷 第 {Number(activeEntry.issue)} 期
                 <span className="text-muted-foreground">
-                  · {fmtDate(activeEntry.publish_at, '已上线（即时刊出）')}
+                  {/* 滚动刊出：一期里最早/最晚上线能差半年（实测 04-04 与 11-06
+                      同属第 5 期）。对已上线期号显示单一日期只会误导读者，
+                      改成说明刊出方式；未上线期号仍显示预计日期。 */}
+                  · {activeEntry.state === 'live'
+                    ? '滚动刊出 · 随时增补'
+                    : `预计 ${fmtDate(activeEntry.publish_at)} 上线`}
                 </span>
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
