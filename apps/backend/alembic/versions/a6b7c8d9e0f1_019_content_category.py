@@ -38,12 +38,9 @@ def upgrade() -> None:
         "resources",
         ["content_category"],
     )
-    # 回填 1：历史赛道 serious → 学术研究
-    op.execute(
-        "UPDATE resources SET content_category = 'academic' "
-        "WHERE track = 'serious' AND content_category IS NULL"
-    )
-    # 回填 2：荒诞指数折算（编辑部口径：<2.5 学术；2.5–7.5 娱乐向；≥7.5 吐槽向）
+    # 回填 1：荒诞指数折算（<2.5 学术；2.5–7.5 娱乐向；≥7.5 吐槽向）。
+    # 不用 track 做判据：013 之后新写入恒为 serious，拿它回填会把全部
+    # 稿子判成学术——那正是「扫一眼全过审」，必须避免。
     op.execute(
         "UPDATE resources SET content_category = 'academic' "
         "WHERE content_category IS NULL AND absurdity_index IS NOT NULL "
@@ -59,7 +56,7 @@ def upgrade() -> None:
         "WHERE content_category IS NULL AND absurdity_index IS NOT NULL "
         "AND absurdity_index >= 7.5"
     )
-    # 回填 3：类型兜底——论文按学术，其余按娱乐向
+    # 回填 2：无荒诞指数时的类型兜底——论文按学术，其余按娱乐向
     op.execute(
         "UPDATE resources SET content_category = 'academic' "
         "WHERE content_category IS NULL AND type = 'paper'"

@@ -134,6 +134,12 @@ const QUALITY_GRADES: Record<string, QualityGrade> = {
   'F': { label: 'F 及格', description: '40–49，及格可发表，按意见修订', className: 'bg-muted text-muted-foreground border-border' },
 }
 
+const GRADE_FALLBACK: QualityGrade = {
+  label: '—',
+  description: '未评级',
+  className: 'bg-muted text-muted-foreground border-border',
+}
+
 export function qualityGrade(grade: string | null | undefined): QualityGrade | null {
   if (!grade) return null
   const known = QUALITY_GRADES[grade]

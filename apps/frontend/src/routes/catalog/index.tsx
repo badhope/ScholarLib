@@ -82,7 +82,7 @@ function CatalogListPage() {
 
   const { data, isLoading, isError, refetch } = useResources(params)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const viewMode: 'list' | 'grid' = search.view === 'grid' ? 'grid' : 'list' 
+  const viewMode: 'list' | 'grid' = search.view === 'grid' ? 'grid' : 'list'
 
   // 筛选条件写到 URL，replace 避免每次筛选都污染历史。
   // 顺带清空勾选：翻页/改筛选后旧 id 已经不在页面上，留着会让「导出」
@@ -146,9 +146,7 @@ function CatalogListPage() {
         <DisciplineChips search={search} updateSearch={updateSearch} />
       )}
 
-      {/* 桌面端：筛选常驻卡片（md 及以上） */}
-      {!isMobile && (
-        {/* 视图切换（v1.11）：列表=管理与速览，九宫格=封面浏览。 */}
+      {/* 视图切换（v1.11）：列表=管理与速览，九宫格=封面浏览。 */}
       {!isMobile && (
         <div className="mb-3 flex justify-end">
           <div className="inline-flex rounded-md border p-0.5 text-xs">
@@ -169,7 +167,9 @@ function CatalogListPage() {
         </div>
       )}
 
-      <DesktopFilters search={search} updateSearch={updateSearch} />
+      {/* 桌面端：筛选常驻卡片（md 及以上） */}
+      {!isMobile && (
+        <DesktopFilters search={search} updateSearch={updateSearch} />
       )}
 
       {/* 移动端：筛选收进可折叠面板，默认收起，避免挤占浏览空间 */}
@@ -215,8 +215,6 @@ function CatalogListPage() {
       ) : !data || data.data.length === 0 ? (
         <EmptyState title="暂无资源" description="尝试调整筛选条件。" />
       ) : viewMode === 'grid' ? (
-        // 九宫格封面视图（v1.11）：封面优先的浏览形态，适合翻刊找感觉；
-        // 批量管理操作仍回列表视图使用。
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
           {data.data.map((r) => (
             <Link
@@ -311,10 +309,7 @@ function CatalogListPage() {
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <Badge variant="secondary">{typeLabel(r.type)}</Badge>
-                          {/* 内容类别（非等级）：academic/fun/rant 是编辑部
-                              评定的一等公民属性；RQS 等级与风格光谱不再
-                              上卡片分层内容，只在详情页评审区呈现。 */}
-                          {r.content_category ? (
+                         {r.content_category ? (
                             <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
                               {contentCategoryLabel(r.content_category)}
                             </Badge>
@@ -426,29 +421,9 @@ function CatalogFilterFields({
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>        </Select>
-        <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">类别</label>
-        <Select
-          value={search.category ?? 'all'}
-          onValueChange={(v) =>
-            updateSearch({
-              category: v === 'all' ? undefined : (v as CatalogSearch['category']),
-              page: 1,
-            })
-          }
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部类别</SelectItem>
-            <SelectItem value="academic">学术研究</SelectItem>
-            <SelectItem value="fun">娱乐向</SelectItem>
-            <SelectItem value="rant">吐槽向</SelectItem>
-          </SelectContent>
         </Select>
-        </div>  <div className="space-y-1.5">
+      </div>
+      <div className="space-y-1.5">
         <label className="text-xs text-muted-foreground">学科</label>
         <Select
           value={search.discipline ?? 'all'}

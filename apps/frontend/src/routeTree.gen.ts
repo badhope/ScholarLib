@@ -30,6 +30,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminAnnouncementsRouteImport } from './routes/admin/announcements'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminClaimsRouteImport } from './routes/admin/claims'
@@ -157,6 +158,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const AccountSecurityRoute = AccountSecurityRouteImport.update({
   id: '/account/security',
   path: '/account/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAnnouncementsRoute = AdminAnnouncementsRouteImport.update({
@@ -313,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
   '/forum/': typeof ForumIndexRoute
@@ -359,6 +366,7 @@ export interface FileRoutesByTo {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/admin': typeof AdminIndexRoute
   '/catalog': typeof CatalogIndexRoute
   '/follows': typeof FollowsIndexRoute
   '/forum': typeof ForumIndexRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
   '/forum/': typeof ForumIndexRoute
@@ -454,6 +463,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
+    | '/admin/'
     | '/catalog/'
     | '/follows/'
     | '/forum/'
@@ -500,6 +510,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
+    | '/admin'
     | '/catalog'
     | '/follows'
     | '/forum'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/submissions/pending'
+    | '/admin/'
     | '/catalog/'
     | '/follows/'
     | '/forum/'
@@ -593,6 +605,7 @@ export interface RootRouteChildren {
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
   ReviewAssignmentsRoute: typeof ReviewAssignmentsRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
+  AdminIndexRoute: typeof AdminIndexRoute
   CatalogIndexRoute: typeof CatalogIndexRoute
   FollowsIndexRoute: typeof FollowsIndexRoute
   ForumIndexRoute: typeof ForumIndexRoute
@@ -749,6 +762,13 @@ declare module '@tanstack/react-router' {
       path: '/account/security'
       fullPath: '/account/security'
       preLoaderRoute: typeof AccountSecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/announcements': {
@@ -953,6 +973,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReaderResourceIdRoute: ReaderResourceIdRoute,
   ReviewAssignmentsRoute: ReviewAssignmentsRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
+  AdminIndexRoute: AdminIndexRoute,
   CatalogIndexRoute: CatalogIndexRoute,
   FollowsIndexRoute: FollowsIndexRoute,
   ForumIndexRoute: ForumIndexRoute,

@@ -24,6 +24,7 @@ import {
   useJournalMetrics,
   useResources,
 } from '@/hooks/api/use-modules'
+import { ArticleCover } from '@/components/common/article-cover'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,7 +37,7 @@ import {
   useAnnouncementPortal,
 } from '@/components/common/announcement-dialog'
 import { BrandMark } from '@/components/common/brand-mark'
-import { contentCategoryLabel } from '@/lib/resource-labels'
+
 import { issueTitle } from '@/lib/issue-meta'
 import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Skeleton } from '@/components/ui/skeleton'
