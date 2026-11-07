@@ -251,11 +251,20 @@ class ResourceResponse(ResourceBase):
 
     @model_validator(mode="after")
     def _derive_derived_fields(self) -> "ResourceResponse":
-        """content_track 按 content_category 回退派生；clc_status 由 clc_code 反推。"""
+        """content_track 按 content_category 回退派生；clc_status 由 clc_code 反推。
+
+        P0 收口：娱乐稿（content_track=essay）不下发任何学术评分字段——
+        absurdity_index / quality_score / quality_grade 一律置 null，
+        学术稿（paper）保持原值。
+        """
         from app.modules.submission.clc import clc_status_of
 
         self.content_track = derive_content_track(self.content_category, self.content_track)
         self.clc_status = clc_status_of(self.clc_code)
+        if self.content_track == "essay":
+            self.absurdity_index = None
+            self.quality_score = None
+            self.quality_grade = None
         return self
 
 
@@ -329,8 +338,6 @@ class JournalMetrics(BaseModel):
     r_factor: float | None = None
     # 无引文数据，自引率恒为 0.0（诚实标注，页面上作为固定项展示）。
     self_citation_rate: float = 0.0
-    # 荒诞指数中位数：已评定记录的中位数；尚无评定时为 None。
-    absurdity_index_median: float | None = None
 
 
 class FacetBucket(BaseModel):

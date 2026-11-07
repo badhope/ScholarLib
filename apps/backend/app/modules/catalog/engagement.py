@@ -25,7 +25,6 @@ inventing one.
 
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass
 from typing import Any
 
@@ -342,15 +341,8 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             ]
             r_factor = round(sum(scores) / len(scores), 2)
 
-    absurdity_rows = (
-        await db.execute(
-            select(Resource.absurdity_index).where(
-                *published_filter, Resource.absurdity_index.is_not(None)
-            )
-        )
-    ).scalars()
-    absurdity_values = [float(v) for v in absurdity_rows if v is not None]
-    absurdity_median = round(statistics.median(absurdity_values), 1) if absurdity_values else None
+    # P0 收口：荒诞指数中位数随"娱乐稿不计算任何学术评分"决策下线，
+    # 不再对 essay 统计，也不在指标接口下发。
 
     return {
         "published_total": total,
@@ -368,7 +360,6 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
         "open_access_rate": 100.0 if total else None,
         "r_factor": r_factor,
         "self_citation_rate": 0.0,
-        "absurdity_index_median": absurdity_median,
     }
 
 

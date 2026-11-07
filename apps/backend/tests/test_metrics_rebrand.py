@@ -1,8 +1,8 @@
 """0.5.0 指标改版的行为锁定测试。
 
-契约（ledger: metrics-rebrand-and-content-hub）：
+契约（ledger: metrics-rebrand-and-content-hub；P0 收口更新）：
 - R1  公开指标不泄露口径：journal-metrics 不含 r_index_formula，
-      含 r_factor / self_citation_rate / absurdity_index_median。
+      含 r_factor / self_citation_rate；P0 收口后不再下发 absurdity_index_median。
 - R2  荒诞指数：公开响应暴露、仅 admin 可改、越界 422。
 - R3  列表 has_file 真实反映"挂了带文件稿件的 submission"。
 """
@@ -38,15 +38,15 @@ async def test_journal_metrics_hides_formula_and_reports_new_fields(
 
     body = (await client.get("/api/catalog/journal-metrics")).json()
     assert "r_index_formula" not in body
+    assert "absurdity_index_median" not in body
     assert body["self_citation_rate"] == 0.0
-    assert body["absurdity_index_median"] is None
     # 全刊只有一篇且无互动：事件总量低于 MIN_R_FACTOR_SAMPLE，R 因子不出数。
     # （此前这里断言 0.0 —— 但 0.0 本身就是「无样本」时的假读数；见
     # engagement.MIN_R_FACTOR_SAMPLE 的注释。）
     assert body["r_factor"] is None
 
 
-async def test_journal_metrics_r_factor_and_absurdity_median(
+async def test_journal_metrics_r_factor_and_no_absurdity_median(
     client: AsyncClient, admin_user: dict, db_session: AsyncSession
 ) -> None:
     headers = await _admin_headers(admin_user)
@@ -70,7 +70,8 @@ async def test_journal_metrics_r_factor_and_absurdity_median(
             await db_session.commit()
 
     body = (await client.get("/api/catalog/journal-metrics")).json()
-    assert body["absurdity_index_median"] == 5.1
+    # P0 收口：即使有记录评定了 absurdity_index，指标接口也不再下发中位数。
+    assert "absurdity_index_median" not in body
     # 两篇零互动：事件总量不足，R 因子为 None（页面显示「样本不足」）。
     assert body["r_factor"] is None
 

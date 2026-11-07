@@ -162,3 +162,63 @@ async def test_manuscript_409_needs_docx(
     assert body["readable"] is False
     assert "无文本层" in body["reason"]
     assert body["downloadable"] is True
+
+
+@pytest.mark.asyncio
+async def test_essay_scores_nulled(
+    client: AsyncClient, db_session: AsyncSession, admin_user: dict
+) -> None:
+    """P0 收口：essay 文章接口不下发 absurdity_index / quality_score / quality_grade。"""
+    tenant = await _default_tenant(db_session)
+    resource = Resource(
+        tenant_id=tenant.id, title="娱乐稿", type="paper", authors=["A"],
+        year=2026, discipline="physics", abstract="x", preview="x", tags=[],
+        publication_status="published", content_category="fun",
+        absurdity_index=5.5, quality_score=80.0, quality_grade="B",
+    )
+    db_session.add(resource)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/catalog/{resource.id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["content_track"] == "essay"
+    assert body["absurdity_index"] is None
+    assert body["quality_score"] is None
+    assert body["quality_grade"] is None
+
+
+@pytest.mark.asyncio
+async def test_paper_scores_kept(
+    client: AsyncClient, db_session: AsyncSession, admin_user: dict
+) -> None:
+    """学术稿（paper）的评分字段保持原样不下发 null。"""
+    tenant = await _default_tenant(db_session)
+    resource = Resource(
+        tenant_id=tenant.id, title="学术稿", type="paper", authors=["A"],
+        year=2026, discipline="physics", abstract="x", preview="x", tags=[],
+        publication_status="published", content_category="academic",
+        absurdity_index=2.0, quality_score=88.0, quality_grade="A",
+    )
+    db_session.add(resource)
+    await db_session.commit()
+
+    resp = await client.get(f"/api/catalog/{resource.id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["content_track"] == "paper"
+    assert body["absurdity_index"] == 2.0
+    assert body["quality_score"] == 88.0
+    assert body["quality_grade"] == "A"
+
+
+@pytest.mark.asyncio
+async def test_metrics_no_absurdity_median(
+    client: AsyncClient, db_session: AsyncSession, admin_user: dict
+) -> None:
+    """指标接口不再下发 absurdity_index_median；r_factor 仍为数值字段。"""
+    resp = await client.get("/api/catalog/journal-metrics")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "absurdity_index_median" not in body
+    assert "r_factor" in body
