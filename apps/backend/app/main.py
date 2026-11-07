@@ -287,6 +287,13 @@ for name, module_router in registry.all_routers():
     app.include_router(module_router, prefix="/api")
     logger.info("module_router_mounted", module=name, prefix=f"/api/{name}")
 
+# --- 审稿人/主编工作台（独立路由，与 review 模块主路由分开挂载，
+#     路径前缀 /review/workbench 与 /editor/workbench） ---
+from app.modules.review.workbench import router as workbench_router  # noqa: E402
+
+app.include_router(workbench_router, prefix="/api")
+logger.info("module_router_mounted", module="workbench", prefix="/api")
+
 
 # --- /reader/{int} 服务端 301 ------------------------------------------------
 # 旧外链 /reader/301 需永久重定向到新详情锚点 /catalog/301#article。

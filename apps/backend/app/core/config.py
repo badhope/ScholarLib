@@ -160,6 +160,11 @@ class Settings(BaseSettings):
     # 单独授权（2026-11-06 主编指令：发布成功要发恭喜邮件）。其余类型
     # （验证码/催审/裁决/补审）仍受 email_outbound_enabled 管控。
     email_congrat_enabled: bool = False
+    # 审稿工作流邮件摘要（指派/催审/裁决/认领结果）独立开关。
+    # 即便打开，也只有在 SMTP 已配置且 email_outbound_enabled=true 时才真正投递；
+    # 未配置时仍会把摘要落库（email_digest_records.status='skipped_no_smtp'），
+    # 便于运维核对"本该发什么"，而不是假装已发。
+    email_review_digest_enabled: bool = True
     email_from_address: str = "no-reply@rubbish.local"
     email_from_name: str = "Rubbish"
     email_smtp_host: str = ""
