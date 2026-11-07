@@ -114,18 +114,41 @@ const ALL_BLOCK_TITLES =
   '摘[ \\t\\u3000]*要|Abstract|ABSTRACT|关键词|关键字|Keywords?|中图分类号|CLC|参考文献|References?|Bibliography|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \\t\\u3000]*使用声明?|致谢|Acknowledg(e)?ments?|DOI|doi|评分|质量等级|RQS|荒诞指数'
 
 /**
- * 规范化：把行内/非行首的 `## 摘要` 这类标题强制断行，让后续按行切分能识别。
- * 原稿常见形态：作者单位行尾紧接 `## 摘要`，Markdown 不把它当 heading。
- * 注意：不跨行匹配（\s* 改为 [ \t]*），且不重复补 ##（$2 已含 #）。
+ * 规范化：逐行处理。只对"本行内出现 #+ 块标题但不在行首"的行，
+ * 把该片段拆成独立行；其余行一个字都不改。
+ * 关键：用负向后顾 (?<!#) 避免把 `## 关键词` 的第一个 # 当成"行内文本"吃掉。
  */
 function normalizeInlineHeadings(md: string): string {
-  // 行内：同行文本后紧跟 ## 块标题 → 断行
-  const re = new RegExp(`([^\\n])[ \\t]*(#{1,6}[ \\t]+(?:${ALL_BLOCK_TITLES})[ \\t]*[:：]?)`, 'g')
-  let out = md.replace(re, '$1\n\n$2')
-  // 块标题后紧跟正文（无换行）→ 补换行
-  const re2 = new RegExp(`(#{1,6}[ \\t]+(?:${ALL_BLOCK_TITLES})[ \\t]*[:：]?)([^\\n ])`, 'g')
-  out = out.replace(re2, '$1\n\n$2')
-  return out
+  const lines = md.split('\n')
+  const out: string[] = []
+  // 行内块标题：# 后跟块标题词，且前面不是 #（避免拆 ## ）
+  const inlineRe = new RegExp(`(?<![#\\n])#{1,6}[ \\t]+(?:${ALL_BLOCK_TITLES})[ \\t]*[:：]?`, 'g')
+  for (const line of lines) {
+    // 已经是行首标题的行不动
+    if (/^#{1,6}\s+/.test(line)) {
+      out.push(line)
+      continue
+    }
+    // 行内出现块标题 → 用 matchAll 定位并拆行
+    const matches = [...line.matchAll(inlineRe)]
+    if (matches.length === 0) {
+      out.push(line)
+      continue
+    }
+    let cursor = 0
+    for (const m of matches) {
+      const start = m.index ?? 0
+      const before = line.slice(cursor, start)
+      if (before.trim()) out.push(before)
+      out.push('')
+      out.push(m[0])
+      out.push('')
+      cursor = start + m[0].length
+    }
+    const after = line.slice(cursor)
+    if (after.trim()) out.push(after)
+  }
+  return out.join('\n')
 }
 
 /**
@@ -162,14 +185,18 @@ function dropAcademicHeader(md: string): string {
  * 按轨道裁剪 Markdown：删除指定的 ## / ### 小节。
  * fun/rant：删 摘要/关键词/CLC/参考文献/声明/DOI；保留正文与「参考资料」
  * sci_pop：删 摘要/关键词/CLC/评分/DOI；保留正文与「延伸阅读」
+ * 安全护栏：删完后若剩余 < 原文 60% 或找不到正文标题，回退为不裁剪。
  */
 export function stripAcademicSections(md: string, kind: string): string {
   if (kind === 'paper' || kind === 'plain') return md
 
-  // 1) 先把行内标题规范化成行首
+  // 先统一换行：去掉 \r（Windows 换行残留会导致 $ 锚点不匹配）
+  md = md.replace(/\r/g, '')
+
+  // 1) 先把行内标题规范化成行首（逐行处理，不动行首标题）
   let work = normalizeInlineHeadings(md)
 
-  // 2) fun/rant 额外剥掉文首学术刊头
+  // 2) fun/rant 额外剥掉文首学术刊头（找不到正文标题时放弃，保持原文）
   if (kind === 'fun' || kind === 'rant') {
     work = dropAcademicHeader(work)
   }
@@ -199,7 +226,23 @@ export function stripAcademicSections(md: string, kind: string): string {
     out.push(line)
     i++
   }
-  return out.join('\n')
+  let result = out.join('\n')
+
+  // 安全护栏：宁可多显示也不能删正文
+  // 1) 剩余长度 < 原文 60% → 回退
+  if (result.length < md.length * 0.6) {
+    console.warn('[stripAcademicSections] result too short, falling back to original', {
+      original: md.length,
+      result: result.length,
+    })
+    return md
+  }
+  // 2) 找不到任何正文标题（1 引言 / 方法 / 结论 等）→ 回退
+  if (!/^#{1,3}\s+(\d+|引言|方法|结果|讨论|结论|Introduction|Method|Result|Discussion)/m.test(result)) {
+    console.warn('[stripAcademicSections] no body heading found, falling back')
+    return md
+  }
+  return result
 }
 
 // 邮箱脱敏：原稿里 `* zabwerk@yeah.net`、`邮箱：zabwerk@yeah.net` 这类
