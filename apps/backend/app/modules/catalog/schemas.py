@@ -324,6 +324,10 @@ class ResourceResponse(ResourceBase):
             self.absurdity_index = None
             self.quality_score = None
             self.quality_grade = None
+            # P1：中图分类号只论文有，娱乐稿不下发（DB 值不删，后续分类改判）。
+            self.clc_code = None
+            self.clc_label = None
+            self.clc_status = "absent"
         self.authors_detail = _build_authors_detail(self.authors, self.authors_meta)
         return self
 

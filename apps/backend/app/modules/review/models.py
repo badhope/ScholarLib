@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -86,6 +87,13 @@ class ReviewAssignment(Base, TenantScopedMixin):
     )
     reminder_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
+    )
+
+    # P1：轮次（默认 1）、slot（1/2/3，审稿人槽位）、是否裁决人。
+    round: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    slot: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    is_adjudicator: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
     )
 
     submission = relationship("Submission", backref="review_assignments")

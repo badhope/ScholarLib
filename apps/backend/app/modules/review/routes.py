@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import require_reviewer, require_tenant_id
+from app.api.deps import require_editor, require_reviewer, require_tenant_id
 from app.core.db import get_db, paginate
 from app.core.time import utcnow
 from app.models import User
@@ -32,6 +32,7 @@ from app.modules.review.schemas import (
     ReviewReportResponse,
     ReviewSubmit,
 )
+from app.modules.submission.models import Submission
 from app.modules.submission.schemas import SubmissionResponse
 
 router = APIRouter(prefix="/review", tags=["review"])
@@ -383,3 +384,213 @@ async def submit_review_report(
         comments_to_author=report.comments_to_author,
         submitted_at=report.submitted_at,
     )
+
+
+# ============================================================================
+# Editor-facing endpoints (P1：双人审稿闸门)
+# ============================================================================
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+
+class AssignReviewersBody(BaseModel):
+    reviewer_ids: list[int] = Field(min_length=1, max_length=3)
+    due_days: int = Field(default=14, ge=1, le=90)
+
+
+class EditorDecisionBody(BaseModel):
+    decision: str = Field(pattern="^(accept|reject|revise)$")
+    reason: str = Field(default="", max_length=2000)
+
+
+def _completed_reports_count(assignments: list[ReviewAssignment]) -> int:
+    return sum(1 for a in assignments if a.status == "completed")
+
+
+def _distinct_reviewers_completed(assignments: list[ReviewAssignment]) -> int:
+    return len({a.reviewer_id for a in assignments if a.status == "completed"})
+
+
+@router.post("/submissions/{submission_id}/assign", status_code=status.HTTP_201_CREATED)
+async def assign_reviewers(
+    submission_id: int,
+    body: AssignReviewersBody,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """批量指派审稿人（slot 1/2/3）。禁止指派给稿件作者/共同作者。"""
+    tenant_id = require_tenant_id()
+    sub = (
+        await db.execute(
+            select(Submission).where(
+                Submission.id == submission_id, Submission.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if sub is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    # 校验：reviewer 不能是 submitted_by 或 authors 里的人
+    author_ids = {sub.submitted_by}
+    # authors 是 list[str]（姓名），无法直接映射到 user_id；这里只拦 submitted_by。
+    # （共同作者绑定 user_id 是 P1 认领后的事，此处先拦第一作者。）
+    for rid in body.reviewer_ids:
+        if rid in author_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="禁止指派给稿件作者（自审）",
+            )
+
+    # 已有 assignments 中，pending/accepted 的占 slot
+    existing = (
+        await db.execute(
+            select(ReviewAssignment).where(
+                ReviewAssignment.submission_id == submission_id,
+                ReviewAssignment.tenant_id == tenant_id,
+                ReviewAssignment.status.in_(["pending", "accepted"]),
+            )
+        )
+    ).scalars().all()
+    used_slots = {a.slot for a in existing}
+    next_slot = 1
+    created = []
+    for rid in body.reviewer_ids:
+        # 跳过已存在的 assignment（同一 reviewer 重复邀请）
+        dup = await db.execute(
+            select(ReviewAssignment).where(
+                ReviewAssignment.submission_id == submission_id,
+                ReviewAssignment.reviewer_id == rid,
+            )
+        )
+        if dup.scalar_one_or_none() is not None:
+            continue
+        while next_slot in used_slots:
+            next_slot += 1
+        used_slots.add(next_slot)
+        due = utcnow() + __import__("datetime").timedelta(days=body.due_days)
+        a = ReviewAssignment(
+            tenant_id=tenant_id,
+            submission_id=submission_id,
+            reviewer_id=rid,
+            assigned_by=current_user.id,
+            status="pending",
+            due_date=due,
+            round=1,
+            slot=next_slot,
+        )
+        db.add(a)
+        created.append(a)
+
+    await db.commit()
+    return {"assigned": len(created), "submission_id": submission_id}
+
+
+@router.get("/submissions/{submission_id}/matrix")
+async def review_matrix(
+    submission_id: int,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """审稿矩阵：每位审稿人状态/推荐/截止/超期/冲突。"""
+    tenant_id = require_tenant_id()
+    assignments = (
+        await db.execute(
+            select(ReviewAssignment)
+            .where(
+                ReviewAssignment.submission_id == submission_id,
+                ReviewAssignment.tenant_id == tenant_id,
+            )
+            .options(selectinload(ReviewAssignment.report))
+            .order_by(ReviewAssignment.slot)
+        )
+    ).scalars().all()
+
+    now = utcnow()
+    rows = []
+    recommendations = []
+    for a in assignments:
+        status = a.status
+        if a.due_date and a.status in ("pending", "accepted") and a.due_date < now:
+            status = "overdue"
+        rec = None
+        if a.report:
+            rec = a.report[0].recommendation if a.report else None
+            recommendations.append(rec)
+        # reviewer username
+        u = await db.get(User, a.reviewer_id)
+        rows.append({
+            "reviewer_id": a.reviewer_id,
+            "username": u.username if u else None,
+            "slot": a.slot,
+            "status": status,
+            "recommendation": rec,
+            "due_date": a.due_date.isoformat() if a.due_date else None,
+            "is_overdue": status == "overdue",
+            "is_adjudicator": a.is_adjudicator,
+        })
+
+    completed = _completed_reports_count(assignments)
+    distinct = _distinct_reviewers_completed(assignments)
+    # 冲突：有 accept 和 reject/major_revision 同时存在
+    conflict = False
+    if "accept" in recommendations and ("reject" in recommendations or "major_revision" in recommendations):
+        conflict = True
+
+    return {
+        "submission_id": submission_id,
+        "assignments": rows,
+        "reports_completed": completed,
+        "distinct_reviewers": distinct,
+        "can_decide": distinct >= 2,
+        "conflict": conflict,
+    }
+
+
+@router.post("/submissions/{submission_id}/decision")
+async def editor_decision(
+    submission_id: int,
+    body: EditorDecisionBody,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """编辑决定：≥2 份 completed 报告（不同 reviewer）才允许，否则 409。"""
+    tenant_id = require_tenant_id()
+    sub = (
+        await db.execute(
+            select(Submission).where(
+                Submission.id == submission_id, Submission.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if sub is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    assignments = (
+        await db.execute(
+            select(ReviewAssignment).where(
+                ReviewAssignment.submission_id == submission_id,
+                ReviewAssignment.tenant_id == tenant_id,
+            )
+        )
+    ).scalars().all()
+    completed = _completed_reports_count(assignments)
+    distinct = _distinct_reviewers_completed(assignments)
+    if distinct < 2:
+        missing = 2 - distinct
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"还差 {missing} 份审稿报告（已收 {completed}/2）",
+        )
+
+    # 写审计
+    from app.models import AuditLog
+    db.add(AuditLog(
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="review.editor_decision",
+        target_type="submission",
+        target_id=str(submission_id),
+        payload={"decision": body.decision, "reason": body.reason},
+    ))
+    await db.commit()
+    return {"submission_id": submission_id, "decision": body.decision, "reports_completed": completed}

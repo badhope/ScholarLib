@@ -7,6 +7,27 @@
 `apps/backend/pyproject.toml`、`apps/frontend/package.json`、`apps/backend/app/__init__.py`
 四处完全一致，由 `scripts/check-version.sh` 守门。
 
+## [1.13.0] — 2026-11-07
+
+### Added
+- **P0 文件解析/质量闸门/CLC/内容赛道/认领归属**：文件头识别格式（%PDF-/PK/D0CF11E0/
+  {\\rtf）；Word（mammoth）优先、PDF 质量闸门（≥300 字/CJK≥30%/无乱码）不达标标
+  needs_docx；CLC 号 front-matter 解析 + `?clc=` 前缀筛选；content_track 派生
+  （academic→paper、fun/rant→essay）；发布写 owner_id，认领审批流，未认领稿
+  不下发解析邮箱。
+- **P1 认领绑定+作者归属**：审批通过后 owner_id 落库、authors_meta 对应位标记
+  claimed=true；管理端 assign-owner 逐位绑定；PUT /admin/resources/{id}/authors
+  校验第一/通讯唯一、order 连续；未认领位 email/user_id/affiliation 一律 null。
+- **双人审稿闸门**：≥2 份 completed 报告（不同 reviewer）才允许编辑决定；
+  指派时校验 reviewer 非作者/共同作者（403 禁止自审）；declined 释放 slot；
+  matrix 端点返回审稿人状态/推荐/截止/超期/冲突标记。
+- **/reader/{int} 服务端 301**：永久重定向到 /catalog/{id}#article。
+- **娱乐稿不显示也不计算学术评分**：essay 不下发 absurdity_index/quality_score/
+  quality_grade；指标下线荒诞中位数；essay 不下发 clc_code/clc_label。
+
+### Fixed
+- 修复仓库内 prebuilt-static/index.html 与 assets 错配导致整站白屏。
+
 ## [1.12.0] — 2026-11-06
 
 ### Added
