@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,12 @@ class CommentCreate(BaseModel):
 
 
 class CommentResponse(BaseModel):
-    """One comment row as shown in the public thread."""
+    """One comment row as shown in the public thread.
+
+    前台不暴露 status / moderated_by / moderation_note——评论者本人和普通
+    读者不需要看到审核状态（被拒评论直接从列表过滤掉，pending 评论按
+    正常评论展示，事后审核）。
+    """
 
     id: int
     resource_id: int
@@ -30,3 +36,47 @@ class CommentResponse(BaseModel):
 class CommentListResponse(BaseModel):
     data: list[CommentResponse]
     meta: PaginationMeta
+
+
+# ---------------------------------------------------------------------------
+# 后台审核
+# ---------------------------------------------------------------------------
+
+ModerationAction = Literal["approve", "reject"]
+
+
+class CommentModerateRequest(BaseModel):
+    """Body for POST /api/admin/comments/{id}/moderate."""
+
+    action: ModerationAction
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class AdminCommentRow(BaseModel):
+    """后台列表一行：比前台多了审核状态、所属资源标题、审核人/时间/理由。"""
+
+    id: int
+    resource_id: int
+    resource_title: Optional[str] = None
+    user_id: int
+    author_name: str
+    body: str
+    status: Literal["pending", "published", "rejected"]
+    moderation_note: Optional[str] = None
+    moderated_by: Optional[int] = None
+    moderated_by_name: Optional[str] = None
+    moderated_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class AdminCommentListResponse(BaseModel):
+    data: list[AdminCommentRow]
+    meta: PaginationMeta
+
+
+class AdminCommentStatusCounts(BaseModel):
+    """顶部状态筛选的计数徽标。"""
+
+    pending: int = 0
+    published: int = 0
+    rejected: int = 0

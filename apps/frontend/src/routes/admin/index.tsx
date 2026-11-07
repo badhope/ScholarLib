@@ -7,6 +7,7 @@ import {
   Gavel,
   Layers,
   Megaphone,
+  MessageSquare,
   ShieldCheck,
   Users,
 } from 'lucide-react'
@@ -14,6 +15,7 @@ import {
 import { requireAdminGuard } from '@/lib/route-guards'
 import { useAuth } from '@/hooks/use-auth'
 import { usePendingClaimsCount } from '@/hooks/api/use-modules'
+import { useAdminCommentCounts } from '@/hooks/api/use-comments'
 import { PageHeader } from '@/components/common/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -41,6 +43,7 @@ const WORKFLOWS: { title: string; desc: string; to: string; icon: typeof Gavel }
   ],
   [
     { title: '用户管理', desc: '角色 · 状态 · 检索', to: '/admin/users', icon: Users },
+    { title: '评论审核', desc: '待审 · 通过 · 拒绝', to: '/admin/comments', icon: MessageSquare },
     { title: '角色申请', desc: '审稿人/编辑申请审批', to: '/admin/role-applications', icon: ClipboardCheck },
     { title: '审计日志', desc: '全站敏感操作留痕', to: '/admin/audit-logs', icon: ShieldCheck },
   ],
@@ -57,6 +60,8 @@ function AdminDashboard() {
   const { user, isAuthenticated } = useAuth()
   const { data: claimsCount } = usePendingClaimsCount(isAuthenticated)
   const pendingCount = claimsCount?.count ?? 0
+  const { data: commentCounts } = useAdminCommentCounts(isAuthenticated)
+  const pendingComments = commentCounts?.pending ?? 0
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
       <PageHeader title="站点总览" description={`欢迎，${user?.username ?? '管理员'}。按工作流找入口。`} />
@@ -97,6 +102,11 @@ function AdminDashboard() {
                   {item.to === '/admin/claims' && pendingCount > 0 ? (
                     <Badge variant="destructive" className="ml-auto mr-2">
                       {pendingCount} 待处理
+                    </Badge>
+                  ) : null}
+                  {item.to === '/admin/comments' && pendingComments > 0 ? (
+                    <Badge variant="destructive" className="ml-auto mr-2">
+                      {pendingComments} 待审
                     </Badge>
                   ) : null}
                   <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />

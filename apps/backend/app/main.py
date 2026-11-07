@@ -294,6 +294,13 @@ from app.modules.review.workbench import router as workbench_router  # noqa: E40
 app.include_router(workbench_router, prefix="/api")
 logger.info("module_router_mounted", module="workbench", prefix="/api")
 
+# --- 评论审核后台（/api/admin/comments）：comments 模块的 admin 子路由，
+#     不经过模块 registry（registry 每模块只挂一个 router），这里显式挂载。
+from app.modules.comments.admin_routes import router as comments_admin_router  # noqa: E402
+
+app.include_router(comments_admin_router, prefix="/api")
+logger.info("module_router_mounted", module="comments_admin", prefix="/api/admin/comments")
+
 
 # --- /reader/{int} 服务端 301 ------------------------------------------------
 # 旧外链 /reader/301 需永久重定向到新详情锚点 /catalog/301#article。

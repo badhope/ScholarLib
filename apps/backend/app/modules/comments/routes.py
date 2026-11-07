@@ -82,9 +82,13 @@ async def list_comments(
     """
     tenant_id = require_tenant_id()
     await _require_published_resource(db, resource_id, tenant_id)
+    # 前台口径：过滤掉被拒绝的评论。新评论写入 pending，但仍按正常评论
+    # 展示（事后审核，避免用户发完看不到自己的发言）；只有 editor 及以上
+    # 在后台判 reject 后，前台才下架。
     stmt = select(Comment).where(
         Comment.tenant_id == tenant_id,
         Comment.resource_id == resource_id,
+        Comment.status != "rejected",
     )
     rows, meta = await paginate(
         db,
@@ -116,6 +120,8 @@ async def create_comment(
         resource_id=payload.resource_id,
         user_id=current_user.id,
         body=body[:MAX_BODY_LENGTH],
+        # 新评论默认 pending（事后审核）；前台仍展示，被拒后才下架。
+        status="pending",
     )
     db.add(comment)
     try:

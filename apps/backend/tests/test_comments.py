@@ -187,3 +187,168 @@ async def test_comment_xp_is_capped_per_day(client: AsyncClient, admin_user: dic
     baseline = RULES["register"]
     earned = body["xp"] - baseline
     assert earned == DAILY_COMMENT_XP_CAP, f"expected cap {DAILY_COMMENT_XP_CAP}, got {earned}"
+
+
+# ---------------------------------------------------------------------------
+# 评论审核（2026-11-07）：新评论落 pending，editor 可在后台通过/拒绝。
+# ---------------------------------------------------------------------------
+
+
+async def test_new_comment_lands_pending_but_still_publicly_visible(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """事后审核口径：写入 status=pending；前台仍展示（避免用户发完看不到自己的）。"""
+    rid = await _create_resource(client, admin_user, "Pending Visible")
+    posted = (
+        await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": "新评论待审"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+
+    # 前台：pending 评论仍展示（事后审核）
+    listing = (await client.get(f"/api/comments?resource_id={rid}")).json()
+    assert listing["meta"]["total"] == 1
+    assert listing["data"][0]["id"] == posted["id"]
+    # 前台 schema 不暴露 status 字段
+    assert "status" not in listing["data"][0]
+
+    # 后台：pending 列表能看到这条
+    pending = (await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))).json()
+    assert pending["meta"]["total"] >= 1
+    row = next(r for r in pending["data"] if r["id"] == posted["id"])
+    assert row["status"] == "pending"
+    assert row["resource_id"] == rid
+    assert row["resource_title"] == "Pending Visible"
+    assert row["author_name"] == test_user["username"]
+
+
+async def test_admin_can_approve_then_reject_comment(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """approve → published；reject → rejected 且前台立即下架。"""
+    rid = await _create_resource(client, admin_user, "Moderate Me")
+    posted = (
+        await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": "待我裁决"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    cid = posted["id"]
+
+    # 先通过
+    approved = await client.post(
+        f"/api/admin/comments/{cid}/moderate",
+        json={"action": "approve"},
+        headers=auth_headers(admin_user),
+    )
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "published"
+    assert approved.json()["moderated_by"] == admin_user["user_id"]
+    assert approved.json()["moderated_at"] is not None
+
+    # 前台仍在
+    listing = (await client.get(f"/api/comments?resource_id={rid}")).json()
+    assert listing["meta"]["total"] == 1
+
+    # 再拒绝（带理由）
+    rejected = await client.post(
+        f"/api/admin/comments/{cid}/moderate",
+        json={"action": "reject", "note": "含广告链接"},
+        headers=auth_headers(admin_user),
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "rejected"
+    assert rejected.json()["moderation_note"] == "含广告链接"
+
+    # 前台立即下架
+    listing = (await client.get(f"/api/comments?resource_id={rid}")).json()
+    assert listing["meta"]["total"] == 0
+    assert listing["data"] == []
+
+    # 后台 rejected 列表能查到
+    rej = (await client.get("/api/admin/comments?status=rejected", headers=auth_headers(admin_user))).json()
+    assert any(r["id"] == cid for r in rej["data"])
+
+
+async def test_admin_comment_list_status_filter_and_counts(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """顶部计数 + 状态筛选。"""
+    rid = await _create_resource(client, admin_user, "Filter Me")
+    c1 = (
+        await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": "待审 1"},
+            headers=auth_headers(test_user),
+        )
+    ).json()["id"]
+    c2 = (
+        await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": "待审 2"},
+            headers=auth_headers(test_user),
+        )
+    ).json()["id"]
+
+    counts = (await client.get("/api/admin/comments/counts", headers=auth_headers(admin_user))).json()
+    assert counts["pending"] >= 2
+    assert counts["rejected"] >= 0
+
+    # 通过 c1
+    r = await client.post(
+        f"/api/admin/comments/{c1}/moderate",
+        json={"action": "approve"},
+        headers=auth_headers(admin_user),
+    )
+    assert r.status_code == 200
+
+    pending = (await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))).json()
+    pending_ids = [row["id"] for row in pending["data"]]
+    assert c1 not in pending_ids
+    assert c2 in pending_ids
+
+    published = (await client.get("/api/admin/comments?status=published", headers=auth_headers(admin_user))).json()
+    assert c1 in [row["id"] for row in published["data"]]
+
+
+async def test_non_editor_cannot_moderate_comments(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """普通读者（user 档位）打 admin 评论接口一律 403。"""
+    rid = await _create_resource(client, admin_user, "No Permission")
+    posted = (
+        await client.post(
+            "/api/comments",
+            json={"resource_id": rid, "body": "普通用户想越权审"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+
+    r = await client.get("/api/admin/comments", headers=auth_headers(test_user))
+    assert r.status_code == 403
+
+    r = await client.get("/api/admin/comments/counts", headers=auth_headers(test_user))
+    assert r.status_code == 403
+
+    r = await client.post(
+        f"/api/admin/comments/{posted['id']}/moderate",
+        json={"action": "approve"},
+        headers=auth_headers(test_user),
+    )
+    assert r.status_code == 403
+
+    # 未登录更不行
+    r = await client.get("/api/admin/comments")
+    assert r.status_code == 401
+
+
+async def test_moderate_missing_comment_404(client: AsyncClient, admin_user: dict) -> None:
+    r = await client.post(
+        "/api/admin/comments/999999/moderate",
+        json={"action": "approve"},
+        headers=auth_headers(admin_user),
+    )
+    assert r.status_code == 404
