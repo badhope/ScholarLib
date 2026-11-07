@@ -81,14 +81,13 @@ function CatalogListPage() {
   const { isAdmin, isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
 
-  // 轨道切换 → 后端 category 参数：论文=academic，娱乐=essay（含 fun+rant）。
-  const trackCategory =
-    search.track === 'paper' ? 'academic' : search.track === 'essay' ? 'essay' : undefined
+  // 轨道切换 → 后端 ?track=paper|essay（按 content_track 过滤，与旧 content_category 解耦）。
 
   const params = {
     q: search.q || undefined,
     type: search.type,
-    category: (trackCategory ?? search.category) || undefined,
+    category: search.category || undefined,
+    track: search.track,
     discipline: search.discipline || undefined,
     year: search.year,
     page: search.page || 1,

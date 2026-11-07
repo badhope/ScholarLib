@@ -153,6 +153,9 @@ async def list_resources(
     # 内容类别筛选（v1.11）：academic/fun/rant；v1.15 起接受逗号多值与
     # essay（=fun+rant，前端「娱乐」tab 的完整口径）。
     category: str | None = Query(default=None),
+    # 轨道筛选（v1.15.1）：按 content_track 过滤，paper=论文 / essay=娱乐（fun+rant）。
+    # 与 content_category 解耦：历史稿件的 category 可能未随 track 迁移。
+    track: str | None = Query(default=None, pattern=r"^(paper|essay)$"),
     discipline: str | None = None,
     year: int | None = None,
     volume: str | None = None,
@@ -236,6 +239,8 @@ async def list_resources(
     cats = _expand_categories(category)
     if cats is not None:
         stmt = stmt.where(Resource.content_category.in_(cats))
+    if track:
+        stmt = stmt.where(Resource.content_track == track)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
@@ -400,6 +405,7 @@ async def get_volume_stats(
 async def get_facets(
     type: str | None = None,
     category: str | None = Query(default=None),
+    track: str | None = Query(default=None, pattern=r"^(paper|essay)$"),
     discipline: str | None = None,
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
@@ -417,6 +423,8 @@ async def get_facets(
     cats = _expand_categories(category)
     if cats is not None:
         stmt = stmt.where(Resource.content_category.in_(cats))
+    if track:
+        stmt = stmt.where(Resource.content_track == track)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
 
