@@ -10,15 +10,14 @@ export const Route = createFileRoute('/about')({
 })
 
 // 关于本刊：定位、理念、编委会、卷期与联系方式。
-// 编委会为编辑部化名的虚构阵容（本刊自己就是一本正经与荒诞并存的刊物，
-// 文章气质由每篇论文的荒诞指数标注，编委信息按刊物设定的方式呈现，
-// 不指向任何真实人物）。
+// 编委会为编辑部化名的虚构阵容（本刊自己就是一本正经与玩梗并存的刊物，
+// 编委信息按刊物设定的方式呈现，不指向任何真实人物）。
 
 const BOARD = [
   {
     name: '陆止于海',
     role: '主编',
-    affiliation: 'Rubbish 编辑部 · 荒诞现象观测站',
+    affiliation: 'Rubbish 编辑部 · 风格观察站',
     note: '主张「严肃的格式，自由的主题」，创刊口号撰写人。',
   },
   {
@@ -30,8 +29,8 @@ const BOARD = [
   {
     name: '顾荒唐',
     role: '副主编 · 选题把关',
-    affiliation: '应用荒诞学研究中心（筹）',
-    note: '负责选题把关与荒诞指数（0–10）的评定，格言：「可以离谱，不可以伤人」。',
+    affiliation: '应用风格研究中心（筹）',
+    note: '负责选题把关与内容风格定位，格言：「可以离谱，不可以伤人」。',
   },
   {
     name: '白鹿原上',
@@ -55,7 +54,7 @@ const BOARD = [
 
 const TIMELINE = [
   ['2026 年 10 月', '创刊。首卷第 1 期上线，投稿、双盲评审、在线阅读全流程开放。'],
-  ['2026 年 10 月', '引入 R 因子与荒诞指数，每篇论文标注离谱程度（0–10）。'],
+  ['2026 年 10 月', '引入 R 因子，建立基于站内互动的全刊热度指标。'],
   ['今天', '等你投稿。'],
 ]
 
@@ -72,7 +71,7 @@ function AboutPage() {
 
       <PageHeader
         title="关于本刊"
-        description="Rubbish 是一家正经与荒诞兼容的开放获取学术期刊——用严格的格式，收纳一切认真的思考。"
+        description="Rubbish 是一家严肃格式与自由主题兼容的开放获取学术期刊——用严格的格式，收纳一切认真的思考。"
       />
 
       <div className="space-y-10">
@@ -84,8 +83,8 @@ function AboutPage() {
             </p>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Rubbish（国际刊号申请中）创刊于 2026 年，是一份免费投稿、免费阅读、免费评审的
-              纯开放获取期刊。我们收录标准学术研究，也正式收录传统刊物不敢收的荒诞研究——
-              只要论证自洽、格式规范，荒诞也是一种严肃。
+              纯开放获取期刊。我们收录标准学术研究，也正式收录传统刊物不敢收的脑洞选题——
+              只要论证自洽、格式规范，玩梗也是一种严肃。
             </p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               不收版面费，不设学历门槛，不问出处。
@@ -138,7 +137,7 @@ function AboutPage() {
             {[
               { icon: Newspaper, label: '刊名', value: 'Rubbish（开放获取学术期刊）' },
               { icon: Globe, label: '出版形式', value: '纯数字出版 · 滚动刊出 + 不定期合卷' },
-              { icon: ScrollText, label: '收录范围', value: '正经与荒诞统一评审 · 荒诞指数标注风格' },
+              { icon: ScrollText, label: '收录范围', value: '严肃格式与自由主题统一评审 · 学术/娱乐/吐槽分类呈现' },
               { icon: Building2, label: '出版方', value: 'Rubbish 编辑部' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3 rounded-lg border bg-card p-4">

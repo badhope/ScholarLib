@@ -7,7 +7,7 @@ import { EChart } from './echart'
 export function DisciplineBar({ data }: { data: Record<string, number> }) {
   const entries = Object.entries(data).sort((a, b) => b[1] - a[1])
   if (entries.length === 0) {
-    // 与荒诞环形图同理：空数据时给一张有说明的空态卡，而不是 return null
+    // 空数据时给一张有说明的空态卡，而不是 return null
     // 在三栏网格里留下让读者误以为加载失败的空白卡片。
     return (
       <div className="flex h-[180px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
@@ -81,53 +81,6 @@ export function EngagementRadar({ data }: { data: JournalMetrics }) {
             areaStyle: { color: 'rgba(47,107,82,0.14)' },
             lineStyle: { color: '#2f6b52', width: 2 },
             itemStyle: { color: '#2f6b52' },
-          },
-        ],
-      }}
-    />
-  )
-}
-
-export function AbsurdityDonut({ median }: { median: number | null }) {
-  // 未评定：给一张有说明的空态卡，而不是 return null（那会在三栏网格里
-  // 留一个比邻卡矮一半的空白卡片，读者会以为是加载失败）。
-  if (median == null) {
-    return (
-      <div className="flex h-[180px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
-        <span className="text-2xl font-semibold text-muted-foreground">—</span>
-        <p className="max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
-          已刊论文尚未做荒诞指数评定。编辑部完成评定后，这里会显示全刊中位数与分布。
-        </p>
-      </div>
-    )
-  }
-  const share = Math.max(0, Math.min(100, (median / 10) * 100))
-  return (
-    <EChart
-      height={180}
-      ariaLabel={`荒诞指数中位数 ${median.toFixed(1)}，满分 10`}
-      option={{
-        tooltip: { trigger: 'item', formatter: '{b}：{c}%' },
-        series: [
-          {
-            type: 'pie',
-            radius: ['62%', '84%'],
-            center: ['50%', '50%'],
-            avoidLabelOverlap: false,
-            label: {
-              show: true,
-              position: 'center',
-              formatter: () => `{v|${median.toFixed(1)}}\n{s|荒诞指数中位数}`,
-              rich: {
-                v: { fontSize: 30, fontWeight: 600, color: '#1f2a24', fontFamily: 'Georgia, serif', lineHeight: 38 },
-                s: { fontSize: 11, color: '#8a9a92', lineHeight: 18 },
-              },
-            },
-            labelLine: { show: false },
-            data: [
-              { value: Number(share.toFixed(1)), name: '荒诞度', itemStyle: { color: '#c7a24b' } },
-              { value: Number((100 - share).toFixed(1)), name: '剩余', itemStyle: { color: '#e8efe9' } },
-            ],
           },
         ],
       }}

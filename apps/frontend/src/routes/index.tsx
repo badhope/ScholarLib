@@ -594,8 +594,8 @@ function HomePage() {
   const disciplineEntries = Object.entries(stats?.by_discipline ?? {}).sort(
     (a, b) => b[1] - a[1],
   )
-  // P0 后荒诞指数不再作为期刊门面统计：全局均值/中位数整块下线，
-  // 学术稿文章页仍可展示风格光谱，但首页四张卡不再承担"这本刊多离谱"的回答。
+  // P0 后风格光谱分数不再作为期刊门面统计：全局均值/中位数整块下线，
+  // 学术稿文章页也不再对外展示该分数；首页四张卡只回答"这本刊在做什么"。
 
   // 滚动入场：motion 14.5.0 的 whileInView 在本项目不触发（线上同样复现），
   // 改由原生 IntersectionObserver 驱动 animate；容器保留原本的 stagger variants。

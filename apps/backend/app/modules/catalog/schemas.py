@@ -182,8 +182,6 @@ class ResourceBase(BaseModel):
     keywords: list[str] | None = Field(default=None, max_length=50)
     language: str = Field(default="zh", max_length=10)
     publication_status: PublicationStatus = "published"
-    # 荒诞指数：编辑部评定（0–10，一位小数），None 表示未评定。
-    absurdity_index: float | None = Field(default=None, ge=0, le=10)
     # 质量评分（quality 模块 RQS v2.0）：0–100 与等级 A+/A/B/C/D。
     quality_score: float | None = Field(default=None, ge=0, le=100)
     quality_grade: str | None = Field(default=None, max_length=4)
@@ -241,8 +239,6 @@ class ResourceUpdate(BaseModel):
     publication_status: PublicationStatus | None = None
     slug: str | None = Field(default=None, min_length=1, max_length=100)
     authors_meta: list[AuthorMeta] | None = Field(default=None, max_length=200)
-    # 荒诞指数：编辑部评定（0–10，一位小数），None 表示未评定。
-    absurdity_index: float | None = Field(default=None, ge=0, le=10)
     # 质量评分与封面（编辑可修正评分；评分口径见 /api/quality/rubric）。
     quality_score: float | None = Field(default=None, ge=0, le=100)
     quality_grade: str | None = Field(default=None, max_length=4)
@@ -303,7 +299,6 @@ class ResourceResponse(ResourceBase):
     saves: int | None = None
     r_index: float | None = None
     quartile: str | None = None
-    # absurdity_index 继承自 ResourceBase（编辑部评定，0–10，可空）。
     # P1：作者位明细（含认领状态）。未认领位 email 强制 null。
     authors_detail: list[AuthorDetail] | None = None
 
@@ -312,8 +307,7 @@ class ResourceResponse(ResourceBase):
         """content_track 按 content_category 回退派生；clc_status 由 clc_code 反推。
 
         P0 收口：娱乐稿（content_track=essay）不下发任何学术评分字段——
-        absurdity_index / quality_score / quality_grade 一律置 null，
-        学术稿（paper）保持原值。
+        quality_score / quality_grade 一律置 null，学术稿（paper）保持原值。
         P1：构建 authors_detail；未认领作者位 email 一律 null（隐私）。
         """
         from app.modules.submission.clc import clc_status_of
@@ -321,7 +315,6 @@ class ResourceResponse(ResourceBase):
         self.content_track = derive_content_track(self.content_category, self.content_track)
         self.clc_status = clc_status_of(self.clc_code)
         if self.content_track == "essay":
-            self.absurdity_index = None
             self.quality_score = None
             self.quality_grade = None
             # P1：中图分类号只论文有，娱乐稿不下发（DB 值不删，后续分类改判）。
@@ -366,8 +359,7 @@ class ResourceStats(BaseModel):
     total: int
     by_type: dict[str, int]
     by_discipline: dict[str, int]
-    # by_track 已随赛道下线移除：文章气质由 absurdity_index 表达，
-    # 不再按赛道分组统计。
+    # by_track 已随赛道下线移除，不再按赛道分组统计。
     downloads_total: int = 0
     reads_total: int = 0
 

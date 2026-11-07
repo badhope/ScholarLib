@@ -33,8 +33,7 @@ export function typeLabel(type: string | null | undefined): string {
   return TYPE_LABELS[type] ?? type
 }
 
-// 赛道标签已随赛道下线移除（后端 core/tracks.py）：文章气质由下面的
-// 荒诞指数（absurdityLevel）表达，不再按正经/荒诞分组展示。
+// 赛道标签已随赛道下线移除（后端 core/tracks.py）：不再按正经/玩梗分组展示。
 
 const STATUS_LABELS: Record<string, string> = {
   published: '已发表',
@@ -72,32 +71,6 @@ export function recommendationReason(reason: string | null | undefined): string 
   if (subdiscipline) return `子学科匹配：${subdiscipline[1]}`
   if (reason.includes('no direct match')) return '相关领域新作'
   return reason
-}
-
-// ---------------------------------------------------------------------------
-// 风格光谱（荒诞指数 0–10）：这是「类别光谱」不是等级——用于告诉读者
-// 这篇内容的风格位置（学术/娱乐/吐槽），同一光谱内才参与同类比对。
-// ---------------------------------------------------------------------------
-
-export interface AbsurdityLevel {
-  label: string
-  description: string
-  variant: 'default' | 'secondary' | 'destructive' | 'outline'
-}
-
-export function absurdityLevel(index: number | null | undefined): AbsurdityLevel | null {
-  if (index == null) return null
-  if (index < 2.5)
-    return { label: '学术', description: '严肃研究', variant: 'outline' }
-  if (index < 5)
-    return { label: '轻娱乐', description: '略带娱乐色彩的研究', variant: 'secondary' }
-  if (index < 7.5)
-    return { label: '娱乐', description: '娱乐向研究', variant: 'default' }
-  return { label: '吐槽', description: '吐槽向内容', variant: 'destructive' }
-}
-
-export function absurdityLabel(index: number | null | undefined): string {
-  return absurdityLevel(index)?.label ?? '—'
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +136,7 @@ export function contentCategoryLabel(category: string | null | undefined): strin
 
 // ---------------------------------------------------------------------------
 // 学术 vs 娱乐：content_category 为 fun/rant，或后端给出 content_track=essay
-// 时，这篇是娱乐稿——全站不渲染任何学术评分元素（荒诞指数、R 因子/分区、
+// 时，这篇是娱乐稿——全站不渲染任何学术评分元素（R 因子/分区、
 // RQS、quality_grade）。阅读量/收藏/评论等内容侧数据照常保留。
 // ---------------------------------------------------------------------------
 export function isScholarlyContent(

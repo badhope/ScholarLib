@@ -107,11 +107,11 @@ const REFS_RE = /^(参考文献|References?|Bibliography)$/i
 const DECLS_RE =
   /^(作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \t\u3000]*使用声明?|致谢|Acknowledg(e)?ments?)$/i
 const DOI_RE = /^(DOI|doi)$/i
-const SCORE_RE = /^(评分|质量等级|RQS|荒诞指数)$/i
+const SCORE_RE = /^(评分|质量等级|RQS)$/i
 
 // 所有需要剥掉的学术小节标题（用于行内标题规范化）
 const ALL_BLOCK_TITLES =
-  '摘[ \\t\\u3000]*要|Abstract|ABSTRACT|关键词|关键字|Keywords?|中图分类号|CLC|参考文献|References?|Bibliography|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \\t\\u3000]*使用声明?|致谢|Acknowledg(e)?ments?|DOI|doi|评分|质量等级|RQS|荒诞指数'
+  '摘[ \\t\\u3000]*要|Abstract|ABSTRACT|关键词|关键字|Keywords?|中图分类号|CLC|参考文献|References?|Bibliography|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \\t\\u3000]*使用声明?|致谢|Acknowledg(e)?ments?|DOI|doi|评分|质量等级|RQS'
 
 /**
  * 规范化：逐行处理。只对"本行内出现 #+ 块标题但不在行首"的行，

@@ -25,7 +25,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    PERMISSION_RANK,
     ROLE_EDITOR,
+    effective_permission_role,
     get_current_user_optional,
     require_admin,
     require_editor,
@@ -124,14 +126,33 @@ def _conflict_detail(exc: IntegrityError) -> str:
     return "Record conflicts with an existing entry"
 
 
+def _expand_categories(category: str | None) -> set[str] | None:
+    """把 ?category= 归一化为 content_category 集合。
+
+    接受单值（academic/fun/rant/essay）或逗号多值（如 ``fun,rant``）。
+    ``essay`` 是前端「娱乐」tab 的语义口径，等价于 ``fun,rant``——
+    之前前端发 ``category=fun`` 会漏掉 rant 稿，这里统一在后端展开。
+    返回 None 表示不过滤；非法 token 直接忽略（不报错，保持宽松）。
+    """
+    if not category:
+        return None
+    allowed = {"academic", "fun", "rant"}
+    out: set[str] = set()
+    for token in category.split(","):
+        t = token.strip().lower()
+        if t == "essay":
+            out.update({"fun", "rant"})
+        elif t in allowed:
+            out.add(t)
+    return out or None
+
+
 @router.get("", response_model=ResourceListResponse)
 async def list_resources(
     type: str | None = None,
-    # 内容类别筛选（v1.11）：academic/fun/rant。「同类别才可比对」——
-    # 类别是目录的一等筛选维度，取代已下线的赛道过滤。
-    category: str | None = Query(
-        default=None, pattern=r"^(academic|fun|rant)$"
-    ),
+    # 内容类别筛选（v1.11）：academic/fun/rant；v1.15 起接受逗号多值与
+    # essay（=fun+rant，前端「娱乐」tab 的完整口径）。
+    category: str | None = Query(default=None),
     discipline: str | None = None,
     year: int | None = None,
     volume: str | None = None,
@@ -212,8 +233,9 @@ async def list_resources(
             stmt = stmt.where(condition)
     if type is not None:
         stmt = stmt.where(Resource.type == type)
-    if category is not None:
-        stmt = stmt.where(Resource.content_category == category)
+    cats = _expand_categories(category)
+    if cats is not None:
+        stmt = stmt.where(Resource.content_category.in_(cats))
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
@@ -377,7 +399,7 @@ async def get_volume_stats(
 @router.get("/facets", response_model=ResourceFacets)
 async def get_facets(
     type: str | None = None,
-    category: str | None = Query(default=None, pattern=r"^(academic|fun|rant)$"),
+    category: str | None = Query(default=None),
     discipline: str | None = None,
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
@@ -392,8 +414,9 @@ async def get_facets(
             stmt = stmt.where(condition)
     if type is not None:
         stmt = stmt.where(Resource.type == type)
-    if category is not None:
-        stmt = stmt.where(Resource.content_category == category)
+    cats = _expand_categories(category)
+    if cats is not None:
+        stmt = stmt.where(Resource.content_category.in_(cats))
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
 
@@ -1445,6 +1468,17 @@ async def get_resource(
         response.saves = engagement.saves
         response.r_index = engagement.r_index
         response.quartile = engagement.quartile
+    # 评分细则与分区口径只对审稿/编辑端可见：作者与普通读者（含匿名）
+    # 不下发 quality_* / quartile。前端再按角色 gate 渲染，避免占位卡片。
+    can_see_scores = viewer is not None and (
+        PERMISSION_RANK[await effective_permission_role(db, viewer)]
+        >= PERMISSION_RANK["reviewer"]
+    )
+    if not can_see_scores:
+        response.quality_score = None
+        response.quality_grade = None
+        response.quality_breakdown = None
+        response.quartile = None
     return response
 
 

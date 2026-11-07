@@ -49,7 +49,7 @@ export function BioCard({ initialBio }: { initialBio?: string | null }) {
         <Textarea
           value={value}
           onChange={(e) => setValue(e.target.value.slice(0, MAX_BIO))}
-          placeholder="例：荒诞现象业余观测者，正经研究在读研究生。"
+          placeholder="例：严肃格式下的自由选题爱好者，正经研究在读研究生。"
           rows={3}
           maxLength={MAX_BIO}
         />

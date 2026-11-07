@@ -151,7 +151,7 @@ export type ResourceType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export type PublicationStatus = 'published' | 'in_review' | 'draft'
 
 /** 赛道：历史字段，已下线（对齐后端 core/tracks.py）。仅保留 serious，
- *  旧值由后端归一化；文章气质由荒诞指数（absurdity_index）表达。 */
+ *  旧值由后端归一化。 */
 export type Track = 'serious'
 
 export interface ResourceBase {
@@ -181,8 +181,6 @@ export interface ResourceBase {
   keywords?: string[] | null
   language: string
   publication_status: PublicationStatus
-  /** 荒诞指数：编辑部评定（0–10），未评定为 null */
-  absurdity_index?: number | null
   /** 质量评分（RQS v3.0，0–100）与 14 档等级 A+~F */
   quality_score?: number | null
   quality_grade?: string | null
@@ -218,8 +216,6 @@ export interface ResourceResponse extends ResourceBase {
   saves?: number | null
   r_index?: number | null
   quartile?: string | null
-  /** 荒诞指数：编辑部评定（0–10），未评定为 null */
-  absurdity_index?: number | null
   /** 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」 */
   clc_code?: string | null
   clc_label?: string | null
@@ -335,8 +331,6 @@ export interface JournalMetrics {
   r_factor: number | null
   /** 无引文数据，自引率恒为 0 */
   self_citation_rate: number
-  /** 荒诞指数中位数（尚无评定时为 null） */
-  absurdity_index_median: number | null
 }
 
 export interface ResourceListResponse {
@@ -348,7 +342,6 @@ export interface ResourceStats {
   total: number
   by_type: Record<string, number>
   by_discipline: Record<string, number>
-  /** by_track 已随赛道下线移除：文章气质由 absurdity_index 表达。 */
   downloads_total?: number
   reads_total?: number
 }

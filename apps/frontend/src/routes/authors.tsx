@@ -38,7 +38,7 @@ const ACCEPT_CRITERIA: Array<{ title: string; body: string }> = [
   },
   {
     title: '清晰的写作',
-    body: '行文要完整：摘要、引言、方法（或论证）、结论缺一不可。荒诞选题的论证同样要像模像样。',
+    body: '行文要完整：摘要、引言、方法（或论证）、结论缺一不可。玩梗选题的论证同样要像模像样。',
   },
 ]
 
@@ -50,15 +50,15 @@ const ACCEPTED_KINDS = [
   },
   {
     icon: Sparkles,
-    title: '荒诞研究',
-    body: '我们正式承认荒诞题材的学术价值：从「奶蛙形象与传统文化叙事」到「食堂窗口拥挤度预测」，只要论证自洽、格式规范、有趣而不伤人，编辑部照单全收。传统刊物嫌它荒诞，我们嫌它不够荒诞。稿件不再分赛道投稿——统一评审标准，发表时按荒诞指数（0–10）标注离谱程度。',
+    title: '脑洞研究',
+    body: '我们正式承认脑洞题材的学术价值：从「奶蛙形象与传统文化叙事」到「食堂窗口拥挤度预测」，只要论证自洽、格式规范、有趣而不伤人，编辑部照单全收。传统刊物嫌它离经叛道，我们嫌它不够好玩。稿件不再分赛道投稿——统一评审标准，发表后按学术/娱乐/吐槽分类呈现。',
   },
 ]
 
 const NOT_ACCEPTED = [
   '违反法律法规或伤害特定群体的内容',
   '抄袭、代写、数据造假',
-  '纯广告或营销软文（连荒诞的都不行）',
+  '纯广告或营销软文（再好玩也不行）',
   '针对真实个人的影射或骚扰',
   '已在外部刊物正式发表的内容',
 ]
@@ -88,8 +88,8 @@ function AuthorsPage() {
         <RevealSection>
           <h2 className="text-xl font-medium">收录范围</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Rubbish 是一家正经与荒诞兼容的开放获取期刊。全部稿件共用同一套格式与伦理标准，
-            同一条评审流水线，文章的离谱程度由编辑部评定的荒诞指数（0–10）标注。
+            Rubbish 是一家严肃格式与自由主题兼容的开放获取期刊。全部稿件共用同一套格式与伦理标准，
+            同一条评审流水线；内容按学术、娱乐、吐槽分类呈现，不影响同一把质量尺。
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {ACCEPTED_KINDS.map(({ icon: Icon, title, body }) => (
@@ -176,7 +176,7 @@ function AuthorsPage() {
             ))}
           </ul>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            荒诞研究同样适用伦理底线：可以离谱，不可以伤人。详见
+            玩梗研究同样适用伦理底线：可以离谱，不可以伤人。详见
             <Link to="/policies" className="mx-1 text-primary hover:underline">
               期刊政策与社区规范
             </Link>
@@ -188,7 +188,7 @@ function AuthorsPage() {
           <h2 className="text-xl font-medium">结构规范</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
             本刊采用「结构化写作」：每一节都有明确的功能，不按功能写的稿件会在初审被退回补全，
-            而不是直接拒稿。以下规范对全部稿件同等适用——荒诞选题的论证同样要经得起结构审查。
+            而不是直接拒稿。以下规范对全部稿件同等适用——玩梗选题的论证同样要经得起结构审查。
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
@@ -198,7 +198,7 @@ function AuthorsPage() {
               },
               {
                 title: '摘要四要素',
-                body: '200–350 字，写清「问题 / 方法 / 结果 / 结论」。不写「本文具有重要意义」这类空转句；荒诞选题也要让读者读完摘要就知道你严肃地荒诞什么。',
+                body: '200–350 字，写清「问题 / 方法 / 结果 / 结论」。不写「本文具有重要意义」这类空转句；玩梗选题也要让读者读完摘要就知道你认真地在论证什么。',
               },
               {
                 title: '图表三原则',
@@ -206,7 +206,7 @@ function AuthorsPage() {
               },
               {
                 title: '引用纪律',
-                body: 'GB/T 7714-2015 顺序编码制，≥ 8 条，全部可在 DOI 或公开数据库核实。编造引用一经发现即退稿并记入作者信用记录——这条没有例外，荒诞选题也一样。',
+                body: 'GB/T 7714-2015 顺序编码制，≥ 8 条，全部可在 DOI 或公开数据库核实。编造引用一经发现即退稿并记入作者信用记录——这条没有例外，玩梗选题也一样。',
               },
               {
                 title: '三段声明',
