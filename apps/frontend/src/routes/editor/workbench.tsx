@@ -3,10 +3,14 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock,
   Gavel,
+  MailWarning,
   Send,
   UserPlus,
+  XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getAuthState } from '@/lib/auth'
@@ -14,6 +18,7 @@ import {
   useBatchAssign,
   useCheckConflicts,
   useEditorDecision,
+  useEditorEmailDigestRecords,
   useEditorWorkbench,
   useRemindReviewers,
   useReviewerCandidates,
@@ -79,7 +84,26 @@ function EditorWorkbenchPage() {
   const [decision, setDecision] = useState<'accept' | 'minor_revision' | 'major_revision' | 'reject'>('major_revision')
   const [editorNote, setEditorNote] = useState('')
 
+  // 邮件摘要状态条：展开查看投递记录
+  const [digestOpen, setDigestOpen] = useState(false)
+
   const columns = data?.columns
+  const digest = data?.email_digest
+
+  // 只有在琥珀/红两态下才按需拉 records；绿色态不需要
+  const digestRecords = useEditorEmailDigestRecords({
+    enabled: digestOpen && !!digest && (!digest.smtp_configured || digest.last_status === 'failed'),
+  })
+
+  // 状态条配色与文案：必须诚实，绝不能让主编以为邮件真发了
+  type DigestTone = 'idle' | 'amber' | 'red' | 'green'
+  let digestTone: DigestTone = 'idle'
+  if (digest) {
+    if (!digest.smtp_configured) digestTone = 'amber'
+    else if (digest.last_status === 'failed') digestTone = 'red'
+    else if (digest.last_status === 'sent') digestTone = 'green'
+    else digestTone = 'idle' // 配了 SMTP 但还没发过任何记录
+  }
 
   const toggleCheck = (id: number) => {
     setChecked((prev) => {
@@ -183,6 +207,101 @@ function EditorWorkbenchPage() {
         title="主编工作台"
         description="四栏流水线：待指派 → 评审中 → 待裁决 → 已决定。"
       />
+
+      {/* 邮件摘要状态条：诚实报告"邮件到底有没有发出去"。
+          站内通知照常，邮件侧若没配 SMTP 必须明说，不能写成"已通知"。 */}
+      {digest && digestTone !== 'idle' && (
+        <div className="mb-4 overflow-hidden rounded-lg border">
+          <div
+            className={
+              digestTone === 'amber'
+                ? 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200'
+                : digestTone === 'red'
+                  ? 'border-red-300 bg-red-50 text-red-900 dark:bg-red-950/20 dark:text-red-200'
+                  : 'border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-200'
+            }
+          >
+            <div className="flex items-start gap-2 px-4 py-2.5 text-sm">
+              {digestTone === 'amber' && <MailWarning className="mt-0.5 h-4 w-4 shrink-0" />}
+              {digestTone === 'red' && <XCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+              {digestTone === 'green' && <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />}
+              <div className="min-w-0 flex-1">
+                {digestTone === 'amber' && (
+                  <p className="font-medium">
+                    邮件摘要未发送：服务器未配置 SMTP，已记录 {digest.skipped_count} 条待发摘要，仅站内通知生效。
+                  </p>
+                )}
+                {digestTone === 'red' && (
+                  <p className="font-medium">
+                    邮件摘要发送失败：最近一次尝试{' '}
+                    {digest.last_attempt_at
+                      ? new Date(digest.last_attempt_at).toLocaleString()
+                      : '未知'}
+                    ，近 30 天共 {digest.failed_count} 条投递失败。站内通知不受影响。
+                  </p>
+                )}
+                {digestTone === 'green' && (
+                  <p className="font-medium">
+                    邮件摘要已发送
+                    {digest.last_attempt_at
+                      ? `（最近 ${new Date(digest.last_attempt_at).toLocaleString()}）`
+                      : ''}
+                    。
+                  </p>
+                )}
+              </div>
+              {digestTone !== 'green' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 shrink-0 px-2 text-xs"
+                  onClick={() => setDigestOpen((v) => !v)}
+                >
+                  {digestOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  查看记录
+                </Button>
+              )}
+            </div>
+
+            {digestTone !== 'green' && digestOpen && (
+              <div className="border-t border-current/10 px-4 py-2 text-xs">
+                {digestRecords.isLoading ? (
+                  <p className="py-2 text-muted-foreground">加载记录中…</p>
+                ) : digestRecords.isError ? (
+                  <p className="py-2 text-muted-foreground">记录加载失败</p>
+                ) : (digestRecords.data?.items.length ?? 0) === 0 ? (
+                  <p className="py-2 text-muted-foreground">暂无投递记录</p>
+                ) : (
+                  <ul className="max-h-64 space-y-1 overflow-y-auto py-1">
+                    {(digestRecords.data?.items ?? []).map((r) => (
+                      <li key={r.id} className="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-black/5 dark:hover:bg-white/5">
+                        <Badge
+                          variant="outline"
+                          className={
+                            r.status === 'sent'
+                              ? 'border-emerald-400 text-emerald-700 dark:text-emerald-300'
+                              : r.status === 'failed'
+                                ? 'border-red-400 text-red-700 dark:text-red-300'
+                                : 'border-amber-400 text-amber-700 dark:text-amber-300'
+                          }
+                        >
+                          {r.status}
+                        </Badge>
+                        <span className="truncate" title={r.subject}>
+                          {r.subject}
+                        </span>
+                        <span className="ml-auto shrink-0 text-muted-foreground">
+                          {r.recipient_email} · {new Date(r.created_at).toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <LoadingSkeleton rows={4} />

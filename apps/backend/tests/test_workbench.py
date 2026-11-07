@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import pytest
 from conftest import auth_headers
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -323,3 +324,108 @@ async def test_notification_category_filter_and_read_state(
     assert ra.status_code == 200
     uc2 = await client.get("/api/notifications/unread-count", headers=auth_headers(reviewer))
     assert uc2.json()["unread"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Email digest side-channel banner (honest "did it actually send?")
+# ---------------------------------------------------------------------------
+
+
+async def test_editor_workbench_email_digest_summary_honest_when_no_smtp(
+    client: AsyncClient, admin_user: dict, test_user: dict, db_session: AsyncSession
+) -> None:
+    """SMTP 未配置时，工作台必须如实报告：smtp_configured=False、skipped_count>0。
+
+    不能让前端误以为邮件发出去了——站内通知照常，但邮件侧要明说。
+    """
+    await client.get("/api/health")
+    tenant = (await db_session.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
+    reviewer = await _register_reviewer(client, db_session, tenant, "wb_digest1")
+
+    sub = await _create_submission(client, test_user, "WB digest no smtp")
+    await client.post(
+        "/api/editor/workbench/batch-assign",
+        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 5},
+        headers=auth_headers(admin_user),
+    )
+
+    wb = await client.get("/api/editor/workbench", headers=auth_headers(admin_user))
+    assert wb.status_code == 200, wb.text
+    ed = wb.json()["email_digest"]
+    # 测试环境 SMTP host/user/password 全为空 → 未配置
+    assert ed["smtp_configured"] is False
+    assert ed["enabled"] is True
+    # 刚才那次指派落了一条 skipped_no_smtp
+    assert ed["skipped_count"] >= 1
+    assert ed["failed_count"] == 0
+    assert ed["last_status"] == "skipped_no_smtp"
+    assert ed["last_attempt_at"] is not None
+
+
+async def test_editor_workbench_email_digest_summary_smtp_fields_present(
+    client: AsyncClient, admin_user: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """host/port/user/password 四项齐全时，smtp_configured=True（不看外发开关）。"""
+    from app.core.config import settings
+
+    await client.get("/api/health")
+    monkeypatch.setattr(settings, "email_smtp_host", "smtp.example.com", raising=False)
+    monkeypatch.setattr(settings, "email_smtp_port", 465, raising=False)
+    monkeypatch.setattr(settings, "email_smtp_username", "noreply@example.com", raising=False)
+    monkeypatch.setattr(settings, "email_smtp_password", "secret", raising=False)
+
+    wb = await client.get("/api/editor/workbench", headers=auth_headers(admin_user))
+    assert wb.status_code == 200, wb.text
+    ed = wb.json()["email_digest"]
+    assert ed["smtp_configured"] is True
+
+
+async def test_editor_email_digest_records_endpoint(
+    client: AsyncClient, admin_user: dict, test_user: dict, db_session: AsyncSession
+) -> None:
+    """records 接口返回最近投递记录，可按 status 过滤；审稿人 403。"""
+    await client.get("/api/health")
+    tenant = (await db_session.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
+    reviewer = await _register_reviewer(client, db_session, tenant, "wb_digest2")
+
+    sub = await _create_submission(client, test_user, "WB digest records")
+    await client.post(
+        "/api/editor/workbench/batch-assign",
+        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 5},
+        headers=auth_headers(admin_user),
+    )
+
+    # editor 可读
+    resp = await client.get(
+        "/api/editor/workbench/email-digest/records", headers=auth_headers(admin_user)
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["count"] >= 1
+    row = body["items"][0]
+    assert row["event_type"] == "assigned"
+    assert row["status"] == "skipped_no_smtp"
+    assert row["recipient_email"]
+    assert row["subject"]
+    assert row["created_at"]
+
+    # status 过滤
+    only_skipped = await client.get(
+        "/api/editor/workbench/email-digest/records?status=skipped_no_smtp",
+        headers=auth_headers(admin_user),
+    )
+    assert only_skipped.status_code == 200
+    assert all(r["status"] == "skipped_no_smtp" for r in only_skipped.json()["items"])
+
+    # 非法 status → 422
+    bad = await client.get(
+        "/api/editor/workbench/email-digest/records?status=bogus",
+        headers=auth_headers(admin_user),
+    )
+    assert bad.status_code == 422
+
+    # 审稿人无权访问（403）
+    forbidden = await client.get(
+        "/api/editor/workbench/email-digest/records", headers=auth_headers(reviewer)
+    )
+    assert forbidden.status_code == 403

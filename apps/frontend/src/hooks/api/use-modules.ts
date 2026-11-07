@@ -1538,6 +1538,33 @@ export interface EditorColumnItem {
   recommendations?: { reviewer_id: number; recommendation: string | null }[]
 }
 
+export interface EmailDigestSummary {
+  /** 运营开关 email_review_digest_enabled 是否打开 */
+  enabled: boolean
+  /** host/port/user/password 四项是否齐全（不看外发开关） */
+  smtp_configured: boolean
+  /** 最近一次投递结果；无记录时为 null */
+  last_status: 'sent' | 'failed' | 'skipped_no_smtp' | 'skipped_disabled' | null
+  /** 近 30 天 skipped_no_smtp + skipped_disabled 条数 */
+  skipped_count: number
+  /** 近 30 天 failed 条数 */
+  failed_count: number
+  /** 最近一次尝试时间（ISO 字符串），无记录时为 null */
+  last_attempt_at: string | null
+}
+
+export interface EmailDigestRecordRow {
+  id: number
+  event_type: string
+  user_id: number
+  recipient_email: string
+  subject: string
+  status: 'sent' | 'failed' | 'skipped_no_smtp' | 'skipped_disabled'
+  related_type: string | null
+  related_id: string | null
+  created_at: string
+}
+
 export interface EditorWorkbenchResponse {
   columns: {
     to_assign: { count: number; items: EditorColumnItem[] }
@@ -1545,6 +1572,7 @@ export interface EditorWorkbenchResponse {
     to_decide: { count: number; items: EditorColumnItem[] }
     decided: { count: number; items: EditorColumnItem[] }
   }
+  email_digest: EmailDigestSummary
 }
 
 export function useReviewerWorkbench() {
@@ -1562,6 +1590,20 @@ export function useEditorWorkbench() {
     queryFn: async () =>
       (await api.get<EditorWorkbenchResponse>('/editor/workbench')).data,
     refetchInterval: 30_000,
+  })
+}
+
+/** 主编查看最近邮件摘要投递记录（排查"为什么没发到"）。默认不自动拉取。 */
+export function useEditorEmailDigestRecords(opts: { enabled: boolean; status?: string }) {
+  return useQuery<{ count: number; items: EmailDigestRecordRow[] }>({
+    queryKey: ['workbench', 'editor', 'email-digest-records', opts.status ?? 'all'] as const,
+    queryFn: async () => {
+      const qs = opts.status ? `?status=${encodeURIComponent(opts.status)}&limit=50` : '?limit=50'
+      return (await api.get<{ count: number; items: EmailDigestRecordRow[] }>(
+        `/editor/workbench/email-digest/records${qs}`,
+      )).data
+    },
+    enabled: opts.enabled,
   })
 }
 

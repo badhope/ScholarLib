@@ -38,6 +38,7 @@ from app.core.db import get_db
 from app.core.time import utcnow
 from app.models import AuditLog, Role, User, UserRole
 from app.modules.notifications import services as notifications
+from app.modules.notifications.models import EmailDigestRecord
 from app.modules.review.models import ReviewAssignment, ReviewReport
 from app.modules.submission.models import Submission
 
@@ -96,6 +97,92 @@ def _assignment_row(a: ReviewAssignment, now: datetime) -> dict[str, Any]:
         "is_overdue": is_overdue,
         "completed_at": a.completed_at,
         "reminder_count": a.reminder_count or 0,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Email digest side-channel status (honest "did it actually send?" summary)
+# ---------------------------------------------------------------------------
+
+
+def _smtp_fields_configured() -> bool:
+    """True when the four SMTP credentials are all present.
+
+    Deliberately *not* the same as ``core.email.smtp_configured()``: that
+    function also requires ``email_outbound_enabled=True`` and
+    ``email_backend=="smtp"``. The workbench banner answers a different
+    question — "has the operator filled in host/port/user/password?" —
+    so a half-configured box (credentials present but outbound switch
+    off) still shows up as "configured" instead of silently looking
+    identical to "never filled in".
+    """
+    return bool(
+        settings.email_smtp_host
+        and settings.email_smtp_port
+        and settings.email_smtp_username
+        and settings.email_smtp_password
+    )
+
+
+async def _email_digest_summary(
+    db: AsyncSession, tenant_id: Any, now: datetime
+) -> dict[str, Any]:
+    """Honest email-digest side-channel summary for the workbench banner.
+
+    - ``enabled``         — operator switch ``email_review_digest_enabled``.
+    - ``smtp_configured`` — host/port/user/password all filled (see above).
+    - ``last_status``     — outcome of the most recent attempt, or null.
+    - ``skipped_count``   — last-30d rows with status skipped_no_smtp / skipped_disabled.
+    - ``failed_count``    — last-30d rows with status failed.
+    - ``last_attempt_at`` — created_at of the most recent attempt, or null.
+
+    Counts are tenant-scoped and windowed to the last 30 days so the
+    banner stays current; the per-row audit trail lives behind
+    ``GET /editor/workbench/email-digest/records``.
+    """
+    window = now - timedelta(days=30)
+
+    skipped_count = int(
+        (
+            await db.execute(
+                select(func.count(EmailDigestRecord.id)).where(
+                    EmailDigestRecord.tenant_id == tenant_id,
+                    EmailDigestRecord.created_at >= window,
+                    EmailDigestRecord.status.in_(("skipped_no_smtp", "skipped_disabled")),
+                )
+            )
+        ).scalar()
+        or 0
+    )
+    failed_count = int(
+        (
+            await db.execute(
+                select(func.count(EmailDigestRecord.id)).where(
+                    EmailDigestRecord.tenant_id == tenant_id,
+                    EmailDigestRecord.created_at >= window,
+                    EmailDigestRecord.status == "failed",
+                )
+            )
+        ).scalar()
+        or 0
+    )
+
+    last = (
+        await db.execute(
+            select(EmailDigestRecord.status, EmailDigestRecord.created_at)
+            .where(EmailDigestRecord.tenant_id == tenant_id)
+            .order_by(desc(EmailDigestRecord.created_at))
+            .limit(1)
+        )
+    ).first()
+
+    return {
+        "enabled": bool(settings.email_review_digest_enabled),
+        "smtp_configured": _smtp_fields_configured(),
+        "last_status": last[0] if last else None,
+        "skipped_count": skipped_count,
+        "failed_count": failed_count,
+        "last_attempt_at": last[1] if last else None,
     }
 
 
@@ -255,13 +342,16 @@ async def editor_workbench(
         if s.status in ("major_revision", "minor_revision", "resubmitted"):
             in_review.append(base)
 
+    email_digest = await _email_digest_summary(db, tenant_id, now)
+
     return {
         "columns": {
             "to_assign": {"count": len(to_assign), "items": to_assign},
             "in_review": {"count": len(in_review), "items": in_review},
             "to_decide": {"count": len(to_decide), "items": to_decide},
             "decided": {"count": len(decided), "items": decided},
-        }
+        },
+        "email_digest": email_digest,
     }
 
 
@@ -269,6 +359,63 @@ def _rec_of(a: ReviewAssignment) -> str | None:
     if a.report:
         return a.report[0].recommendation
     return None
+
+
+# ---------------------------------------------------------------------------
+# Email digest records audit trail (editor-only)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/editor/workbench/email-digest/records")
+async def editor_email_digest_records(
+    status: str | None = Query(default=None, max_length=32),
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """最近邮件摘要投递记录，便于排查"为什么没发到"。
+
+    每条带事件类型、收件人、主题、状态与时间。可按 ``status`` 过滤
+    （``sent`` / ``failed`` / ``skipped_no_smtp`` / ``skipped_disabled``）。
+    仅 editor 及以上；审稿人不需要看运维侧审计。
+    """
+    tenant_id = require_tenant_id()
+    allowed = {"sent", "failed", "skipped_no_smtp", "skipped_disabled"}
+    where = [EmailDigestRecord.tenant_id == tenant_id]
+    if status:
+        if status not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"status must be one of {sorted(allowed)}",
+            )
+        where.append(EmailDigestRecord.status == status)
+
+    rows = (
+        await db.execute(
+            select(EmailDigestRecord)
+            .where(*where)
+            .order_by(desc(EmailDigestRecord.created_at))
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    return {
+        "count": len(rows),
+        "items": [
+            {
+                "id": r.id,
+                "event_type": r.event_type,
+                "user_id": r.user_id,
+                "recipient_email": r.recipient_email,
+                "subject": r.subject,
+                "status": r.status,
+                "related_type": r.related_type,
+                "related_id": r.related_id,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+    }
 
 
 # ---------------------------------------------------------------------------
