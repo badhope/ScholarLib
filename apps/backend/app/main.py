@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 _RESERVED_SOFT_404 = frozenset({"docs", "openapi.json", "redoc", "docs/oauth2-redirect"})
 _SPA_ROUTE_PREFIXES = frozenset({
     "403", "about", "account", "admin", "archive", "auth", "authors", "browse",
-    "catalog", "dashboard", "follows", "forgot-password", "forum", "ingest",
+    "catalog", "claim", "dashboard", "follows", "forgot-password", "forum", "ingest",
     "journal-metrics", "levels", "library", "login", "notifications", "policies",
     "profile", "reader", "recommendations", "register", "reset-password", "review",
     "settings", "submissions", "support", "verify-email",
