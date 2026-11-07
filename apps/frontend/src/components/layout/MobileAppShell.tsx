@@ -87,6 +87,10 @@ export function MobileAppShell() {
   ].some((p) => location.pathname.startsWith(p))
   const showChrome = !isAuthPage
 
+  // 首页是期刊门面 Hero，自带报头/导航/页脚：不套 MobileAppShell 的 h-14 头部，
+  // 但必须渲染底部 4 Tab（任务要求首页也能切 Tab）。
+  const isHome = location.pathname === '/'
+
   // 资源详情页自带底部固定操作栏（z-40），会盖住 Tab 栏
   const hasOwnBottomBar = /^\/catalog\/\d+/.test(location.pathname)
   // 沉浸阅读：Tab 栏随滚动方向隐藏
@@ -127,11 +131,11 @@ export function MobileAppShell() {
     isAuthenticated &&
     canIngest &&
     !hasOwnBottomBar &&
+    !isHome &&
     FAB_ROUTES.some((p) => location.pathname === p || location.pathname.startsWith(p + '/'))
 
-  // 期刊门面模式：首页走独立的全宽 editorial 版式，不套移动端 Tab 壳
-  const AUTH_FACADE = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email']
-  if (location.pathname === '/' || AUTH_FACADE.includes(location.pathname)) {
+  // 认证页：完全裸奔，不套任何壳
+  if (isAuthPage) {
     return (
       <div className="min-h-screen bg-background">
         <CookieBanner />
@@ -161,6 +165,47 @@ export function MobileAppShell() {
     void navigate({ to })
   }
 
+  // 底部 4 Tab 栏：首页与所有非认证页都渲染
+  // z-50 确保压在首页自己的 sticky header(z-40) 与 back-to-top 按钮之上
+  const bottomTab = showChrome && (
+    <nav
+      className={cn(
+        'fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-4 items-stretch border-t bg-background backdrop-blur pb-[env(safe-area-inset-bottom)]',
+        'transition-transform duration-300 ease-out',
+        immersive && barHidden ? 'translate-y-full' : 'translate-y-0',
+      )}
+      aria-label="主导航"
+    >
+      {MOBILE_TABS.map((tab) => (
+        <MobileTabButton
+          key={tab.to}
+          tab={tab}
+          active={isActive(tab.to)}
+          badge={unread?.unread}
+          onClick={() => go(tab.to)}
+        />
+      ))}
+    </nav>
+  )
+
+  // 首页：不套 MobileAppShell 头部，只渲染内容 + 底部 Tab
+  if (isHome) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex-1 pb-[calc(4rem+env(safe-area-inset-bottom))]">
+          <CookieBanner />
+          <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </ModuleErrorBoundary>
+        </main>
+        {bottomTab}
+      </div>
+    )
+  }
+
+  // 普通内页：header + 内容 + 底部 Tab
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* 紧凑头部：logo + 主题切换 + 折叠菜单（⋯） */}
@@ -274,27 +319,7 @@ export function MobileAppShell() {
         </Button>
       )}
 
-      {/* 底部固定 4 Tab */}
-      {showChrome && (
-        <nav
-          className={cn(
-            'fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 items-stretch border-t bg-background/95 backdrop-blur pb-[env(safe-area-inset-bottom)]',
-            'transition-transform duration-300 ease-out',
-            immersive && barHidden ? 'translate-y-full' : 'translate-y-0',
-          )}
-          aria-label="主导航"
-        >
-          {MOBILE_TABS.map((tab) => (
-            <MobileTabButton
-              key={tab.to}
-              tab={tab}
-              active={isActive(tab.to)}
-              badge={unread?.unread}
-              onClick={() => go(tab.to)}
-            />
-          ))}
-        </nav>
-      )}
+      {bottomTab}
     </div>
   )
 }
