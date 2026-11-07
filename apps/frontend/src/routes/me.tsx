@@ -4,7 +4,6 @@ import { Award, Shield, Flame } from 'lucide-react'
 import { getAuthState } from '@/lib/auth'
 import { PageHeader } from '@/components/common/page-header'
 import { ErrorState, Loading } from '@/components/common/state'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useMePoints, useMeProfile, type MeIdentityLevel } from '@/hooks/api/use-modules'
 import { cn } from '@/lib/utils'
@@ -78,7 +77,8 @@ function MePageInner({
   data,
   owned,
   multi,
-  initial,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  initial: _initial,
 }: {
   data: NonNullable<ReturnType<typeof useMeProfile>['data']>
   owned: string[]

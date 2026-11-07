@@ -1,21 +1,20 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import {
-  Award,
-  BookOpen,
-  CalendarCheck,
+  ArrowRight,
+  BadgeCheck,
   Coins,
-  Flame,
-  Layers,
-  Lock,
+  Crosshair,
+  Crown,
+  Eye,
+  FileText,
+  Info,
+  PenLine,
+  ShieldAlert,
   ShieldCheck,
-  Sparkles,
+  User,
+  Users,
 } from 'lucide-react'
-import { toast } from 'sonner'
-import { useCheckinStatus, useDailyCheckin, useLadder, useQualityRubric } from '@/hooks/api/use-modules'
-import { RoleApplicationsSection } from '@/components/common/role-applications'
-import { useAuth } from '@/hooks/use-auth'
 import { PageHeader } from '@/components/common/page-header'
-import { ErrorState, Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,337 +24,381 @@ export const Route = createFileRoute('/levels')({
   component: LevelsPage,
 })
 
-// RQS v3.0 的 13 档等级配色（A+ ~ F，见 quality/rubric.py GRADE_BANDS）。缺键兜底走末尾的 `?? ''` 链式默认：
-// 新增档位时这里同步即可，页面不会因缺键崩坏。
-const GRADE_STYLES: Record<string, string> = {
-  'A+': 'bg-amber-300 text-amber-950',
-  A: 'bg-amber-200/80 text-amber-950',
-  'A-': 'bg-amber-100 text-amber-900',
-  'B+': 'bg-primary/20 text-primary',
-  B: 'bg-primary/15 text-primary',
-  'B-': 'bg-primary/10 text-primary',
-  'C+': 'bg-muted text-foreground',
-  C: 'bg-muted text-foreground',
-  'C-': 'bg-muted text-foreground',
-  'D+': 'bg-muted text-muted-foreground',
-  D: 'bg-muted text-muted-foreground',
-  'D-': 'bg-muted text-muted-foreground',
-  F: 'bg-muted text-foreground',
+// ---------------------------------------------------------------------------
+// 口径来源（与后端保持一致，前端只读展示，不参与任何计算）：
+//   - 权限轴：apps/backend/app/api/me.py  PERMISSION_LABELS / _PERMISSIONS
+//   - 等级阈值：apps/backend/app/modules/gamification/levels_axis.py  LEVEL_BANDS
+//   - 积分规则：同文件 POINT_RULES
+// 术语与 /me 页严格对齐：identity key = author / reviewer / editor；
+// 权限层 = user / reviewer / editor / editor_in_chief。
+// ---------------------------------------------------------------------------
+
+type PermissionKey = 'visitor' | 'user' | 'reviewer' | 'editor' | 'editor_in_chief'
+
+interface PermissionLayer {
+  key: PermissionKey
+  label: string
+  icon: typeof Eye
+  /** 该层「新增」的能力（不含从下一层继承来的）。展示时按层级累计。 */
+  adds: string[]
+  granted: string
+  tint: string
 }
 
-/** 每日签到与积分来源说明：货币体系（XP）的入口页说明 + 一键签到。 */
-function CheckinSection({ authenticated }: { authenticated: boolean }) {
-  const status = useCheckinStatus({ enabled: authenticated })
-  const checkin = useDailyCheckin()
-  const st = status.data
+const PERMISSION_LAYERS: PermissionLayer[] = [
+  {
+    key: 'visitor',
+    label: '访客',
+    icon: Eye,
+    adds: ['浏览公开目录与已发表文章摘要'],
+    granted: '无需注册',
+    tint: 'bg-muted text-muted-foreground',
+  },
+  {
+    key: 'user',
+    label: '用户（读者 / 作者）',
+    icon: User,
+    adds: [
+      '阅读全部已发表文章、下载 PDF / Markdown',
+      '收藏到阅读列表、关注作者',
+      '发表评论与论坛讨论',
+      '提交稿件（需先确认当前版《投稿规范》）',
+    ],
+    granted: '注册即得；确认规范后获得作者轨',
+    tint: 'bg-muted text-foreground',
+  },
+  {
+    key: 'reviewer',
+    label: '审稿人',
+    icon: BadgeCheck,
+    adds: [
+      '接收审稿邀请',
+      '阅读匿名稿并提交评审意见与评分',
+      '查看自己完成的审稿历史',
+    ],
+    granted: '编辑部审批授予',
+    tint: 'bg-sky-500/15 text-sky-600',
+  },
+  {
+    key: 'editor',
+    label: '栏目编辑',
+    icon: PenLine,
+    adds: [
+      '初审稿件、分配与撤销审稿人',
+      '编排卷期、管理目录',
+      '查看编辑工作台',
+    ],
+    granted: '编辑部按贡献任命',
+    tint: 'bg-amber-500/15 text-amber-600',
+  },
+  {
+    key: 'editor_in_chief',
+    label: '主编',
+    icon: Crown,
+    adds: [
+      '作出录用 / 修回 / 拒稿最终决定',
+      '审批角色申请与作者认领',
+      '站点设置与审计日志',
+    ],
+    granted: '编辑部最高任命',
+    tint: 'bg-primary text-primary-foreground',
+  },
+]
 
-  const onCheckin = async () => {
-    try {
-      const r = await checkin.mutateAsync()
-      if (r.bonus_awarded) toast.success(`连续签到 ${r.streak} 天，额外 +${r.weekly_bonus_xp} XP！`)
-      else if (r.awarded) toast.success(`签到成功，+${r.daily_xp} XP`)
-      else toast.info('今天已经签到过了')
-    } catch {
-      toast.error('签到失败，请稍后再试')
-    }
-  }
+interface LevelBandRow {
+  label: string
+  range: string
+  note: string
+}
 
-  const SOURCES: [string, string][] = [
-    ['每日签到', '每天 +2，连续每满 7 天再 +5'],
-    ['阅读资源', '读完一篇 +2，完整读毕 +3'],
-    ['参与讨论', '发表评论 +2（每日封顶 10）'],
-    ['收藏与关注', '创建阅读列表 +3，关注作者 +2'],
-    ['投稿与审稿', '投稿 +10，录用 +60，完成审稿 +25'],
-  ]
+interface LevelTrack {
+  identity: 'author' | 'reviewer' | 'editor'
+  name: string
+  unit: string
+  bands: LevelBandRow[]
+}
 
-  return (
-    <section>
-      <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-        <Coins className="h-4 w-4" /> 每日签到与积分获取
-      </h2>
-      <Card>
-        <CardContent className="space-y-4 py-5">
-          {authenticated ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  <CalendarCheck className="h-5 w-5" />
-                </div>
-                <p className="text-sm">
-                  {st ? (
-                    st.checked_in_today ? (
-                      <>
-                        今日已签到
-                        {st.streak > 0 && (
-                          <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400">
-                            <Flame className="h-3.5 w-3.5" />
-                            连续 {st.streak} 天 · 累计 {st.total} 天
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      `已连续签到 ${st.streak} 天，今天还没签`
-                    )
-                  ) : (
-                    '加载签到状态…'
-                  )}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant={st?.checked_in_today ? 'outline' : 'default'}
-                disabled={st?.checked_in_today || checkin.isPending}
-                onClick={() => void onCheckin()}
-              >
-                {st?.checked_in_today ? '已签到' : checkin.isPending ? '签到中…' : '立即签到'}
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              登录后即可每日签到累积 XP：<Link to="/login" className="text-primary hover:underline">去登录</Link>
-            </p>
-          )}
-          <ul className="grid gap-x-6 gap-y-1.5 text-sm text-muted-foreground sm:grid-cols-2">
-            {SOURCES.map(([name, desc]) => (
-              <li key={name} className="flex justify-between gap-2 border-b border-dashed pb-1.5">
-                <span className="text-foreground">{name}</span>
-                <span className="tabular-nums text-xs">{desc}</span>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-    </section>
-  )
+const LEVEL_TRACKS: LevelTrack[] = [
+  {
+    identity: 'author',
+    name: '作者',
+    unit: '分',
+    bands: [
+      { label: 'L1', range: '0 – 49', note: '起步作者' },
+      { label: 'L2', range: '50 – 149', note: '稳定投稿' },
+      { label: 'L3', range: '150 – 299', note: '持续贡献' },
+      { label: 'L4', range: '300 – 499', note: '核心作者' },
+      { label: 'L5', range: '500 及以上', note: '资深作者' },
+    ],
+  },
+  {
+    identity: 'reviewer',
+    name: '审稿人',
+    unit: '份审稿报告',
+    bands: [
+      { label: 'R1', range: '0 – 2', note: '新晋审稿人' },
+      { label: 'R2', range: '3 – 7', note: '成熟审稿人' },
+      { label: 'R3', range: '8 及以上', note: '资深审稿人' },
+    ],
+  },
+  {
+    identity: 'editor',
+    name: '栏目编辑',
+    unit: '分',
+    bands: [
+      { label: 'E1', range: '0 – 19', note: '见习编辑' },
+      { label: 'E2', range: '20 – 59', note: '责任编辑' },
+      { label: 'E3', range: '60 及以上', note: '资深编辑' },
+    ],
+  },
+]
+
+interface PointRule {
+  identity: 'author' | 'reviewer' | 'editor'
+  label: string
+  delta: number
+  counts: boolean
+}
+
+const POINT_RULES: PointRule[] = [
+  { identity: 'author', label: '正式论文被录用', delta: 60, counts: true },
+  { identity: 'author', label: '作者认领审核通过', delta: 20, counts: true },
+  { identity: 'author', label: '娱乐 / 吐槽类稿件录用', delta: 0, counts: false },
+  { identity: 'reviewer', label: '按时完成审稿报告并提交', delta: 1, counts: true },
+  { identity: 'editor', label: '对稿件作出编辑裁决', delta: 8, counts: true },
+]
+
+const IDENTITY_BADGE: Record<string, string> = {
+  author: 'bg-muted text-foreground',
+  reviewer: 'bg-sky-500/15 text-sky-600',
+  editor: 'bg-amber-500/15 text-amber-600',
+}
+
+const IDENTITY_NAME: Record<string, string> = {
+  author: '作者轨',
+  reviewer: '审稿人轨',
+  editor: '编辑轨',
 }
 
 function LevelsPage() {
-  const ladder = useLadder()
-  const rubric = useQualityRubric()
-  const { isAuthenticated } = useAuth()
-
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6">
       <PageHeader
-        title="身份体系与质量规范"
-        description="四种身份、贡献积分与论文质量评分口径。全部公开、全部冻结，改版需升版本号。"
+        title="身份与等级体系"
+        description="两条轴：身份决定你能做什么；等级只在你自己的身份里涨。互不混排、互不兑换。"
       />
 
-      {/* 身份 vs 积分：两者的区别是这一页最重要的一句话 */}
+      {/* 双轴总览：一句话讲清楚这一页在说什么 */}
       <Card className="border-primary/25 bg-primary/[0.03]">
         <CardContent className="space-y-3 py-5 text-sm leading-relaxed">
           <p className="flex items-center gap-2 font-medium">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            身份管权限，积分只是荣誉
+            先看身份，再看等级
           </p>
           <p className="text-muted-foreground">
-            本刊有<strong className="text-foreground">四种身份</strong>：读者、作者、审稿人、编辑。
-            能做什么由身份决定——读者注册即得，作者确认《投稿规范》即得，
-            审稿人与编辑由编辑部授予。<strong className="text-foreground">积分（XP）
-            不再决定任何权限</strong>，它只回答"这个人参与了多少"：谁在持续读、
-            持续写、持续审。把参与度当成权限，只会让新读者在"还差 28 积分"
-            的提示里失去兴趣。
+            <strong className="text-foreground">身份（权限轴）</strong>回答的是「你能做什么」——
+            从访客到主编共五层，高层级天然包含低层级的全部权限。
+            <strong className="text-foreground">等级（激励轴）</strong>回答的是「你在当前身份里做得多深」——
+            作者 L1–L5、审稿人 R1–R3、栏目编辑 E1–E3，三套数字各算各的。
           </p>
           <p className="text-muted-foreground">
-            申请审稿人走「申请 → 编辑部审批」；编辑由编辑部按贡献提拔，不开放申请。
+            一个人可以同时是作者和审稿人，但你永远不会看到「作者 L3 比审稿人 R2 高 / 低」这种比较——
+            它们不在同一根轴上。
           </p>
         </CardContent>
       </Card>
 
-      {/* 每日签到与积分获取（登录用户可见签到条；游客看到玩法说明） */}
-      <CheckinSection authenticated={isAuthenticated} />
-
-      {/* 职责轨申请通道（L5/L6）：资格画像 + 提交 + 记录 */}
-      <RoleApplicationsSection />
-
-      {/* 四种身份：与后端 require_* 门禁一一对应 */}
+      {/* 一、权限轴五层 */}
       <section>
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <Layers className="h-4 w-4" /> 四种身份
+        <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
+          <Users className="h-4 w-4" /> 权限轴：五层身份
         </h2>
-        {ladder.isLoading ? (
-          <Loading />
-        ) : ladder.isError || !ladder.data ? (
-          <ErrorState message="加载身份体系失败" onRetry={() => ladder.refetch()} />
-        ) : (
-          <div className="space-y-3">
-            {ladder.data.identities.map((item) => (
+        <p className="mb-4 text-sm text-muted-foreground">
+          大身份包含小身份的全部权限。例如成为主编，就同时拥有栏目编辑、审稿人、用户的所有能力；
+          主编就是主编，不再额外叠加「我是编辑」这种小标签。
+        </p>
+        <div className="space-y-3">
+          {PERMISSION_LAYERS.map((layer, idx) => {
+            const Icon = layer.icon
+            return (
               <div
-                key={item.slug}
-                className={cn(
-                  'rounded-xl border p-4 sm:p-5',
-                  item.slug === 'reader' || item.slug === 'author' ? 'bg-card' : 'bg-muted/30',
-                )}
+                key={layer.key}
+                className="relative rounded-xl border bg-card p-4 sm:p-5"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={cn(
-                      'inline-flex h-7 items-center rounded-full px-2.5 text-xs font-semibold tabular-nums',
-                      item.slug === 'reviewer' || item.slug === 'editor'
-                        ? 'bg-primary/15 text-primary'
-                        : 'bg-muted text-muted-foreground',
+                      'inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold',
+                      layer.tint,
                     )}
                   >
-                    {item.name}
+                    <Icon className="h-3.5 w-3.5" />
+                    {idx + 1}. {layer.label}
                   </span>
-                  <h3 className="text-base font-semibold">{item.name}</h3>
                   <Badge variant="outline" className="text-[10px]">
-                    {/* 身份 3.0：granted_by 是唯一获得方式说明（XP 不再是
-                        任何身份的条件）。旧字段 track 保留兼容但不再展示。 */}
-                    {item.granted_by ?? '身份'}
+                    {layer.granted}
                   </Badge>
                 </div>
-                <p className="mt-1.5 text-sm text-muted-foreground">{item.description}</p>
-                <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  {item.capabilities.map((c) => (
-                    <li key={c} className="flex items-center gap-1">
-                      <Sparkles className="h-3 w-3 text-primary/70" />
-                      {c}
+                <p className="mt-2 text-xs font-medium text-muted-foreground">
+                  本层新增能力：
+                </p>
+                <ul className="mt-1 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                  {layer.adds.map((c) => (
+                    <li key={c} className="flex items-start gap-1.5">
+                      <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                      <span className="min-w-0 break-words">{c}</span>
                     </li>
                   ))}
                 </ul>
               </div>
-            ))}
-          </div>
-        )}
+            )
+          })}
+        </div>
       </section>
 
-      {/* 成就 */}
+      {/* 二、等级轴三套 */}
       <section>
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          <Award className="h-4 w-4" /> 成就体系
+        <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
+          <Crosshair className="h-4 w-4" /> 等级轴：三套独立阈值表
         </h2>
-        <Card>
-          <CardContent className="space-y-3 py-5 text-sm leading-relaxed text-muted-foreground">
-            <p>
-              成就分四档：铜（入门）· 银（常态参与）· 金（长期贡献）· 特别（稀有行为）。
-              共 27 枚，覆盖阅读、讨论、收藏、关注、投稿、审稿、编辑、习惯、探索九类。
-            </p>
-            <p>
-              解法不一：有的是累计量（读完 50 篇），有的是连续行为（连续 30 天有阅读），
-              有的是稀有场景（凌晨三点读完一篇）。隐藏成就只在解锁后显示，
-              最高权限（L9）可查看完整成就表。
-            </p>
-            <p className="text-xs">
-              个人中心只展示「已解锁 + 最近三个待解锁」，成就墙随等级逐步展开。
-            </p>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/profile">进入我的个人中心</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* 质量评分 */}
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold">
-          <BookOpen className="h-4 w-4" /> 论文质量评分（RQS v3.0）
-        </h2>
-        {rubric.isLoading ? (
-          <Loading />
-        ) : rubric.isError || !rubric.data ? (
-          <ErrorState message="加载评分规范失败" onRetry={() => rubric.refetch()} />
-        ) : (
-          <div className="space-y-4">
-            {/* 维度说明：v3.0 的核心变化是「评价值」而非「评形式」，
-                必须让读者看懂每一维到底在问什么。 */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">评价维度（每一维都要求评分者写理由）</CardTitle>
+        <p className="mb-4 text-sm text-muted-foreground">
+          等级只在同一身份内累加。下表数值与后端配置一致，不同身份之间不比较、不并列、不进同一榜单。
+        </p>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {LEVEL_TRACKS.map((track) => (
+            <Card key={track.identity} className="flex flex-col">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center justify-between gap-2 text-base">
+                  <span className="flex items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className={cn('text-[11px]', IDENTITY_BADGE[track.identity])}
+                    >
+                      {track.name}
+                    </Badge>
+                  </span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    单位：{track.unit}
+                  </span>
+                </CardTitle>
               </CardHeader>
-              <CardContent>
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {rubric.data.dimensions.map((d) => (
-                    <li key={d.key} className="rounded-md border bg-muted/30 px-3 py-2">
-                      <p className="text-[13px] font-medium">{d.label}</p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                        {(d as { hint?: string }).hint}
-                      </p>
+              <CardContent className="flex-1 pt-0">
+                <ul className="divide-y">
+                  {track.bands.map((band) => (
+                    <li
+                      key={band.label}
+                      className="flex items-center justify-between gap-2 py-2 text-sm"
+                    >
+                      <span className="inline-flex h-6 w-10 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold tabular-nums text-primary">
+                        {band.label}
+                      </span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {band.range}
+                      </span>
+                      <span className="hidden text-xs text-muted-foreground sm:inline">
+                        {band.note}
+                      </span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
             </Card>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {Object.entries(rubric.data.profiles).map(([key, profile]) => (
-                <Card key={key} className="bg-card/60">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">{profile.label}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <ul className="space-y-1 text-[11px] text-muted-foreground">
-                      {Object.entries(profile.weights).map(([dim, weight]) => {
-                        const dimLabel =
-                          rubric.data.dimensions.find((d) => d.key === dim)?.label ?? dim
-                        return (
-                          <li key={dim} className="flex justify-between gap-2">
-                            <span>{dimLabel}</span>
-                            <span className="tabular-nums">{weight}</span>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            <Card>
-              <CardContent className="space-y-3 py-5 text-sm">
-                <div className="flex flex-wrap gap-2">
-                  {rubric.data.grades.map((g) => (
-                    <span
-                      key={g.code}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
-                        GRADE_STYLES[g.code],
-                      )}
-                    >
-                      {g.code} {g.label}
-                      <span className="tabular-nums opacity-70">
-                        {g.min}–{g.max}
-                      </span>
-                    </span>
-                  ))}
-                </div>
-                <p className="text-muted-foreground">
-                  七个学术价值维度加权满分 100（v3.0 严厉客观制：A+ 95–100 为典范水准，
-                  极少达到，多数稿子落在 C/D）。权重按稿件类型（研究论文 / 综述 / 随笔 /
-                  研究简报）分别设定，冻结在代码里，保证不同月份入库的文章可比较。
-                </p>
-                <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <strong className="text-foreground">处置语义（v3.0）</strong>：
-                  F（40–54）= 合格，可以阅读、仍可发表；55–57（D-）为边缘稿，提示编辑谨慎；
-                  <strong className="text-foreground">只有低于 40 分才不予发表</strong>——
-                  不合格稿件打回审稿人补审或要求作者修改，把逐条修改要求发给作者。
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  学术诚信维度为<strong>一票否决</strong>：发现编造数据或引用，该维度记 0 分，
-                  全篇按不合格处理（不予发表）——无论其他维度多高。
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  结构要求（研究论文）：{rubric.data.profile_sections.research?.join('、')}；
-                  参考文献下限 {rubric.data.min_references.research} 条；摘要 {rubric.data.abstract_band[0]}–
-                  {rubric.data.abstract_band[1]} 字。
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+          ))}
+        </div>
       </section>
 
+      {/* 三、积分怎么涨 */}
+      <section>
+        <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
+          <Coins className="h-4 w-4" /> 积分怎么涨：只服务同身份升级
+        </h2>
+        <p className="mb-4 text-sm text-muted-foreground">
+          下面这些行为会计入对应身份的积分。同一篇稿件 / 同一份审稿只计一次，重复触发不重复加分。
+        </p>
+        <Card>
+          <CardContent className="p-0">
+            <ul className="divide-y">
+              {POINT_RULES.map((rule, i) => (
+                <li
+                  key={i}
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <Badge
+                      variant="secondary"
+                      className={cn('shrink-0 text-[11px]', IDENTITY_BADGE[rule.identity])}
+                    >
+                      {IDENTITY_NAME[rule.identity]}
+                    </Badge>
+                    <span className="min-w-0 break-words">{rule.label}</span>
+                  </div>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {rule.counts ? (
+                      <>+{rule.delta} 分</>
+                    ) : (
+                      <span className="text-xs">
+                        <ShieldAlert className="mr-1 inline h-3.5 w-3.5" />
+                        不计分（仅记活跃度）
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+        <p className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            娱乐 / 吐槽类稿件（随笔、吐槽、非正式论文）录用后只记一条活跃度流水，
+            <strong>不推进任何等级</strong>，也不折算成作者轨积分。想在作者轨升级，靠的是正式论文与认领。
+          </span>
+        </p>
+      </section>
+
+      {/* 四、三条红线 */}
+      <section>
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
+          <ShieldAlert className="h-4 w-4" /> 三条硬规则
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              title: '等级不跨身份比较',
+              body: '作者 L 与审稿人 R、编辑 E 是三套独立数字，不排进同一张表，也不放在同一个卡片里对比。',
+            },
+            {
+              title: '不设全站排行榜',
+              body: '全站总榜、积分榜、名人墙一律不做。个人页面只显示你当前身份 + 该身份等级 + 距下一级还差多少。',
+            },
+            {
+              title: '积分不兑换权限',
+              body: '积分高不会自动变成审稿人或编辑。权限走五层身份，由编辑部授予；积分只在你已有身份内推动等级。',
+            },
+          ].map((rule) => (
+            <Card key={rule.title} className="bg-muted/30">
+              <CardContent className="space-y-1.5 py-4">
+                <p className="text-sm font-semibold">{rule.title}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">{rule.body}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* 结尾 CTA */}
       <Card>
         <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm">
           <span className="flex items-center gap-2 text-muted-foreground">
-            <Lock className="h-4 w-4" /> 完整投稿规范见「作者指南」与「政策规范」。
+            <FileText className="h-4 w-4" />
+            登录后在「我的」页查看你当前的身份与各身份等级进度。
           </span>
-          <div className="flex gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link to="/authors">作者指南</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/policies">政策规范</Link>
-            </Button>
-          </div>
+          <Button asChild size="sm">
+            <Link to="/me">
+              去看我的身份
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
