@@ -770,12 +770,22 @@ export function useRemoveReadingListItem() {
 }
 
 // --- Notifications ---
-export function useNotifications(page = 1, pageSize = 20) {
+export type NotificationCategory =
+  | 'assigned'
+  | 'reminder'
+  | 'decision'
+  | 'claim'
+
+export function useNotifications(
+  page = 1,
+  pageSize = 20,
+  category?: NotificationCategory,
+) {
   return useQuery<NotificationListResponse>({
-    queryKey: keys.notifications.list(page, pageSize),
+    queryKey: ['notifications', 'list', page, pageSize, category ?? 'all'] as const,
     queryFn: async () =>
       (await api.get<NotificationListResponse>('/notifications', {
-        params: { page, page_size: pageSize },
+        params: { page, page_size: pageSize, ...(category ? { category } : {}) },
       })).data,
     refetchInterval: 30_000,
   })
@@ -1485,6 +1495,148 @@ export function useUploadSubmissionCover() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['submissions'] })
+    },
+  })
+}
+
+// --- Workbench (审稿人 / 主编 两栏/四栏，独立接口) ---
+export interface ReviewerWorkbenchRow {
+  assignment_id: number
+  submission_id: number
+  title: string | null
+  type: string | null
+  reviewer_id: number
+  reviewer_username: string | null
+  status: string
+  invited_at: string
+  due_date: string | null
+  due_label: string | null
+  is_overdue: boolean
+  completed_at: string | null
+  reminder_count: number
+  recommendation?: string | null
+}
+
+export interface ReviewerWorkbenchResponse {
+  pending: { count: number; items: ReviewerWorkbenchRow[] }
+  completed: { count: number; items: ReviewerWorkbenchRow[] }
+}
+
+export interface EditorAssignmentRow extends ReviewerWorkbenchRow {}
+
+export interface EditorColumnItem {
+  submission_id: number
+  title: string | null
+  type: string | null
+  submitted_by: number
+  status: string
+  submitted_at: string
+  assignments?: EditorAssignmentRow[]
+  active_count?: number
+  completed_count?: number
+  is_overdue?: boolean
+  recommendations?: { reviewer_id: number; recommendation: string | null }[]
+}
+
+export interface EditorWorkbenchResponse {
+  columns: {
+    to_assign: { count: number; items: EditorColumnItem[] }
+    in_review: { count: number; items: EditorColumnItem[] }
+    to_decide: { count: number; items: EditorColumnItem[] }
+    decided: { count: number; items: EditorColumnItem[] }
+  }
+}
+
+export function useReviewerWorkbench() {
+  return useQuery<ReviewerWorkbenchResponse>({
+    queryKey: ['workbench', 'reviewer'] as const,
+    queryFn: async () =>
+      (await api.get<ReviewerWorkbenchResponse>('/review/workbench')).data,
+    refetchInterval: 30_000,
+  })
+}
+
+export function useEditorWorkbench() {
+  return useQuery<EditorWorkbenchResponse>({
+    queryKey: ['workbench', 'editor'] as const,
+    queryFn: async () =>
+      (await api.get<EditorWorkbenchResponse>('/editor/workbench')).data,
+    refetchInterval: 30_000,
+  })
+}
+
+export interface BatchAssignCreated {
+  submission_id: number
+  reviewer_id: number
+  assignment_id: number
+  due_date: string
+}
+
+export interface BatchAssignSkipped {
+  submission_id: number
+  reviewer_id?: number
+  reason: string
+}
+
+export function useBatchAssign() {
+  const qc = useQueryClient()
+  return useMutation<
+    {
+      created: BatchAssignCreated[]
+      skipped: BatchAssignSkipped[]
+      created_count: number
+    },
+    Error,
+    {
+      items: { submission_id: number; reviewer_ids: number[] }[]
+      due_days: number
+    }
+  >({
+    mutationFn: async (body) =>
+      (await api.post('/editor/workbench/batch-assign', body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['workbench'] })
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export interface ConflictCandidate {
+  reviewer_id: number
+  username?: string
+  exists: boolean
+  is_submitter?: boolean
+  name_matches_author?: boolean
+  own_submission_count?: number
+  warnings?: string[]
+  warning: boolean
+  default_selected?: boolean
+}
+
+export function useCheckConflicts() {
+  return useMutation<
+    { submission_id: number; candidates: ConflictCandidate[] },
+    Error,
+    { submission_id: number; reviewer_ids: number[] }
+  >({
+    mutationFn: async (body) =>
+      (await api.post('/editor/workbench/conflicts', body)).data,
+  })
+}
+
+export function useRemindReviewers() {
+  const qc = useQueryClient()
+  return useMutation<
+    { reminded: { assignment_id: number; reviewer_id: number }[]; reminded_count: number },
+    Error,
+    { assignment_ids: number[] }
+  >({
+    mutationFn: async (body) =>
+      (await api.post('/editor/workbench/remind', body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['workbench'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

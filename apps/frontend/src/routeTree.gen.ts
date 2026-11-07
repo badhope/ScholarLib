@@ -45,6 +45,7 @@ import { Route as CatalogIndexRouteImport } from './routes/catalog/index'
 import { Route as CatalogResourceIdRouteImport } from './routes/catalog/$resourceId'
 import { Route as CatalogNewRouteImport } from './routes/catalog/new'
 import { Route as ClaimResourceIdRouteImport } from './routes/claim/$resourceId'
+import { Route as EditorWorkbenchRouteImport } from './routes/editor/workbench'
 import { Route as FollowsIndexRouteImport } from './routes/follows/index'
 import { Route as ForumIndexRouteImport } from './routes/forum/index'
 import { Route as ForumTopicIdRouteImport } from './routes/forum/$topicId'
@@ -53,6 +54,7 @@ import { Route as LibraryIndexRouteImport } from './routes/library/index'
 import { Route as LibraryListIdRouteImport } from './routes/library/$listId'
 import { Route as ReaderResourceIdRouteImport } from './routes/reader/$resourceId'
 import { Route as ReviewAssignmentsRouteImport } from './routes/review/assignments'
+import { Route as ReviewWorkbenchRouteImport } from './routes/review/workbench'
 import { Route as SubmissionsIndexRouteImport } from './routes/submissions/index'
 import { Route as SubmissionsNewRouteImport } from './routes/submissions/new'
 import { Route as SubmissionsPendingRouteImport } from './routes/submissions/pending'
@@ -238,6 +240,11 @@ const ClaimResourceIdRoute = ClaimResourceIdRouteImport.update({
   path: '/claim/$resourceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EditorWorkbenchRoute = EditorWorkbenchRouteImport.update({
+  id: '/editor/workbench',
+  path: '/editor/workbench',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FollowsIndexRoute = FollowsIndexRouteImport.update({
   id: '/follows/',
   path: '/follows/',
@@ -276,6 +283,11 @@ const ReaderResourceIdRoute = ReaderResourceIdRouteImport.update({
 const ReviewAssignmentsRoute = ReviewAssignmentsRouteImport.update({
   id: '/review/assignments',
   path: '/review/assignments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewWorkbenchRoute = ReviewWorkbenchRouteImport.update({
+  id: '/review/workbench',
+  path: '/review/workbench',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SubmissionsIndexRoute = SubmissionsIndexRouteImport.update({
@@ -334,10 +346,12 @@ export interface FileRoutesByFullPath {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/review/workbench': typeof ReviewWorkbenchRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
@@ -384,10 +398,12 @@ export interface FileRoutesByTo {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/review/workbench': typeof ReviewWorkbenchRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin': typeof AdminIndexRoute
@@ -435,10 +451,12 @@ export interface FileRoutesById {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/review/workbench': typeof ReviewWorkbenchRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
@@ -487,10 +505,12 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/review/workbench'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
@@ -537,10 +557,12 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/review/workbench'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin'
@@ -587,10 +609,12 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/review/workbench'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
@@ -638,10 +662,12 @@ export interface RootRouteChildren {
   CatalogResourceIdRoute: typeof CatalogResourceIdRoute
   CatalogNewRoute: typeof CatalogNewRoute
   ClaimResourceIdRoute: typeof ClaimResourceIdRoute
+  EditorWorkbenchRoute: typeof EditorWorkbenchRoute
   ForumTopicIdRoute: typeof ForumTopicIdRoute
   LibraryListIdRoute: typeof LibraryListIdRoute
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
   ReviewAssignmentsRoute: typeof ReviewAssignmentsRoute
+  ReviewWorkbenchRoute: typeof ReviewWorkbenchRoute
   SubmissionsNewRoute: typeof SubmissionsNewRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -908,6 +934,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClaimResourceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/editor/workbench': {
+      id: '/editor/workbench'
+      path: '/editor/workbench'
+      fullPath: '/editor/workbench'
+      preLoaderRoute: typeof EditorWorkbenchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/follows/': {
       id: '/follows/'
       path: '/follows'
@@ -962,6 +995,13 @@ declare module '@tanstack/react-router' {
       path: '/review/assignments'
       fullPath: '/review/assignments'
       preLoaderRoute: typeof ReviewAssignmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review/workbench': {
+      id: '/review/workbench'
+      path: '/review/workbench'
+      fullPath: '/review/workbench'
+      preLoaderRoute: typeof ReviewWorkbenchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/submissions/': {
@@ -1030,10 +1070,12 @@ const rootRouteChildren: RootRouteChildren = {
   CatalogResourceIdRoute: CatalogResourceIdRoute,
   CatalogNewRoute: CatalogNewRoute,
   ClaimResourceIdRoute: ClaimResourceIdRoute,
+  EditorWorkbenchRoute: EditorWorkbenchRoute,
   ForumTopicIdRoute: ForumTopicIdRoute,
   LibraryListIdRoute: LibraryListIdRoute,
   ReaderResourceIdRoute: ReaderResourceIdRoute,
   ReviewAssignmentsRoute: ReviewAssignmentsRoute,
+  ReviewWorkbenchRoute: ReviewWorkbenchRoute,
   SubmissionsNewRoute: SubmissionsNewRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
   AdminIndexRoute: AdminIndexRoute,

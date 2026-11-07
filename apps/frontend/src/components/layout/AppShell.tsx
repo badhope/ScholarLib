@@ -68,18 +68,17 @@ const NAV: NavItem[] = [
   { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '内容' },
   { to: '/submissions', label: '我的提交', icon: ScrollText, auth: true, group: '我的工作' },
   {
-    to: '/review/assignments',
+    to: '/review/workbench',
     label: '审稿工作台',
     icon: ClipboardCheck,
     auth: true,
     roles: ['reviewer'],
     group: '我的工作',
   },
-  // 编辑工作台（admin 审核队列）：挂在审稿工作台旁，语义上属于编辑部工作流，
-  // 而非"我的提交"的子页面
+  // 主编/栏目编辑工作台（四栏流水线 + 批量指派 + 裁决）
   {
-    to: '/submissions/pending',
-    label: '编辑工作台',
+    to: '/editor/workbench',
+    label: '主编工作台',
     icon: Gavel,
     auth: true,
     roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'],

@@ -9,6 +9,7 @@ import {
   useMarkRead,
   useNotifications,
   useUnreadCount,
+  type NotificationCategory,
 } from '@/hooks/api/use-modules'
 import { extractError } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
@@ -17,6 +18,7 @@ import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/sta
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export const Route = createFileRoute('/notifications')({
   beforeLoad: () => {
@@ -26,6 +28,16 @@ export const Route = createFileRoute('/notifications')({
 })
 
 const PAGE_SIZE = 20
+
+type CategoryTab = 'all' | NotificationCategory
+
+const CATEGORY_TABS: { value: CategoryTab; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'assigned', label: '指派' },
+  { value: 'reminder', label: '催审' },
+  { value: 'decision', label: '裁决' },
+  { value: 'claim', label: '认领结果' },
+]
 
 /**
  * 把通知的 related_type / related_id 解析成站内目标。
@@ -60,7 +72,12 @@ function resolveTarget(
 function NotificationsPage() {
   const navigate = useNavigate()
   const [page, setPage] = useState(1)
-  const { data, isLoading, isError, refetch } = useNotifications(page, PAGE_SIZE)
+  const [category, setCategory] = useState<CategoryTab>('all')
+  const { data, isLoading, isError, refetch } = useNotifications(
+    page,
+    PAGE_SIZE,
+    category === 'all' ? undefined : category,
+  )
   const unread = useUnreadCount()
   const markAllMut = useMarkAllRead()
   const markMut = useMarkRead()
@@ -118,12 +135,29 @@ function NotificationsPage() {
         </Badge>
       </div>
 
-      {isLoading ? (
-        <LoadingSkeleton rows={5} />
-      ) : isError ? (
-        <ErrorState message="加载通知失败" onRetry={() => refetch()} />
-      ) : !data || data.data.length === 0 ? (
-        <EmptyState title="暂无通知" />
+      <Tabs
+        value={category}
+        onValueChange={(v) => {
+          setCategory(v as CategoryTab)
+          setPage(1)
+        }}
+      >
+        <TabsList>
+          {CATEGORY_TABS.map((t) => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      <div className="mt-4">
+        {isLoading ? (
+          <LoadingSkeleton rows={5} />
+        ) : isError ? (
+          <ErrorState message="加载通知失败" onRetry={() => refetch()} />
+        ) : !data || data.data.length === 0 ? (
+          <EmptyState title="暂无通知" />
       ) : (
         <div className="space-y-3">
           {data.data.map((n) => (
@@ -204,6 +238,7 @@ function NotificationsPage() {
           ))}
         </div>
       )}
+      </div>
 
       {data && (
         <Pagination
