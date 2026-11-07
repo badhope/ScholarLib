@@ -7,6 +7,25 @@
 `apps/backend/pyproject.toml`、`apps/frontend/package.json`、`apps/backend/app/__init__.py`
 四处完全一致，由 `scripts/check-version.sh` 守门。
 
+## [1.14.0] — 2026-11-07
+
+### Added
+- **身份权限五层**：users.role 列（visitor/contributor/editor/manager/chief_editor），路由按角色守卫；
+  编辑台支持多选指派 reviewer_ids（slot 1/2/3 批量创建 assignment）。
+- **身份内等级轴**：user_levels 表（等级/经验值/称号）+ point_events 流水（行为加分/扣分）；
+  与角色正交——同角色内按等级展示。
+- **/me 页**：个人中心聚合（投稿、认领、审稿、积分流水）；`/profile` 301 → `/me`。
+- **移动 4 Tab**：底部导航第 4 Tab 指向 `/me`，论坛页加入举报入口。
+- **论坛举报**：帖子/评论举报接口与管理端队列。
+- **22 篇论文重排**：按引用/下载/编辑加权重排 catalog 默认排序。
+
+### Changed
+- **发布/替换/绑定/审核一律走 AI 管理账号**（rubbish_ai_admin, user_id=89），
+  不再使用 bigbad 做批量发布/导入/审计。
+- **裁剪护栏**（95ef42b）：逐行规范化 + 
+ 处理 + 安全护栏（剩余<60% 或找不到正文标题则不裁剪）。
+- **paper 信息卡**：论文轨文章信息卡补中图分类号/质量评分/R 因子三项（仅 paper 显示，essay 不渲染）。
+
 ## [1.13.0] — 2026-11-07
 
 ### Added
