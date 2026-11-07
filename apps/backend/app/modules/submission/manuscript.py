@@ -481,16 +481,79 @@ def markdown_storage_key(file_path: str) -> str:
     return str(path.with_suffix(_MD_SUFFIX)).replace("\\", "/")
 
 
+# --- 内嵌 data-URI 图片拆分（1.14.1） ---------------------------------------
+# 220dpi 抽取会把整图 base64 内嵌进 Markdown，单篇可达 1MB+，首屏正文
+# 被图片字节拖慢到 ~11s。读时把 `![alt](data:image/...;base64,...)` 就地
+# 改写成 `![alt](/api/catalog/{id}/img/{n})`，原图不迁移、不改存储；
+# /img/{n} 端点按序号从原 Markdown 里抽出第 n 个 data URI 返回字节。
+# 解析失败一律原样返回 Markdown，不得丢图、不得报错。
+_DATA_URI_IMG_RE = re.compile(
+    r'!\[([^\]]*)\]\(data:image/([a-zA-Z0-9.+-]+);base64,([^)]*)\)'
+)
+
+
+@dataclass(frozen=True)
+class EmbeddedImage:
+    """Markdown 内嵌的一张图片（文档顺序，1-based 序号即列表下标+1）。"""
+
+    media_type: str
+    data: bytes
+
+
+def extract_embedded_images(md: str) -> list[EmbeddedImage]:
+    """按文档顺序抽出 Markdown 里内嵌的 data-URI 图片字节。
+
+    单个 base64 损坏只跳过该张（decode 失败/空字节），不影响其余图片。
+    """
+    out: list[EmbeddedImage] = []
+    for m in _DATA_URI_IMG_RE.finditer(md):
+        subtype = m.group(2).lower()
+        payload = re.sub(r"\s+", "", m.group(3))
+        if not payload:
+            continue
+        try:
+            raw = base64.b64decode(payload, validate=False)
+        except Exception:  # noqa: BLE001 — 损坏的单张图跳过，不影响其余
+            logger.warning("embedded_image_decode_failed subtype=%s", subtype)
+            continue
+        if not raw:
+            continue
+        out.append(EmbeddedImage(media_type=f"image/{subtype}", data=raw))
+    return out
+
+
+def rewrite_embedded_images(md: str, resource_id: int) -> str:
+    """把内嵌 data-URI 图片就地改写为 `/api/catalog/{id}/img/{n}`。
+
+    - 无任何匹配时原样返回；
+    - 任何异常都吞掉并返回原文（兜底：不得丢图、不得报错）。
+    """
+    try:
+        counter = {"n": 0}
+
+        def _sub(m: re.Match[str]) -> str:
+            counter["n"] += 1
+            return f"![{m.group(1)}](/api/catalog/{resource_id}/img/{counter['n']})"
+
+        return _DATA_URI_IMG_RE.sub(_sub, md)
+    except Exception:  # noqa: BLE001
+        logger.warning("embedded_image_rewrite_failed resource_id=%s", resource_id, exc_info=True)
+        return md
+
+
 def needs_docx_storage_key(file_path: str) -> str:
     """needs_docx 原因侧car key：``{file_path}.needs_docx``。"""
     return f"{file_path}.needs_docx".replace("\\", "/")
 
 
 __all__ = [
+    "EmbeddedImage",
     "ManuscriptResult",
     "convert_manuscript",
     "convert_manuscript_async",
     "convert_to_markdown",
+    "extract_embedded_images",
     "markdown_storage_key",
     "needs_docx_storage_key",
+    "rewrite_embedded_images",
 ]

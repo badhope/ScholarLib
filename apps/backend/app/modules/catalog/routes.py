@@ -1025,18 +1025,111 @@ async def get_resource_manuscript(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
         ) from exc
+    # 1.14.1：220dpi 抽取把整图 base64 内嵌进 Markdown，单篇可达 1MB+，
+    # 首屏正文被图片字节拖到 ~11s。读时把 `![alt](data:...)` 就地改写成
+    # `/api/catalog/{id}/img/{n}`（原图不迁移、不改存储），正文体积从 MB 级
+    # 降到几十 KB；图片由 /img/{n} 按序号抽字节返回，浏览器端懒加载。
+    # 兜底：任何异常都回退原始字节，不得丢图、不得报错。
+    from app.modules.submission.manuscript import rewrite_embedded_images
+
+    out_data = data
+    try:
+        md_text = data.decode("utf-8")
+        rewritten = rewrite_embedded_images(md_text, resource_id)
+        if rewritten != md_text:
+            out_data = rewritten.encode("utf-8")
+    except Exception:  # noqa: BLE001
+        logger.warning("manuscript_rewrite_failed resource_id=%s", resource_id, exc_info=True)
+        out_data = data
     # 1.6.0：稿件含 220dpi 内嵌图（单篇可达 1-2MB），给协商缓存——
     # 内容 sha256 作 ETag，重复阅读命中 304 不再重拉。
-    etag = f'W/"{hashlib.sha256(data).hexdigest()[:32]}"'
+    etag = f'W/"{hashlib.sha256(out_data).hexdigest()[:32]}"'
     if if_none_match and etag in if_none_match:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
     return Response(
-        content=data,
+        content=out_data,
         media_type="text/markdown; charset=utf-8",
         headers={
             "X-Content-Type-Options": "nosniff",
             "ETag": etag,
             "Cache-Control": "private, max-age=300",
+        },
+    )
+
+
+@router.get("/{resource_id}/img/{n}")
+async def get_resource_manuscript_image(
+    resource_id: int,
+    n: int,
+    if_none_match: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> Response:
+    """内嵌图片只读端点（1.14.1）：按序号从原 Markdown 抽出第 n 个 data URI
+    （n 从 1 开始，文档顺序）返回图片字节。
+
+    - 归属/可见性与 /manuscript 完全一致（published 公开；未刊稿仅刊前预览者，
+      无权限 404）——按 resource 归属校验，n 越界同样 404，读不到别的文件。
+    - 原图不迁移、不改存储；字节内容不变，故长缓存不可变 + ETag/304。
+    """
+    from app.core.storage import get_storage
+    from app.modules.submission.manuscript import extract_embedded_images
+    from app.modules.submission.models import Submission
+
+    tenant_id = require_tenant_id()
+    result = await db.execute(
+        select(Resource).where(
+            Resource.id == resource_id,
+            Resource.tenant_id == tenant_id,
+        )
+    )
+    resource = result.scalar_one_or_none()
+    is_published = is_public(resource)
+    if resource is None or (
+        not is_published and not await _can_preview_unpublished(db, viewer, resource_id, tenant_id)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    submission = (
+        (
+            await db.execute(
+                select(Submission).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                    Submission.markdown_path.is_not(None),
+                    Submission.markdown_path != "",
+                ).order_by(Submission.id.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if submission is None or not submission.markdown_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    try:
+        raw_md = await get_storage().load(submission.markdown_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
+        ) from exc
+
+    if n < 1:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    images = extract_embedded_images(raw_md.decode("utf-8", errors="replace"))
+    if n > len(images):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    img = images[n - 1]
+    etag = f'W/"{hashlib.sha256(img.data).hexdigest()[:32]}"'
+    if if_none_match and etag in if_none_match:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+    return Response(
+        content=img.data,
+        media_type=img.media_type,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            "ETag": etag,
+            "Cache-Control": "public, max-age=31536000, immutable",
         },
     )
 

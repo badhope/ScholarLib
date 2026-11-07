@@ -465,3 +465,130 @@ async def test_list_has_markdown_flag(
     listing = (await client.get("/api/catalog?page_size=50")).json()
     flags = {item["id"]: item["has_markdown"] for item in listing["data"]}
     assert flags[rid] is True
+
+
+# --- 1.14.1：内嵌 data-URI 图片拆分为 /img/{n} 只读端点 --------------------
+
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+    "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+)
+
+
+async def _seed_published_md(
+    client: AsyncClient,
+    db_session,
+    admin_user: dict,
+    *,
+    md_text: str,
+    status: str = "published",
+) -> int:
+    """落一篇带内嵌图 Markdown 的资源，返回 resource id。"""
+    from sqlalchemy import select as sa_select
+
+    from app.core.storage import get_storage
+    from app.models import Tenant
+    from app.modules.submission.models import Submission
+    from tests.test_catalog import _SAMPLE
+
+    payload = {**_SAMPLE, "title": "Embedded Image Split", "publication_status": status}
+    r = await client.post(
+        "/api/catalog", json=payload, headers={"Authorization": f"Bearer {admin_user['token']}"}
+    )
+    r.raise_for_status()
+    rid = r.json()["id"]
+    tenant = (
+        await db_session.execute(sa_select(Tenant).where(Tenant.slug == "default"))
+    ).scalar_one()
+    rel = f"{tenant.id}/{rid}/embedded.md"
+    await get_storage().save(rel, md_text.encode("utf-8"))
+    db_session.add(
+        Submission(
+            tenant_id=tenant.id,
+            resource_id=rid,
+            submitted_by=admin_user["user_id"],
+            title="Embedded Image Split",
+            type="paper",
+            discipline="computer-science",
+            authors=["Anon"],
+            year=2026,
+            abstract="abstract",
+            preview="preview",
+            tags=[],
+            status="accepted",
+            markdown_path=rel,
+        )
+    )
+    await db_session.commit()
+    return rid
+
+
+async def test_manuscript_rewrites_data_uri_to_img_endpoint(
+    client: AsyncClient, db_session, admin_user: dict
+) -> None:
+    md_text = (
+        "# 拆分测试\n\n"
+        "正文第一段必须原样保留。\n\n"
+        f"![示意图](data:image/png;base64,{_TINY_PNG_B64})\n\n"
+        "## 1 引言\n\n"
+        "后续文字。\n"
+    )
+    rid = await _seed_published_md(client, db_session, admin_user, md_text=md_text)
+
+    resp = await client.get(f"/api/catalog/{rid}/manuscript")
+    assert resp.status_code == 200
+    body = resp.text
+    # 内嵌 data URI 被就地替换
+    assert "data:image/" not in body
+    assert f"/api/catalog/{rid}/img/1" in body
+    # 正文与图注不丢
+    assert "正文第一段必须原样保留。" in body
+    assert "![示意图]" in body
+
+
+async def test_img_endpoint_serves_bytes_and_headers(
+    client: AsyncClient, db_session, admin_user: dict
+) -> None:
+    import base64
+
+    md_text = f"# 图\n\n![a](data:image/png;base64,{_TINY_PNG_B64})\n"
+    rid = await _seed_published_md(client, db_session, admin_user, md_text=md_text)
+
+    img = await client.get(f"/api/catalog/{rid}/img/1")
+    assert img.status_code == 200
+    assert img.headers["content-type"] == "image/png"
+    assert img.content == base64.b64decode(_TINY_PNG_B64)
+    assert "immutable" in img.headers["cache-control"]
+    assert img.headers.get("etag")
+
+    # 越界 → 404
+    assert (await client.get(f"/api/catalog/{rid}/img/2")).status_code == 404
+    assert (await client.get(f"/api/catalog/{rid}/img/0")).status_code == 404
+
+    # 协商缓存 304
+    etag = img.headers["etag"]
+    again = await client.get(f"/api/catalog/{rid}/img/1", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+
+
+async def test_manuscript_without_data_uri_is_untouched(
+    client: AsyncClient, db_session, admin_user: dict
+) -> None:
+    md_text = "# 纯文字\n\n没有图片的正文段落。\n"
+    rid = await _seed_published_md(client, db_session, admin_user, md_text=md_text)
+    resp = await client.get(f"/api/catalog/{rid}/manuscript")
+    assert resp.status_code == 200
+    assert "没有图片的正文段落。" in resp.text
+    assert "/img/" not in resp.text
+
+
+async def test_img_endpoint_hidden_for_unpublished(
+    client: AsyncClient, db_session, admin_user: dict
+) -> None:
+    md_text = f"# 私密\n\n![x](data:image/png;base64,{_TINY_PNG_B64})\n"
+    rid = await _seed_published_md(
+        client, db_session, admin_user, md_text=md_text, status="draft"
+    )
+    # 匿名访问：manuscript 与 img 同边界
+    assert (await client.get(f"/api/catalog/{rid}/manuscript")).status_code == 404
+    assert (await client.get(f"/api/catalog/{rid}/img/1")).status_code == 404

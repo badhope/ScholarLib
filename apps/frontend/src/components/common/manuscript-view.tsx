@@ -412,7 +412,15 @@ function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
       </span>
     )
   }
-  return <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  )
 }
 
 // 中文出版符号在阅读页也要「看得出是什么」：书名号走楷体 + 品牌绿，
