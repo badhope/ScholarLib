@@ -37,15 +37,16 @@ import {
   useUpdateResource,
 } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceUpdate } from '@/lib/types'
-import { extractError, formatDateTime, parseListField } from '@/lib/utils'
+import { extractError, formatDateTime, parseListField, sanitizeAuthors } from '@/lib/utils'
 import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import {
   absurdityLevel,
   contentCategoryLabel,
+  displayTypeLabel,
+  isScholarlyContent,
   languageLabel,
   qualityGrade,
   statusLabel,
-  typeLabel,
 } from '@/lib/resource-labels'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -85,7 +86,7 @@ function CatalogDetailPage() {
   const { resourceId } = Route.useParams()
   const id = Number(resourceId)
   const navigate = useNavigate()
-  const { isAdmin, isAuthenticated } = useAuth()
+  const { isAdmin, isAuthenticated, user } = useAuth()
 
   const { data, isLoading, isError, refetch } = useResource(id)
   const progress = useReadingProgress(id, { enabled: isAuthenticated })
@@ -150,6 +151,23 @@ function CatalogDetailPage() {
     }
   }
 
+  // P0：娱乐稿（content_category=fun/rant 或 content_track=essay）不参与学术
+  // 评分体系——荒诞指数、R 因子/分区、RQS、quality_grade 一律不渲染。
+  // 阅读量/收藏/评论等内容侧数据保留。
+  const isScholarly = isScholarlyContent(data.content_category, data.content_track)
+  // P0 兜底：数据侧清脏数据前，展示层先过滤掉姓名含 bigbad 的条目。
+  const cleanAuthors = sanitizeAuthors(data.authors)
+  // 认领卡：当前登录用户本身就是作者时，不向他自己展示"认领本文"。
+  const currentUsername = user?.username?.trim().toLowerCase() ?? ''
+  const isAuthor =
+    !!currentUsername &&
+    cleanAuthors.some((a) => a.trim().toLowerCase() === currentUsername)
+  // owner 已绑定（state=claimed）时后端已把 claimable 置 false；这里再显式
+  // 挡一道 state，防止缓存旧响应把认领入口漏出来。
+  const ownerBound = claimStatus.data?.state === 'claimed'
+  const canClaim =
+    isAuthenticated && !isAuthor && !ownerBound && claimStatus.data?.claimable === true
+
   return (
     <div className={isMobile ? 'pb-40' : ''}>
       <Link
@@ -168,25 +186,34 @@ function CatalogDetailPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            {/* 类别徽章（非等级）：RQS 与风格光谱只在评审信息区呈现。 */}
-            <Badge variant="secondary">{typeLabel(data.type)}</Badge>
-            {data.content_category ? (
+            {/* 类型 chip：学术稿显示资源类型（论文/图书/…），娱乐稿直接显示赛道名。 */}
+            <Badge variant="secondary">
+              {displayTypeLabel(data.type, data.content_category, data.content_track)}
+            </Badge>
+            {/* 类别副标：娱乐稿的类型 chip 已写明，不再重复打"娱乐/吐槽"副标；
+                学术稿保留"学术研究"副标以区分于图书/数据集等资源类型。 */}
+            {isScholarly && data.content_category ? (
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25">
                 {contentCategoryLabel(data.content_category)}
               </Badge>
             ) : null}
-            {(() => {
-              const level = absurdityLevel(data.absurdity_index)
-              return level ? (
-                <Badge
-                  variant={level.variant}
-                  title={`风格光谱 ${data.absurdity_index} / 10 · ${level.description}`}
-                >
-                  {level.label} {data.absurdity_index?.toFixed(1)}
-                </Badge>
-              ) : null
-            })()}
-            {data.r_index != null &&
+            {/* 风格光谱（荒诞指数）：仅学术稿展示；娱乐稿不参与学术评分体系。 */}
+            {isScholarly
+              ? (() => {
+                  const level = absurdityLevel(data.absurdity_index)
+                  return level ? (
+                    <Badge
+                      variant={level.variant}
+                      title={`风格光谱 ${data.absurdity_index} / 10 · ${level.description}`}
+                    >
+                      {level.label} {data.absurdity_index?.toFixed(1)}
+                    </Badge>
+                  ) : null
+                })()
+              : null}
+            {/* R 指数 + 学科分区：仅学术稿展示。 */}
+            {isScholarly &&
+            data.r_index != null &&
             (data.reads ?? 0) + (data.downloads ?? 0) + (data.saves ?? 0) >= 3 ? (
               <Badge variant="outline" className="tabular-nums">
                 R {data.r_index.toFixed(1)}
@@ -199,17 +226,22 @@ function CatalogDetailPage() {
           </div>
           {/* 手机上标题占三到四行会把摘要挤出首屏，降到 xl 后两行内可见 */}
           <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{data.title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {data.authors.join(', ')}
-          </p>
+          {/* 作者行：过滤掉姓名含 bigbad 的脏数据；过滤后为空时不补"编辑部"等替代文案。 */}
+          {cleanAuthors.length > 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {cleanAuthors.join(', ')}
+            </p>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* 主体 */}
         <div className="space-y-6 lg:col-span-2">
-          {/* 认领入口：登录 + 文章可认领时显示（编辑部导入的早期文章与站内账号无关） */}
-          {isAuthenticated && claimStatus.data?.claimable && (
+          {/* 认领入口：登录 + 文章未挂 owner + 当前用户不是作者本人时才显示。
+              未登录一律不显示；owner 已绑定（state=claimed）由后端硬校验，
+              前端这里只是不展示。 */}
+          {canClaim && (
             <Card className="border-dashed">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
                 <div className="min-w-0">
@@ -263,9 +295,9 @@ function CatalogDetailPage() {
             </CardContent>
           </FoldCard>
 
-          {/* R 指数：只有真实事件才算数；分区样本不足时明确写出来，
-              不用一个看着漂亮的字母糊弄读者。 */}
-          {/* 评审信息：RQS v4.0 七维明细（评审元数据，不作内容分层） */}
+          {/* 评审信息：RQS v4.0 七维明细。仅学术稿展示——娱乐稿不参与学术评分体系，
+              即使后端历史数据带了 quality_grade / quality_breakdown 也不渲染。 */}
+          {isScholarly && (
           <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
             <CardContent>
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -325,29 +357,40 @@ function CatalogDetailPage() {
               </p>
             </CardContent>
           </FoldCard>
+          )}
 
           <FoldCard title="阅读与影响" defaultOpen={false}>
             <CardContent>
-              <MetaItem label="R 指数" value={data.r_index != null ? String(data.r_index) : '—'} />
-              <MetaItem
-                label="学科分区"
-                value={data.quartile ?? '样本不足'}
-              />
+              {/* R 指数 / 学科分区 / 荒诞指数均为学术评分体系指标，娱乐稿不展示；
+                  阅读量/下载/收藏是内容侧数据，保留。 */}
+              {isScholarly && (
+                <>
+                  <MetaItem label="R 指数" value={data.r_index != null ? String(data.r_index) : '—'} />
+                  <MetaItem
+                    label="学科分区"
+                    value={data.quartile ?? '样本不足'}
+                  />
+                </>
+              )}
               <MetaItem label="阅读次数" value={String(data.reads ?? 0)} />
               <MetaItem label="下载次数" value={String(data.downloads ?? 0)} />
               <MetaItem label="收藏次数" value={String(data.saves ?? 0)} />
-              <MetaItem
-                label="荒诞指数"
-                value={
-                  data.absurdity_index != null
-                    ? `${data.absurdity_index.toFixed(1)} / 10 · ${absurdityLevel(data.absurdity_index)?.description ?? ''}`
-                    : '未评定'
-                }
-              />
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                R 指数与荒诞指数均为本刊自设计指标：前者衡量站内注意力，
-                后者由编辑部评定内容气质；口径属编辑部内部标准，不等同于影响因子。
-              </p>
+              {isScholarly && (
+                <MetaItem
+                  label="荒诞指数"
+                  value={
+                    data.absurdity_index != null
+                      ? `${data.absurdity_index.toFixed(1)} / 10 · ${absurdityLevel(data.absurdity_index)?.description ?? ''}`
+                      : '未评定'
+                  }
+                />
+              )}
+              {isScholarly && (
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  R 指数与荒诞指数均为本刊自设计指标：前者衡量站内注意力，
+                  后者由编辑部评定内容气质；口径属编辑部内部标准，不等同于影响因子。
+                </p>
+              )}
             </CardContent>
           </FoldCard>
 
@@ -515,13 +558,13 @@ function CatalogDetailPage() {
           <FoldCard title="引用与分享" defaultOpen={!isMobile}>
             <CardContent className="space-y-2">
               <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                {data.authors.join('，')}：{data.title}[Z]．Rubbish，{data.year}．
+                {cleanAuthors.length > 0 ? cleanAuthors.join('，') : data.authors.join('，')}：{data.title}[Z]．Rubbish，{data.year}．
               </p>
               <Button
                 variant="outline"
                 className="w-full"
                 onClick={async () => {
-                  const cite = `${data.authors.join('，')}：${data.title}[Z]．Rubbish，${data.year}．`
+                  const cite = `${cleanAuthors.length > 0 ? cleanAuthors.join('，') : data.authors.join('，')}：${data.title}[Z]．Rubbish，${data.year}．`
                   try {
                     await navigator.clipboard.writeText(cite)
                     toast.success('引用格式已复制')
@@ -613,7 +656,7 @@ function CatalogDetailPage() {
           )}
 
           <FollowCard
-            authorName={data.authors[0]}
+            authorName={cleanAuthors[0] ?? ''}
             discipline={data.discipline}
           />
         </div>
@@ -1213,9 +1256,16 @@ function RelatedResources({
               {r.title}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {r.authors.slice(0, 2).join('、')}
-              {r.authors.length > 2 ? ' 等' : ''} · {r.year}
-              {r.absurdity_index != null && r.absurdity_index >= 7.5 ? ' · 离谱' : ''}
+              {(() => {
+                const clean = sanitizeAuthors(r.authors)
+                return (
+                  <>
+                    {clean.slice(0, 2).join('、')}
+                    {clean.length > 2 ? ' 等' : ''} · {r.year}
+                    {isScholarlyContent(r.content_category, r.content_track) && r.absurdity_index != null && r.absurdity_index >= 7.5 ? ' · 离谱' : ''}
+                  </>
+                )
+              })()}
             </p>
           </Link>
         ))}
@@ -1230,11 +1280,12 @@ function RelatedResources({
  * 第一个动作（写综述、挂参考文献），藏在下拉里等于没有。
  */
 function CitationCard({ resource }: { resource: ResourceResponse }) {
-  const firstAuthor = resource.authors[0] ?? '佚名'
+  const safeAuthors = sanitizeAuthors(resource.authors)
+  const firstAuthor = safeAuthors[0] ?? '佚名'
   const authorPart =
-    resource.authors.length > 3
+    safeAuthors.length > 3
       ? `${firstAuthor}, 等`
-      : resource.authors.join(', ')
+      : safeAuthors.join(', ')
   const pagesPart = resource.pages ? `: ${resource.pages}` : ''
   const venuePart = resource.venue || 'Rubbish'
   const gbt7714 =
@@ -1243,7 +1294,7 @@ function CitationCard({ resource }: { resource: ResourceResponse }) {
   const bibtex = [
     `@article{rubbish${resource.id}${resource.year},`,
     `  title  = {${resource.title}},`,
-    `  author = {${resource.authors.join(' and ')}},`,
+    `  author = {${safeAuthors.join(' and ')}},`,
     `  journal= {${venuePart}},`,
     `  year   = {${resource.year}},`,
     resource.volume ? `  volume = {${resource.volume}},` : null,

@@ -133,7 +133,7 @@ function JournalMetricsPage() {
             <h2 className="text-lg font-medium">指标一览</h2>
             <dl className="mt-3 grid gap-4 sm:grid-cols-2">
               {[
-                ['已发表记录', `${data.published_total} 篇`],
+                ['已发表论文', `${data.published_total} 篇`],
                 ['覆盖学科', `${data.discipline_count} 个`],
                 [
                   '开放获取率',
@@ -265,6 +265,11 @@ function JournalMetricsPage() {
             <p>
               数据来源：本站数据库的 resources / reading_history /
               reading_list_items / submissions 表；页面每次访问实时计算。
+            </p>
+            <p className="mt-2">
+              口径说明：R 因子、荒诞指数中位数、篇均下载/阅读等学术指标仅统计学术稿
+              （content_category=academic）；娱乐稿（fun/rant）的阅读、收藏、评论、点赞
+              等内容侧数据不计入学术指标，但仍在各文章页展示。
             </p>
             <p className="mt-2">
               机器可读版本：

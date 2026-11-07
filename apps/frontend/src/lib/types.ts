@@ -187,6 +187,9 @@ export interface ResourceBase {
   quality_score?: number | null
   quality_grade?: string | null
   content_category?: "academic" | "fun" | "rant" | null
+  /** 内容赛道：essay 表示娱乐/随笔稿（与 content_category=fun/rant 同义，
+   *  后端物化时可能只下发其一）；前端据此隐藏全部学术评分元素。 */
+  content_track?: string | null
   // 编辑部评语挂在 quality_breakdown.comment（额外键，读取处自行收窄类型）
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null
   /** 主题封面图（/covers/xx.jpg）；为空时回退生成式封面 */

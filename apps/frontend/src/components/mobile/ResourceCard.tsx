@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { FileDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { ArticleCover } from '@/components/common/article-cover'
-import { contentCategoryLabel, typeLabel } from '@/lib/resource-labels'
+import { contentCategoryLabel, displayTypeLabel, isScholarlyContent } from '@/lib/resource-labels'
 import { formatAuthors } from '@/lib/utils'
 import type { ResourceResponse } from '@/lib/types'
 
@@ -14,7 +14,9 @@ import type { ResourceResponse } from '@/lib/types'
 // 封面高度锁定 84px，图片懒加载也不会引起滚动跳动。
 export function ResourceCard({ resource }: { resource: ResourceResponse }) {
   const authors = formatAuthors(resource.authors)
-  const categoryTag = contentCategoryLabel(resource.content_category)
+  const scholarly = isScholarlyContent(resource.content_category, resource.content_track)
+  // 娱乐稿不再打"娱乐向"副标——类型 chip 已写明"娱乐/吐槽"，避免重复。
+  const categoryTag = scholarly ? contentCategoryLabel(resource.content_category) : ''
 
   return (
     <Link
@@ -38,7 +40,7 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
             <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-              {typeLabel(resource.type)}
+              {displayTypeLabel(resource.type, resource.content_category, resource.content_track)}
             </Badge>
             {categoryTag ? (
               <Badge variant="outline" className="bg-primary/10 px-1.5 py-0 text-[10px] text-primary border-primary/25">

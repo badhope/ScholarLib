@@ -101,8 +101,20 @@ export function parseListField(s: string): string[] {
 // 1) 把 "Last, First" 规范成 "First Last"（BibTeX/RIS 导入常带逗号格式，
 //    直接 join 会让人误以为拆成多个作者）；
 // 2) 超过 2 位作者时截断为 "前两位 et al."。
+//
+// P0 兜底：数据侧会清掉姓名含 bigbad 的脏数据，但缓存/旧接口可能还带出来，
+// 展示层统一过滤，防止脏作者名漏到读者视野。
+export function sanitizeAuthors(authors: string[] | null | undefined): string[] {
+  if (!authors) return []
+  return authors.filter((a) => {
+    if (!a) return false
+    // 大小写不敏感匹配 "bigbad"，避免 BigBad / BIGBAD 变体漏网
+    return !a.toLowerCase().includes('bigbad')
+  })
+}
+
 export function formatAuthors(authors: string[], limit = 2): string {
-  const names = authors.map((a) => {
+  const names = sanitizeAuthors(authors).map((a) => {
     const parts = a
       .split(',')
       .map((s) => s.trim())

@@ -7,7 +7,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { exportResources, useCatalogStats, useResources } from '@/hooks/api/use-modules'
 import type { ResourceType } from '@/lib/types'
 import { extractError, formatAuthors, cn } from '@/lib/utils'
-import { contentCategoryLabel, typeLabel } from '@/lib/resource-labels'
+import { contentCategoryLabel, displayTypeLabel, isScholarlyContent } from '@/lib/resource-labels'
 import { PageHeader } from '@/components/common/page-header'
 import { ArticleCover } from '@/components/common/article-cover'
 import { EmptyState, ErrorState } from '@/components/common/state'
@@ -226,15 +226,17 @@ function CatalogListPage() {
               <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" />
               <div className="space-y-1.5 p-3">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {r.content_category ? (
+                  {isScholarlyContent(r.content_category, r.content_track) && r.content_category ? (
                     <Badge variant="outline" className="bg-primary/10 text-[10px] text-primary border-primary/25">
                       {contentCategoryLabel(r.content_category)}
                     </Badge>
                   ) : null}
-                  <Badge variant="secondary" className="text-[10px]">{typeLabel(r.type)}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {displayTypeLabel(r.type, r.content_category, r.content_track)}
+                  </Badge>
                 </div>
                 <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
-                <p className="line-clamp-1 text-xs text-muted-foreground">{r.authors.join('、')}</p>
+                <p className="line-clamp-1 text-xs text-muted-foreground">{formatAuthors(r.authors)}</p>
               </div>
             </Link>
           ))}
@@ -312,8 +314,8 @@ function CatalogListPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Badge variant="secondary">{typeLabel(r.type)}</Badge>
-                         {r.content_category ? (
+                          <Badge variant="secondary">{displayTypeLabel(r.type, r.content_category, r.content_track)}</Badge>
+                         {isScholarlyContent(r.content_category, r.content_track) && r.content_category ? (
                             <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
                               {contentCategoryLabel(r.content_category)}
                             </Badge>

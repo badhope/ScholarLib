@@ -153,11 +153,38 @@ export function qualityGrade(grade: string | null | undefined): QualityGrade | n
 // ---------------------------------------------------------------------------
 const CATEGORY_LABELS: Record<string, string> = {
   academic: '学术研究',
-  fun: '娱乐向',
-  rant: '吐槽向',
+  fun: '娱乐',
+  rant: '吐槽',
 }
 
 export function contentCategoryLabel(category: string | null | undefined): string {
   return (category && CATEGORY_LABELS[category]) || ''
+}
+
+// ---------------------------------------------------------------------------
+// 学术 vs 娱乐：content_category 为 fun/rant，或后端给出 content_track=essay
+// 时，这篇是娱乐稿——全站不渲染任何学术评分元素（荒诞指数、R 因子/分区、
+// RQS、quality_grade）。阅读量/收藏/评论等内容侧数据照常保留。
+// ---------------------------------------------------------------------------
+export function isScholarlyContent(
+  contentCategory: string | null | undefined,
+  contentTrack?: string | null,
+): boolean {
+  if (contentTrack === 'essay') return false
+  if (contentCategory === 'fun' || contentCategory === 'rant') return false
+  return true
+}
+
+// 类型 chip：学术稿按资源类型显示（论文/图书/…）；娱乐稿直接显示赛道名，
+// 不再把娱乐稿标成"论文"。
+export function displayTypeLabel(
+  type: string | null | undefined,
+  contentCategory?: string | null,
+  contentTrack?: string | null,
+): string {
+  if (contentTrack === 'essay') return '娱乐'
+  if (contentCategory === 'fun') return '娱乐'
+  if (contentCategory === 'rant') return '吐槽'
+  return typeLabel(type)
 }
 

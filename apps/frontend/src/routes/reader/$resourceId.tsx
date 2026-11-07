@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { typeLabel } from '@/lib/resource-labels'
+import { displayTypeLabel } from '@/lib/resource-labels'
 import { ReadingProgressBar } from '@/components/common/reading-progress-bar'
 import { formatDateTime } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
@@ -313,7 +313,7 @@ function ReaderPage() {
           <span className="hidden sm:inline">返回详情</span>
         </Link>
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{data.title}</span>
-        {data.type && <Badge variant="secondary" className="hidden sm:inline-flex">{typeLabel(data.type)}</Badge>}
+        {data.type && <Badge variant="secondary" className="hidden sm:inline-flex">{displayTypeLabel(data.type, data.content_category, data.content_track)}</Badge>}
         {data.has_markdown && data.download_url && (
           <button
             onClick={() => setModeOverride(mode === 'pdf' ? 'md' : 'pdf')}
