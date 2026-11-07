@@ -240,7 +240,8 @@ function CatalogDetailPage() {
               hideTocNav
               onTocReady={setToc}
               onFatalError={setManuscriptError}
-              contentKind={kind}
+              contentCategory={data.content_category}
+              contentTrack={data.content_track}
             />
           )}
 

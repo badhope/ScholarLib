@@ -87,8 +87,10 @@ interface ManuscriptViewProps {
   hideTocNav?: boolean
   /** 稿件加载失败（含 409 needs_docx）时回调，父级可据此渲染兜底 UI */
   onFatalError?: (err: unknown) => void
-  /** 内容轨道：fun/rant/sci_pop 时按规范在渲染前剥掉学术小节与邮箱 */
-  contentKind?: 'paper' | 'sci_pop' | 'fun' | 'rant' | 'plain'
+  /** 内容分类（来自资源元数据），组件内部据此计算 effectiveKind */
+  contentCategory?: string | null
+  /** 内容赛道（essay/paper），作为 contentCategory 的兜底 */
+  contentTrack?: string | null
 }
 
 // --- 轨道裁剪：在 Markdown 渲染前按 v3 规范剥掉学术小节 -------------------
@@ -114,13 +116,14 @@ const ALL_BLOCK_TITLES =
 /**
  * 规范化：把行内/非行首的 `## 摘要` 这类标题强制断行，让后续按行切分能识别。
  * 原稿常见形态：作者单位行尾紧接 `## 摘要`，Markdown 不把它当 heading。
+ * 注意：不跨行匹配（\s* 改为 [ \t]*），且不重复补 ##（$2 已含 #）。
  */
 function normalizeInlineHeadings(md: string): string {
-  // 在 #+ 后跟块标题前补 \n\n；在块标题后补 \n\n
-  const re = new RegExp(`([^\\n])\\s*(#{1,6}\\s*(?:${ALL_BLOCK_TITLES})\\s*[:：]?)`, 'g')
-  let out = md.replace(re, '$1\n\n## $2')
-  // 标题后如果紧跟正文（无换行），补换行
-  const re2 = new RegExp(`(#{1,6}\\s*(?:${ALL_BLOCK_TITLES})\\s*[:：]?)([^\\n])`, 'g')
+  // 行内：同行文本后紧跟 ## 块标题 → 断行
+  const re = new RegExp(`([^\\n])[ \\t]*(#{1,6}[ \\t]+(?:${ALL_BLOCK_TITLES})[ \\t]*[:：]?)`, 'g')
+  let out = md.replace(re, '$1\n\n$2')
+  // 块标题后紧跟正文（无换行）→ 补换行
+  const re2 = new RegExp(`(#{1,6}[ \\t]+(?:${ALL_BLOCK_TITLES})[ \\t]*[:：]?)([^\\n ])`, 'g')
   out = out.replace(re2, '$1\n\n$2')
   return out
 }
@@ -200,17 +203,20 @@ export function stripAcademicSections(md: string, kind: string): string {
 }
 
 // 邮箱脱敏：原稿里 `* zabwerk@yeah.net`、`邮箱：zabwerk@yeah.net` 这类
-// 整行/整段移除，不留孤零零的「未认领」。只对真邮箱做替换。
+// 整行移除；行内残留邮箱也删掉。注意不能吃掉邮箱相邻的作者名/字符。
+// 用负向后顾确保不从单词中间开始匹配（避免把 Zabwerk 削成 abwerk）。
 const EMAIL_LINE_RE =
   /^[ \t>*\-]*\s*(?:邮箱[：:]|Email[：:]|E-mail[：:])?\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*[ \t]*$/gim
-const EMAIL_INLINE_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+// 行内邮箱：前后不能是字母数字（避免匹配到 XZabwerk@... 里的子串）
+const EMAIL_INLINE_RE = /(?<![A-Za-z0-9])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9])/g
 
 export function scrubManuscriptEmails(md: string): string {
-  // 先删整行邮箱（整行只剩邮箱或「邮箱：xxx」的列表项）
+  // 1) 整行邮箱（含 * / 邮箱： 前缀）整块删除
   let out = md.replace(EMAIL_LINE_RE, '')
-  // 再把行内残留邮箱替换为空字符串（不留「未认领」拼接）
+  // 2) 行内残留邮箱删除（不留「未认领」拼接）
   out = out.replace(EMAIL_INLINE_RE, '')
-  // 清理多余空行
+  // 3) 清理因删除留下的孤立列表标记 `* ` 与多余空行
+  out = out.replace(/^[ \t]*\*[ \t]*$/gm, '')
   out = out.replace(/\n{3,}/g, '\n\n')
   return out
 }
@@ -445,7 +451,8 @@ export function ManuscriptView({
   onTocReady,
   hideTocNav = false,
   onFatalError,
-  contentKind = 'paper',
+  contentCategory,
+  contentTrack,
 }: ManuscriptViewProps) {
    const scrollRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
@@ -456,6 +463,18 @@ export function ManuscriptView({
   const { prefs, update: updatePrefs } = useReadingPrefs()
   // 手机端阅读设置默认收起，避免常驻工具条压住正文开头
   const [prefsOpen, setPrefsOpen] = useState(false)
+
+  // 组件内部自行计算 effectiveKind：以 content_category 为准，content_track=essay 兜底。
+  // 不依赖外部一次性传值，避免父组件漏传导致裁剪不生效。
+  const effectiveKind: 'paper' | 'sci_pop' | 'fun' | 'rant' | 'plain' = (() => {
+    const cat = (contentCategory ?? '').toLowerCase()
+    if (cat === 'fun') return 'fun'
+    if (cat === 'rant') return 'rant'
+    if (cat === 'science' || cat === 'science_pop' || cat === 'popular' || cat === 'scipop' || cat === '科普') return 'sci_pop'
+    if (cat === 'academic' || cat === 'paper') return 'paper'
+    if (contentTrack === 'essay') return 'fun' // 兜底：essay 一律按娱乐处理
+    return 'paper'
+  })()
 
   // 底部操作栏的「目录」按钮通过 window 事件唤出抽屉：目录条目是在
   // 本组件里从 Markdown 解析出来的，把状态提上去反而要重解析一遍。
@@ -480,9 +499,14 @@ export function ManuscriptView({
 
   // 渲染前剥离 Word 转换残留的 HTML 注释（只在渲染层，不改存储原文）。
   // 再按轨道裁掉学术小节（fun/rant/sci_pop），并把原稿里的邮箱一律脱敏。
-  const cleaned = data
-    ? scrubManuscriptEmails(stripAcademicSections(stripHtmlComments(data), contentKind))
-    : data
+  // 兜底：若 effectiveKind=paper 但原稿以 Open Access 开头（说明 content_category 没标对），
+  // 强制走 fun 分支剥刊头。
+  const cleaned = (() => {
+    if (!data) return data
+    let kind = effectiveKind
+    if (kind === 'paper' && /^Open Access/i.test(data.trim())) kind = 'fun'
+    return scrubManuscriptEmails(stripAcademicSections(stripHtmlComments(data), kind))
+  })()
 
   // 目录与正文/参考文献拆分：纯字符串操作，无需 memo
   const split = cleaned ? splitManuscript(cleaned) : { main: '', refs: '' }
@@ -777,7 +801,9 @@ export function ManuscriptView({
         </div>
         <article
           ref={articleRef}
-          className="markdown-body min-w-0 flex-1"          style={{
+          data-content-kind={effectiveKind}
+          className="markdown-body min-w-0 flex-1"
+          style={{
             fontSize: `${prefs.fontScale}em`,
             lineHeight: prefs.lineHeight,
             fontFamily: prefs.serif
