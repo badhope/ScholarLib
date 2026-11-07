@@ -124,7 +124,7 @@ _RESERVED_SOFT_404 = frozenset({"docs", "openapi.json", "redoc", "docs/oauth2-re
 _SPA_ROUTE_PREFIXES = frozenset({
     "403", "about", "account", "admin", "archive", "auth", "authors", "browse",
     "catalog", "claim", "dashboard", "follows", "forgot-password", "forum", "ingest",
-    "journal-metrics", "levels", "library", "login", "notifications", "policies",
+    "journal-metrics", "levels", "library", "login", "me", "notifications", "policies",
     "profile", "reader", "recommendations", "register", "reset-password", "review",
     "settings", "submissions", "support", "verify-email",
 })
