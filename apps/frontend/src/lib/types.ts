@@ -223,6 +223,8 @@ export interface ResourceResponse extends ResourceBase {
   /** 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」 */
   clc_code?: string | null
   clc_label?: string | null
+  /** R 因子：单篇 R 指数（详情接口返回） */
+  r_factor?: number | null
   /** 结构化作者列表（v5）：未认领者 email/affiliation/user_id 为 null，
    *  前端绝不能从 PDF/Word 抓私人邮箱展示。 */
   authors_detail?: AuthorDetail[] | null

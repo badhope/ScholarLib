@@ -288,6 +288,15 @@ function CatalogDetailPage() {
                   {data.clc_code && (
                     <MetaItem label="中图分类号" value={`${data.clc_code}${data.clc_label ? ` · ${data.clc_label}` : ''}`} />
                   )}
+                  {data.quality_score != null && (
+                    <MetaItem
+                      label="评分"
+                      value={`${data.quality_score.toFixed(1)}${data.quality_grade ? `（${data.quality_grade}）` : ''}`}
+                    />
+                  )}
+                  {data.r_factor != null && (
+                    <MetaItem label="R 因子" value={data.r_factor.toFixed(1)} />
+                  )}
                   <MetaItem label="ISSN" value={data.issn} />
                   <MetaItem label="ISBN" value={data.isbn} />
                 </CardContent>
@@ -493,6 +502,18 @@ function CatalogDetailPage() {
               <MetaItem label="页码" value={data.pages || '—'} />
               <MetaItem label="DOI" value={data.doi || '—'} />
               <MetaItem label="年份" value={String(data.year)} />
+              {kind === 'paper' && data.clc_code && (
+                <MetaItem label="中图分类号" value={`${data.clc_code}${data.clc_label ? ` · ${data.clc_label}` : ''}`} />
+              )}
+              {kind === 'paper' && data.quality_score != null && (
+                <MetaItem
+                  label="评分"
+                  value={`${data.quality_score.toFixed(1)}${data.quality_grade ? `（${data.quality_grade}）` : ''}`}
+                />
+              )}
+              {kind === 'paper' && data.r_factor != null && (
+                <MetaItem label="R 因子" value={data.r_factor.toFixed(1)} />
+              )}
               <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
                 本文以 CC BY-NC 4.0 许可发布；转载需注明出处并保持非商业用途。
               </p>
