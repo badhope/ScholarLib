@@ -7,6 +7,16 @@
 `apps/backend/pyproject.toml`、`apps/frontend/package.json`、`apps/backend/app/__init__.py`
 四处完全一致，由 `scripts/check-version.sh` 守门。
 
+## [1.14.1] — 2026-11-07
+
+### Changed
+- `/levels` 页改为身份/等级双轴口径：权限五层（访客→用户→审稿人→栏目编辑→主编）+ 身份内等级（作者 L1–L5 / 审稿人 R1–R3 / 栏目编辑 E1–E3），移除旧"四种身份+XP"模型。
+- `/me` 身份轴按账号实际持有身份返回：主编不再并列显示 L/R/E 三轨；无作者产出的普通用户不显示作者轨。
+
+### Fixed
+- 移动端首页也渲染底部 4 Tab（此前首页 early-return 导致无导航）。
+- 文章正文内嵌 base64 图片改为读时拆分：`/manuscript` 返回 `/api/catalog/{id}/img/{n}` URL，新增只读图片端点；302 正文从 1.09MB 降到约 18KB，首屏从约 11s 降到 ~0.7s。
+
 ## [1.14.0] — 2026-11-07
 
 ### Added

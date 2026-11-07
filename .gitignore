@@ -164,3 +164,14 @@ apps/backend/prebuilt-static/assets/
 dist.tar.gz
 .tmp-*.log
 dist.tgz
+
+# 旧静态备份/构建产物与用户实物（不得入库）
+apps/backend/prebuilt-static.bak*/
+apps/backend/prebuilt-static.old/
+apps/backend/prebuilt-static/covers/
+apps/backend/prebuilt-static/templates/
+*.docx
+*.pdf
+.env
+.env.*
+!.env.example
