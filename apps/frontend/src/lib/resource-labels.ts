@@ -143,6 +143,8 @@ export function isScholarlyContent(
   contentCategory: string | null | undefined,
   contentTrack?: string | null,
 ): boolean {
+  // 轨道优先：content_track 是唯一权威口径（历史稿件 category 可能未同步）。
+  if (contentTrack === 'paper') return true
   if (contentTrack === 'essay') return false
   if (contentCategory === 'fun' || contentCategory === 'rant') return false
   return true
@@ -155,7 +157,8 @@ export function displayTypeLabel(
   contentCategory?: string | null,
   contentTrack?: string | null,
 ): string {
-  if (contentTrack === 'essay') return '娱乐'
+  if (contentTrack === 'essay') return contentCategory === 'rant' ? '吐槽' : '娱乐'
+  if (contentTrack === 'paper') return TYPE_LABELS[type ?? ''] ?? '论文'
   if (contentCategory === 'fun') return '娱乐'
   if (contentCategory === 'rant') return '吐槽'
   return typeLabel(type)
