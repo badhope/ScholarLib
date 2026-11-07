@@ -1001,6 +1001,18 @@ export function useAdminClaims(state: string) {
   })
 }
 
+// 待认领数量徽标：轻量轮询，未登录时静默不请求
+export function usePendingClaimsCount(enabled: boolean) {
+  return useQuery<{ count: number }>({
+    queryKey: ['admin', 'claims', 'pending', 'count'],
+    queryFn: async () =>
+      (await api.get<{ count: number }>('/admin/claims', { params: { state: 'pending' } })).data,
+    enabled,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  })
+}
+
 // 编辑部：通过 / 驳回认领（v5 端点 POST /admin/claims/{id}/decide）
 export function useDecideClaim() {
   const qc = useQueryClient()

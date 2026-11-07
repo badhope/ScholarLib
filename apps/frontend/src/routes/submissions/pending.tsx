@@ -6,6 +6,7 @@ import {
   Eye,
   FileText,
   Gavel,
+  Save,
   ShieldCheck,
   UserPlus,
 } from 'lucide-react'
@@ -24,9 +25,11 @@ import {
   useSubmissionReports,
   useSubmissionVersions,
   useReviewerCandidates,
+  usePutAuthors,
 } from '@/hooks/api/use-modules'
 import type {
   AssignmentResponse,
+  AuthorEditInput,
   EditorDecision,
   ReviewReportResponse,
   SubmissionResponse,
@@ -42,6 +45,7 @@ import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { AuthorEditor } from '@/components/common/author-editor'
 import {
   Dialog,
   DialogContent,
@@ -175,11 +179,28 @@ function assignmentStatusBadge(status: string) {
 interface DecisionFormState {
   decision: EditorDecision
   editor_note: string
+  /** 审稿意见冲突时必填的裁决理由 */
+  arbitration_note: string
 }
 
 const EMPTY_DECISION: DecisionFormState = {
   decision: 'minor_revision',
   editor_note: '',
+  arbitration_note: '',
+}
+
+// 做决定前置条件：reports_completed >= 2，或后端显式 can_decide=true
+function canOpenDecision(s: SubmissionResponse): boolean {
+  if (s.can_decide === true) return true
+  const completed = s.reports_completed ?? 0
+  return completed >= 2
+}
+
+function decisionDisabledReason(s: SubmissionResponse): string | undefined {
+  if (s.can_decide === true) return undefined
+  const completed = s.reports_completed ?? 0
+  if (completed < 2) return `还差 ${2 - completed} 份审稿报告（${completed}/2）`
+  return undefined
 }
 
 function PendingSubmissionsPage() {
@@ -241,12 +262,19 @@ function PendingSubmissionsPage() {
   }
 
   const doDecision = async (target: SubmissionResponse) => {
+    // 冲突时必须填裁决理由
+    if (target.conflict && !decisionForm.arbitration_note.trim()) {
+      toast.error('审稿意见冲突：请填写裁决理由')
+      return
+    }
     try {
       await decisionMut.mutateAsync({
         id: target.id,
         body: {
           decision: decisionForm.decision,
           editor_note: decisionForm.editor_note || undefined,
+          arbitration_note:
+            target.conflict ? decisionForm.arbitration_note : undefined,
         },
       })
       toast.success('决定已记录')
@@ -360,7 +388,8 @@ function PendingSubmissionsPage() {
                           setDecisionTarget(s)
                           setDecisionForm(EMPTY_DECISION)
                         }}
-                        disabled={decisionMut.isPending}
+                        disabled={decisionMut.isPending || !canOpenDecision(s)}
+                        title={decisionDisabledReason(s)}
                       >
                         <Gavel className="h-4 w-4" /> 做决定
                       </Button>
@@ -524,6 +553,25 @@ function PendingSubmissionsPage() {
                 rows={4}
               />
             </div>
+            {decisionTarget?.conflict && (
+              <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                <Label htmlFor="arbitration_note" className="text-amber-800 dark:text-amber-200">
+                  审稿意见冲突，需填写裁决理由（必填）
+                </Label>
+                <Textarea
+                  id="arbitration_note"
+                  value={decisionForm.arbitration_note}
+                  onChange={(e) =>
+                    setDecisionForm((prev) => ({
+                      ...prev,
+                      arbitration_note: e.target.value,
+                    }))
+                  }
+                  placeholder="说明为何采纳某份意见、驳回另一份"
+                  rows={3}
+                />
+              </div>
+            )}
           </div>
 
           {/* D 级打回：评分不达标时不直接拒稿，而是要求审稿人补审/作者修改。
@@ -630,6 +678,37 @@ function PendingSubmissionsPage() {
 function SubmissionDetailBody({ sub }: { sub: SubmissionResponse }) {
   // 版本历史：编辑需要知道稿件被重投过几次、每次作者说明了什么
   const versionsQ = useSubmissionVersions(sub.id)
+  const putAuthors = usePutAuthors()
+  // 作者编辑：从 sub.authors（字符串数组）初始化
+  const [authors, setAuthors] = useState<AuthorEditInput[]>(() =>
+    sub.authors.map((name, i) => ({
+      name,
+      affiliation: '',
+      email: '',
+      roles: i === 0 ? ['first'] : [],
+      order: i + 1,
+    })),
+  )
+  const [dirty, setDirty] = useState(false)
+
+  const onSaveAuthors = async () => {
+    if (authors.length === 0) {
+      toast.error('至少需要 1 位作者')
+      return
+    }
+    if (!authors.some((a) => a.roles.includes('first'))) {
+      toast.error('必须指定 1 位第一作者')
+      return
+    }
+    try {
+      await putAuthors.mutateAsync({ path: 'submission', id: sub.id, authors })
+      toast.success('作者列表已保存')
+      setDirty(false)
+    } catch (err) {
+      toast.error(extractError(err, '保存作者失败'))
+    }
+  }
+
   return (
     <div className="space-y-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -640,10 +719,27 @@ function SubmissionDetailBody({ sub }: { sub: SubmissionResponse }) {
           <span className="text-muted-foreground">{sub.subdiscipline}</span>
         )}
       </div>
-      <div>
-        <span className="text-muted-foreground">作者：</span>
-        {sub.authors.join(', ')}
+
+      {/* 作者编辑面板：增删/排序/第一/通讯 */}
+      <div className="rounded-md border p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="font-medium">作者（发布前可编辑）</span>
+          <div className="flex items-center gap-2">
+            {dirty && <Badge variant="outline" className="text-amber-700">未保存</Badge>}
+            <Button size="sm" variant="outline" onClick={onSaveAuthors} disabled={putAuthors.isPending}>
+              <Save className="h-3.5 w-4" /> 保存
+            </Button>
+          </div>
+        </div>
+        <AuthorEditor
+          value={authors}
+          onChange={(next) => {
+            setAuthors(next)
+            setDirty(true)
+          }}
+        />
       </div>
+
       {sub.venue && (
         <div>
           <span className="text-muted-foreground">出版物：</span>

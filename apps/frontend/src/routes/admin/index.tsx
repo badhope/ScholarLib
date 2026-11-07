@@ -13,6 +13,7 @@ import {
 
 import { requireAdminGuard } from '@/lib/route-guards'
 import { useAuth } from '@/hooks/use-auth'
+import { usePendingClaimsCount } from '@/hooks/api/use-modules'
 import { PageHeader } from '@/components/common/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -53,7 +54,9 @@ const CHAIN = [
 ]
 
 function AdminDashboard() {
-  const { user } = useAuth()
+  const { user, isAuthenticated } = useAuth()
+  const { data: claimsCount } = usePendingClaimsCount(isAuthenticated)
+  const pendingCount = claimsCount?.count ?? 0
   return (
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
       <PageHeader title="站点总览" description={`欢迎，${user?.username ?? '管理员'}。按工作流找入口。`} />
@@ -91,6 +94,11 @@ function AdminDashboard() {
               >
                 <div className="mb-2 flex items-center justify-between">
                   <item.icon className="h-5 w-5 text-primary" />
+                  {item.to === '/admin/claims' && pendingCount > 0 ? (
+                    <Badge variant="destructive" className="ml-auto mr-2">
+                      {pendingCount} 待处理
+                    </Badge>
+                  ) : null}
                   <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
                 </div>
                 <p className="text-sm font-medium">{item.title}</p>

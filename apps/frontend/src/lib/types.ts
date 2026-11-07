@@ -425,6 +425,8 @@ export interface SubmissionDecision {
   resource_id?: number | null
   /** accept 且新建物化时生效：published（默认，录用即刊）或 draft（暂存草稿，刊前整理） */
   publication_status?: 'published' | 'draft'
+  /** 审稿意见冲突时的裁决理由（冲突时必填） */
+  arbitration_note?: string | null
 }
 
 /** 结构报告单项（上传文件端点返回） */
@@ -485,6 +487,12 @@ export interface SubmissionResponse {
   quality_score?: number | null
   quality_grade?: string | null
   content_category?: "academic" | "fun" | "rant" | null
+  /** 编辑能否做最终决定（后端基于 reports_completed/conflict 计算） */
+  can_decide?: boolean
+  /** 已完成的审稿报告数 */
+  reports_completed?: number
+  /** 审稿意见是否冲突（需仲裁/裁决理由） */
+  conflict?: boolean
 }
 
 export interface SubmissionListResponse {
