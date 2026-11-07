@@ -789,6 +789,21 @@ async def decide_claim(
         claim.status = "approved"
         notify_title = f"认领已批准：{resource.title}"
         notify_body = "编辑部已批准你对该文章的认领，文章已挂到你的名下。"
+        # 等级轴：认领审核通过，author 身份 +20（幂等，同一 claim 只记一次）。
+        from app.modules.gamification import levels_axis
+
+        claim_user = (
+            await db.execute(select(User).where(User.id == claim.user_id))
+        ).scalar_one_or_none()
+        if claim_user is not None:
+            await levels_axis.award_points(
+                db,
+                claim_user,
+                "claim.approve",
+                ref_type="author_claim",
+                ref_id=str(claim.id),
+                note=resource.title[:120],
+            )
     else:
         claim.status = "rejected"
         notify_title = f"认领未通过：{resource.title}"

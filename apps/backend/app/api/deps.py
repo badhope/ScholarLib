@@ -105,17 +105,9 @@ async def get_current_user(
 async def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Require the current user to have ``is_admin=True``.
 
-    When ``settings.require_2fa_for_admin`` is True, additionally
-    require the caller to have enrolled in TOTP. The reload-secret-keys
-    endpoint opts out via ``require_admin_no_2fa`` below so an operator
-    mid-rotation can still trigger a key reload.
-
-    Per-tenant admin scope is enforced by RLS — a user with ``is_admin=True``
-    in tenant A cannot read tenant B's data because RLS denies the rows.
+    过渡实现：内部映射到五层权限轴的 ``editor_in_chief``。新代码应直接用
+    ``Depends(require_role("editor_in_chief"))``。
     """
-    # Enforce 2FA-for-admin policy before the admin check so that even
-    # callers who passed the auth step still get the 2FA prompt when
-    # the policy is on.
     if settings.require_2fa_for_admin and current_user.totp_enabled_at is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -190,6 +182,109 @@ EDITORIAL_ROLES = (
     ROLE_CHIEF_EDITOR,
 )
 
+# ---------------------------------------------------------------------------
+# 权限轴：五层收敛（v1.14）
+# 访客（不入库） < user（读者=作者已合并） < reviewer（审稿人）
+#   < editor（栏目编辑） < editor_in_chief（主编）
+# 大身份包含小身份全部权限；主编不叠加小身份。所有权限校验统一走
+# require_role(min_role)；旧 require_admin/require_reviewer/require_editor/
+# require_chief_editor 保留为薄包装，内部映射到本轴。
+# ---------------------------------------------------------------------------
+PERMISSION_ROLES = ("user", "reviewer", "editor", "editor_in_chief")
+PERMISSION_RANK: dict[str, int] = {
+    "user": 1,
+    "reviewer": 2,
+    "editor": 3,
+    "editor_in_chief": 4,
+}
+# 历史 user_roles 名 → 五层权限档位（过渡映射；迁移后以 users.role 为准）。
+_LEGACY_ROLE_TO_PERMISSION: dict[str, str] = {
+    "reviewer": "reviewer",
+    "senior_reviewer": "reviewer",
+    "section_editor": "editor",
+    "board_editor": "editor",
+    "editor": "editor",
+    "deputy_editor": "editor_in_chief",
+    "chief_editor": "editor_in_chief",
+}
+
+
+async def effective_permission_role(db: AsyncSession, user: User) -> str:
+    """解析用户当前最高权限档位（五层之一）。
+
+    以 ``users.role`` 为权威；若仍停留在迁移前的默认值 ``user``，则回退到
+    ``is_admin`` 与历史 ``user_roles`` 推导，保证迁移窗口内与单测里不丢权限。
+    """
+    # is_admin 历史上等价主编；优先于普通 user 档位。
+    if user.is_admin:
+        return "editor_in_chief"
+    role = (user.role or "user").strip()
+    if role in PERMISSION_RANK and role != "user":
+        return role
+    # 迁移前兜底：从 user_roles 推导最高档位。
+    tenant_id = user.tenant_id
+    result = await db.execute(
+        select(Role.name)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(
+            UserRole.user_id == user.id,
+            UserRole.tenant_id == tenant_id,
+            Role.tenant_id == tenant_id,
+        )
+    )
+    best = "user"
+    best_rank = PERMISSION_RANK["user"]
+    for name in result.scalars():
+        mapped = _LEGACY_ROLE_TO_PERMISSION.get(name)
+        if mapped and PERMISSION_RANK[mapped] > best_rank:
+            best = mapped
+            best_rank = PERMISSION_RANK[mapped]
+    return best
+
+
+def require_role(min_role: str):
+    """权限校验统一依赖：要求当前用户权限档位 >= min_role。
+
+    用法::
+
+        async def endpoint(user: User = Depends(require_role("editor"))): ...
+
+    档位层级：user < reviewer < editor < editor_in_chief。低权限账号打
+    高权限接口一律 403。
+    """
+    if min_role not in PERMISSION_RANK:
+        raise ValueError(f"unknown permission role: {min_role}")
+    min_rank = PERMISSION_RANK[min_role]
+
+    async def _guard(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        # 2FA-for-admin 只对主编级生效（沿用 require_admin 的既有策略）。
+        if min_role == "editor_in_chief" and settings.require_2fa_for_admin and current_user.totp_enabled_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Admin access requires two-factor authentication. "
+                    "Enable TOTP in your account settings before calling "
+                    "admin endpoints."
+                ),
+            )
+        actual = await effective_permission_role(db, current_user)
+        if PERMISSION_RANK[actual] < min_rank:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "insufficient_permission",
+                    "required_role": min_role,
+                    "actual_role": actual,
+                    "message": f"需要 {min_role} 权限，当前为 {actual}。",
+                },
+            )
+        return current_user
+
+    return _guard
+
 
 async def _user_has_role(db: AsyncSession, user: User, role_name: str) -> bool:
     """检查用户在当前租户内是否被分配了指定角色。
@@ -241,56 +336,46 @@ async def require_reviewer(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """要求当前用户拥有 reviewer / senior_reviewer 角色或 admin。
+    """要求当前用户权限档位 >= reviewer（五层轴）。
 
-    L5 审稿人与 L6 资深审稿人共用同一套评审端点（接受/拒绝邀请、提交
-    意见）；资深审稿人只是资格等级与候选池排序的差异，不是独立权限域。
-    此前仅认 reviewer，导致 ladder 承诺的 L6 授予后处处 403。
+    历史上认 reviewer / senior_reviewer 两个角色；现在统一由 users.role
+    （迁移自 user_roles）判定，两者等价。
     """
-    if await _user_has_role(db, current_user, ROLE_REVIEWER) or await _user_has_role(
-        db, current_user, ROLE_SENIOR_REVIEWER
-    ):
-        return current_user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Reviewer role required",
-    )
+    actual = await effective_permission_role(db, current_user)
+    if PERMISSION_RANK[actual] < PERMISSION_RANK["reviewer"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Reviewer role required",
+        )
+    return current_user
 
 
 async def require_editor(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """要求当前用户拥有 editor / section_editor 角色或 admin。
+    """要求当前用户权限档位 >= editor（五层轴）。
 
     用于编辑工作台的读端点与送审操作（分配/撤销审稿人、匿名稿）。
-    注意职权分离：**四元最终决定（录用/修回/拒稿）是 L8 执行编辑的
-    职权**，见 :func:`require_chief_editor`。
     """
-    for role in EDITORIAL_ROLES:
-        if await _user_has_role(db, current_user, role):
-            return current_user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Editorial role required",
-    )
+    actual = await effective_permission_role(db, current_user)
+    if PERMISSION_RANK[actual] < PERMISSION_RANK["editor"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Editorial role required",
+        )
+    return current_user
 
 
 async def require_chief_editor(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """要求当前用户拥有终审权角色：主编（chief_editor）、副主编
-    （deputy_editor）或 admin。
-
-    用于稿件四元决定端点。编委（board_editor/section_editor，L7）与
-    执行编辑（editor）按职权链只做初筛、送审与推荐，没有最终裁决权；
-    终审权集中在主编/主编级——决策可问责、口径统一。
-    """
-    for role in CHIEF_ROLES:
-        if await _user_has_role(db, current_user, role):
-            return current_user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Chief editor role required",
-    )
+    """要求当前用户权限档位 == editor_in_chief（五层轴，终审权）。"""
+    actual = await effective_permission_role(db, current_user)
+    if PERMISSION_RANK[actual] < PERMISSION_RANK["editor_in_chief"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chief editor role required",
+        )
+    return current_user

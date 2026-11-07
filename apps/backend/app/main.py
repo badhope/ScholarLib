@@ -34,6 +34,7 @@ from app.api import (
     capabilities,
     gdpr,
     health,
+    me,
     metrics,
     modules,
     oai,
@@ -268,6 +269,7 @@ app.include_router(two_factor.router, prefix="/api")
 app.include_router(gdpr.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
+app.include_router(me.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(tenant_hosts.router, prefix="/api")
 app.include_router(modules.router, prefix="/api")

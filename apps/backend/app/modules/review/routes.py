@@ -350,6 +350,16 @@ async def submit_review_report(
         await gamification.award(
             db, current_user, "review.completed", ref_type="assignment", ref_id=str(a.id)
         )
+        # 等级轴：审稿人身份 +1（R 等级按完成审稿份数计）。幂等。
+        from app.modules.gamification import levels_axis
+
+        await levels_axis.award_points(
+            db,
+            current_user,
+            "review.completed",
+            ref_type="assignment",
+            ref_id=str(a.id),
+        )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()

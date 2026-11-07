@@ -20,6 +20,7 @@ import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as JournalMetricsRouteImport } from './routes/journal-metrics'
 import { Route as LevelsRouteImport } from './routes/levels'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MeRouteImport } from './routes/me'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as ProfileRouteImport } from './routes/profile'
@@ -109,6 +110,11 @@ const LevelsRoute = LevelsRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MeRoute = MeRouteImport.update({
+  id: '/me',
+  path: '/me',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NotificationsRoute = NotificationsRouteImport.update({
@@ -226,6 +232,11 @@ const CatalogNewRoute = CatalogNewRouteImport.update({
   path: '/catalog/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClaimResourceIdRoute = ClaimResourceIdRouteImport.update({
+  id: '/claim/$resourceId',
+  path: '/claim/$resourceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FollowsIndexRoute = FollowsIndexRouteImport.update({
   id: '/follows/',
   path: '/follows/',
@@ -261,11 +272,6 @@ const ReaderResourceIdRoute = ReaderResourceIdRouteImport.update({
   path: '/reader/$resourceId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ClaimResourceIdRoute = ClaimResourceIdRouteImport.update({
-  id: '/claim/$resourceId',
-  path: '/claim/$resourceId',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReviewAssignmentsRoute = ReviewAssignmentsRouteImport.update({
   id: '/review/assignments',
   path: '/review/assignments',
@@ -299,6 +305,7 @@ export interface FileRoutesByFullPath {
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
+  '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
@@ -347,6 +354,7 @@ export interface FileRoutesByTo {
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
+  '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
@@ -396,6 +404,7 @@ export interface FileRoutesById {
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
+  '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
@@ -446,6 +455,7 @@ export interface FileRouteTypes {
     | '/journal-metrics'
     | '/levels'
     | '/login'
+    | '/me'
     | '/notifications'
     | '/policies'
     | '/profile'
@@ -494,6 +504,7 @@ export interface FileRouteTypes {
     | '/journal-metrics'
     | '/levels'
     | '/login'
+    | '/me'
     | '/notifications'
     | '/policies'
     | '/profile'
@@ -542,6 +553,7 @@ export interface FileRouteTypes {
     | '/journal-metrics'
     | '/levels'
     | '/login'
+    | '/me'
     | '/notifications'
     | '/policies'
     | '/profile'
@@ -563,6 +575,7 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/claim/$resourceId'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
@@ -590,6 +603,7 @@ export interface RootRouteChildren {
   JournalMetricsRoute: typeof JournalMetricsRoute
   LevelsRoute: typeof LevelsRoute
   LoginRoute: typeof LoginRoute
+  MeRoute: typeof MeRoute
   NotificationsRoute: typeof NotificationsRoute
   PoliciesRoute: typeof PoliciesRoute
   ProfileRoute: typeof ProfileRoute
@@ -704,6 +718,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/me': {
+      id: '/me'
+      path: '/me'
+      fullPath: '/me'
+      preLoaderRoute: typeof MeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/notifications': {
@@ -966,6 +987,7 @@ const rootRouteChildren: RootRouteChildren = {
   JournalMetricsRoute: JournalMetricsRoute,
   LevelsRoute: LevelsRoute,
   LoginRoute: LoginRoute,
+  MeRoute: MeRoute,
   NotificationsRoute: NotificationsRoute,
   PoliciesRoute: PoliciesRoute,
   ProfileRoute: ProfileRoute,

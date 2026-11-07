@@ -718,6 +718,40 @@ async def editor_decision(
         ref_id=str(entry.id),
     )
 
+    # --- 等级轴（v1.14）：身份内积分，与上面的荣誉 XP 正交 ---
+    # 正式论文（paper）录用：作者 +60；娱乐/吐槽稿（essay）录用：delta=0 仅记活跃。
+    # 编辑裁决：editor 身份 +8。全部幂等（同一 submission 只记一次）。
+    from app.modules.gamification import levels_axis
+
+    if author is not None:
+        if decision == "accept":
+            if (entry.content_track or "paper") == "paper":
+                await levels_axis.award_points(
+                    db,
+                    author,
+                    "submission.accepted",
+                    ref_type="submission",
+                    ref_id=str(entry.id),
+                    note=entry.title[:120],
+                )
+            else:
+                # 娱乐/吐槽轨：不推进等级，只留一条活跃度流水。
+                await levels_axis.award_points(
+                    db,
+                    author,
+                    "submission.accepted.essay",
+                    ref_type="submission",
+                    ref_id=str(entry.id),
+                )
+    if decision in ("accept", "reject", "major_revision", "minor_revision"):
+        await levels_axis.award_points(
+            db,
+            current_user,
+            "editor.decision",
+            ref_type="submission",
+            ref_id=str(entry.id),
+        )
+
     # 通知作者。录用时 related 指向物化出的公开目录条目而非 submission，
     # 作者点通知即可直达自己已发表的文章（目录详情页对访客也公开）。
     decision_labels = {

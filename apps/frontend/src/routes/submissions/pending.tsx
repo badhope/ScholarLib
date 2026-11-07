@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth'
 import {
   downloadSubmissionFile,
   useAllSubmissions,
-  useAssignReviewer,
+  useAssignReviewersBulk,
   useCancelAssignment,
   useEditorDecision,
   useSetAnonymizedFile,
@@ -166,7 +166,11 @@ function assignmentStatusBadge(status: string) {
     case 'accepted':
       return <Badge className="bg-primary/15 text-primary">已接受</Badge>
     case 'declined':
-      return <Badge variant="outline">已拒绝</Badge>
+      return (
+        <Badge variant="outline" className="border-amber-500/40 text-amber-600">
+          待重新指派
+        </Badge>
+      )
     case 'completed':
       return <Badge className="bg-emerald-500/15 text-emerald-700">已完成</Badge>
     case 'cancelled':
@@ -852,27 +856,33 @@ function AssignReviewerDialog({
   const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT)
   const candidates = candidateData ?? []
   const truncated = candidates.length >= REVIEWER_CANDIDATE_LIMIT
-  const assignMut = useAssignReviewer()
-  const [reviewerId, setReviewerId] = useState<number | null>(null)
-  const [dueDate, setDueDate] = useState('')
+  const assignMut = useAssignReviewersBulk()
+  const [selected, setSelected] = useState<number[]>([])
+  const [dueDays, setDueDays] = useState('14')
+
+  const toggle = (id: number) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 3 ? prev : [...prev, id],
+    )
+  }
 
   const onConfirm = async () => {
-    if (reviewerId === null) {
-      toast.error('请选择审稿人')
+    if (selected.length === 0) {
+      toast.error('请至少选择一名审稿人（最多 3 名）')
       return
     }
     try {
-      await assignMut.mutateAsync({
+      const res = await assignMut.mutateAsync({
         id: submission.id,
         body: {
-          reviewer_id: reviewerId,
-          due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+          reviewer_ids: selected,
+          due_days: Math.max(1, Math.min(90, Number(dueDays) || 14)),
         },
       })
-      toast.success('已分配审稿人')
+      toast.success(`已指派 ${res.assigned} 名审稿人`)
       onClose()
     } catch (err) {
-      toast.error(extractError(err, '分配失败'))
+      toast.error(extractError(err, '指派失败'))
     }
   }
 
@@ -880,11 +890,13 @@ function AssignReviewerDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>分配审稿人 — {submission.title}</DialogTitle>
+          <DialogTitle>指派审稿人 — {submission.title}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="reviewer">审稿人</Label>
+          <p className="text-xs text-muted-foreground">
+            可一次多选（最多 3 名，占 slot 1/2/3）；重复邀请同一审稿人会自动跳过。
+          </p>
+          <div className="max-h-[40vh] space-y-1 overflow-y-auto">
             {isLoading ? (
               <Loading />
             ) : candidates.length === 0 ? (
@@ -892,36 +904,44 @@ function AssignReviewerDialog({
                 没有可指派的审稿人：请先在「用户管理」里给用户授予审稿人（reviewer）角色。
               </p>
             ) : (
-              <Select
-                value={reviewerId !== null ? String(reviewerId) : undefined}
-                onValueChange={(v) => setReviewerId(Number(v))}
-              >
-                <SelectTrigger id="reviewer" className="w-full">
-                  <SelectValue placeholder="选择用户…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {candidates.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.username} ({u.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {truncated && (
-              <p className="text-xs text-muted-foreground">
-                候选列表只取了前 {REVIEWER_CANDIDATE_LIMIT} 个审稿人，目标审稿人不在其中时请用
-                「用户管理」确认其角色。
-              </p>
+              candidates.map((u) => {
+                const checked = selected.includes(u.id)
+                return (
+                  <label
+                    key={u.id}
+                    className="flex cursor-pointer items-center gap-2 rounded border px-2 py-1.5 text-sm hover:bg-accent"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(u.id)}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-medium">{u.username}</span>
+                    <span className="text-xs text-muted-foreground">{u.email}</span>
+                    {selected.includes(u.id) && (
+                      <span className="ml-auto text-xs text-primary">已选</span>
+                    )}
+                  </label>
+                )
+              })
             )}
           </div>
+          {truncated && (
+            <p className="text-xs text-muted-foreground">
+              候选列表只取了前 {REVIEWER_CANDIDATE_LIMIT} 个审稿人，目标审稿人不在其中时请用
+              「用户管理」确认其角色。
+            </p>
+          )}
           <div className="space-y-2">
-            <Label htmlFor="due_date">截止日期（可选）</Label>
+            <Label htmlFor="due_days">审稿截止天数（1–90）</Label>
             <Input
-              id="due_date"
-              type="datetime-local"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+              id="due_days"
+              type="number"
+              min={1}
+              max={90}
+              value={dueDays}
+              onChange={(e) => setDueDays(e.target.value)}
             />
           </div>
         </div>
@@ -930,7 +950,7 @@ function AssignReviewerDialog({
             取消
           </Button>
           <Button onClick={onConfirm} disabled={assignMut.isPending}>
-            {assignMut.isPending ? '处理中…' : '确认分配'}
+            {assignMut.isPending ? '处理中…' : `确认指派（${selected.length} 人）`}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -412,12 +412,32 @@ export function useSubmission(id: number) {
   })
 }
 
-// 编辑分配审稿人
+// 编辑分配审稿人（单选旧端点，保留兼容）
 export function useAssignReviewer() {
   const qc = useQueryClient()
   return useMutation<AssignmentResponse, Error, { id: number; body: AssignmentCreate }>({
     mutationFn: async ({ id, body }) =>
       (await api.post<AssignmentResponse>(`/submissions/${id}/assignments`, body)).data,
+    onSuccess: (_, { id }) => {
+      void qc.invalidateQueries({ queryKey: keys.submission.assignments(id) })
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
+    },
+  })
+}
+
+// 编辑批量指派审稿人（多选一次指派 slot 1/2/3，后端 e623556 已支持）
+export function useAssignReviewersBulk() {
+  const qc = useQueryClient()
+  return useMutation<
+    { assigned: number; submission_id: number },
+    Error,
+    { id: number; body: { reviewer_ids: number[]; due_days?: number } }
+  >({
+    mutationFn: async ({ id, body }) =>
+      (await api.post<{ assigned: number; submission_id: number }>(
+        `/review/submissions/${id}/assign`,
+        body,
+      )).data,
     onSuccess: (_, { id }) => {
       void qc.invalidateQueries({ queryKey: keys.submission.assignments(id) })
       void qc.invalidateQueries({ queryKey: ['submissions'] })
@@ -1201,6 +1221,64 @@ export function useGamificationProfile(options?: { enabled?: boolean }) {
     queryKey: keys.gamification.profile(),
     queryFn: async () => (await api.get<GamificationProfile>('/gamification/me')).data,
     enabled: options?.enabled ?? true,
+    staleTime: 60_000,
+  })
+}
+
+// --- /me：身份（权限轴）+ 身份内等级（激励轴） ---
+export interface MeIdentityLevel {
+  identity: string
+  identity_name: string
+  level: number
+  level_label: string
+  points: number
+  current_floor: number
+  current_ceiling: number
+  next_threshold: number | null
+  to_next: number
+  progress: number
+}
+
+export interface MeProfile {
+  user_id: number
+  username: string
+  permission_role: 'user' | 'reviewer' | 'editor' | 'editor_in_chief'
+  permission_label: string
+  permissions: string[]
+  identities: string[]
+  levels: Record<string, MeIdentityLevel>
+  rules_accepted: boolean
+}
+
+export interface MePointEvent {
+  reason: string
+  label: string
+  delta: number
+  note: string | null
+  created_at: string
+}
+
+export interface MePointsLedger {
+  identity: string
+  identity_name: string
+  snapshot: MeIdentityLevel
+  events: MePointEvent[]
+}
+
+export function useMeProfile() {
+  return useQuery<MeProfile>({
+    queryKey: ['me', 'profile'],
+    queryFn: async () => (await api.get<MeProfile>('/me/profile')).data,
+    staleTime: 60_000,
+  })
+}
+
+export function useMePoints(identity: string) {
+  return useQuery<MePointsLedger>({
+    queryKey: ['me', 'points', identity],
+    queryFn: async () =>
+      (await api.get<MePointsLedger>('/me/points', { params: { identity } })).data,
+    enabled: !!identity,
     staleTime: 60_000,
   })
 }

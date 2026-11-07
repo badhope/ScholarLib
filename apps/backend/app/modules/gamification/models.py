@@ -122,4 +122,76 @@ class RoleApplication(Base, TenantScopedMixin):
     )
 
 
-__all__ = ["RoleApplication", "UserAchievement", "UserXpEvent"]
+__all__ = ["RoleApplication", "UserAchievement", "UserXpEvent", "UserLevel", "PointEvent"]
+
+
+# ---------------------------------------------------------------------------
+# 等级轴（v1.14）：身份内等级，跨身份不比较、不并列、不进同一榜单。
+#   author  L1–L5（按累计积分）
+#   reviewer R1–R3（按完成审稿份数）
+#   editor  E1–E3（按累计积分）
+# 娱乐/吐槽轨（essay）可写 point_events 但 delta=0，不推进 user_levels。
+# ---------------------------------------------------------------------------
+
+
+class UserLevel(Base, TenantScopedMixin):
+    """某用户在某一身份内的等级快照（热路径读）。
+
+    事实源是 ``point_events``；这里存累计 points 与推算出的 level，
+    避免每次 /me 都聚合流水。
+    """
+
+    __tablename__ = "user_levels"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "identity", name="uq_user_level_identity"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # author / reviewer / editor
+    identity: Mapped[str] = mapped_column(String(16), nullable=False)
+    level: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class PointEvent(Base, TenantScopedMixin):
+    """某身份积分流水（append-only）。
+
+    唯一约束 (tenant, user, identity, reason, ref_type, ref_id) 让同一
+    业务动作（同一 ref）幂等：重复触发不会重复加分。
+    娱乐/吐槽轨写 delta=0 仅记活跃度，不影响 level。
+    """
+
+    __tablename__ = "point_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    identity: Mapped[str] = mapped_column(String(16), nullable=False)
+    delta: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    ref_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    ref_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "identity",
+            "reason",
+            "ref_type",
+            "ref_id",
+            name="uq_point_event_identity",
+        ),
+        Index("ix_point_events_tenant_user_created", "tenant_id", "user_id", created_at.desc()),
+    )

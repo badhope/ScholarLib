@@ -156,6 +156,14 @@ class User(Base, TenantScopedMixin):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # --- 权限轴（五层收敛，v1.14） ---
+    # 单一权限档位：user < reviewer < editor < editor_in_chief。
+    # 大身份包含小身份全部权限；主编不叠加小身份。访客不入库。
+    # 历史 is_admin 与 user_roles 在迁移 20261107_role_axis 中收敛进此列；
+    # require_role() 以本列为准，is_admin 仅作过渡兜底（= editor_in_chief）。
+    role: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="user", server_default="user"
+    )
     is_email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Independent from token_version so refresh rotation does not log out
