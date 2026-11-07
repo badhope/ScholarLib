@@ -64,7 +64,6 @@ async def active_announcement(db: AsyncSession = Depends(get_db)) -> Announcemen
 
 @router.get("", response_model=list[AnnouncementOut])
 async def list_announcements(
-    _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> list[AnnouncementOut]:
     tenant_id = require_tenant_id()
