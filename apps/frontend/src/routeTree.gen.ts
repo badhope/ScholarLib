@@ -43,6 +43,7 @@ import { Route as AdminVolumesRouteImport } from './routes/admin/volumes'
 import { Route as CatalogIndexRouteImport } from './routes/catalog/index'
 import { Route as CatalogResourceIdRouteImport } from './routes/catalog/$resourceId'
 import { Route as CatalogNewRouteImport } from './routes/catalog/new'
+import { Route as ClaimResourceIdRouteImport } from './routes/claim/$resourceId'
 import { Route as FollowsIndexRouteImport } from './routes/follows/index'
 import { Route as ForumIndexRouteImport } from './routes/forum/index'
 import { Route as ForumTopicIdRouteImport } from './routes/forum/$topicId'
@@ -260,6 +261,11 @@ const ReaderResourceIdRoute = ReaderResourceIdRouteImport.update({
   path: '/reader/$resourceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClaimResourceIdRoute = ClaimResourceIdRouteImport.update({
+  id: '/claim/$resourceId',
+  path: '/claim/$resourceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReviewAssignmentsRoute = ReviewAssignmentsRouteImport.update({
   id: '/review/assignments',
   path: '/review/assignments',
@@ -314,6 +320,7 @@ export interface FileRoutesByFullPath {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/claim/$resourceId': typeof ClaimResourceIdRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/claim/$resourceId': typeof ClaimResourceIdRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
@@ -409,6 +417,7 @@ export interface FileRoutesById {
   '/admin/volumes': typeof AdminVolumesRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
+  '/claim/$resourceId': typeof ClaimResourceIdRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
@@ -458,6 +467,7 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/claim/$resourceId'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
@@ -505,6 +515,7 @@ export interface FileRouteTypes {
     | '/admin/volumes'
     | '/catalog/$resourceId'
     | '/catalog/new'
+    | '/claim/$resourceId'
     | '/forum/$topicId'
     | '/library/$listId'
     | '/reader/$resourceId'
@@ -600,6 +611,7 @@ export interface RootRouteChildren {
   AdminVolumesRoute: typeof AdminVolumesRoute
   CatalogResourceIdRoute: typeof CatalogResourceIdRoute
   CatalogNewRoute: typeof CatalogNewRoute
+  ClaimResourceIdRoute: typeof ClaimResourceIdRoute
   ForumTopicIdRoute: typeof ForumTopicIdRoute
   LibraryListIdRoute: typeof LibraryListIdRoute
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
@@ -855,6 +867,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CatalogNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/claim/$resourceId': {
+      id: '/claim/$resourceId'
+      path: '/claim/$resourceId'
+      fullPath: '/claim/$resourceId'
+      preLoaderRoute: typeof ClaimResourceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/follows/': {
       id: '/follows/'
       path: '/follows'
@@ -968,6 +987,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminVolumesRoute: AdminVolumesRoute,
   CatalogResourceIdRoute: CatalogResourceIdRoute,
   CatalogNewRoute: CatalogNewRoute,
+  ClaimResourceIdRoute: ClaimResourceIdRoute,
   ForumTopicIdRoute: ForumTopicIdRoute,
   LibraryListIdRoute: LibraryListIdRoute,
   ReaderResourceIdRoute: ReaderResourceIdRoute,

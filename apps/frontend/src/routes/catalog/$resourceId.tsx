@@ -20,7 +20,6 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import {
-  useClaimResource,
   useClaimStatus,
   useDeleteResource,
   useRecordView,
@@ -28,7 +27,7 @@ import {
   useResources,
   useUpdateResource,
 } from '@/hooks/api/use-modules'
-import type { ResourceUpdate } from '@/lib/types'
+import type { AuthorDetail, ResourceUpdate } from '@/lib/types'
 import { extractError, parseListField, sanitizeAuthors } from '@/lib/utils'
 import { safeHref } from '@/lib/url-safety'
 import {
@@ -99,26 +98,12 @@ function CatalogDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
-  const [claimOpen, setClaimOpen] = useState(false)
-  const [claimNote, setClaimNote] = useState('')
   const claimStatus = useClaimStatus(id, isAuthenticated)
-  const claimMut = useClaimResource()
 
   // ManuscriptView 把 TOC 上提到这里，供右侧 sticky 侧栏渲染。
   const [toc, setToc] = useState<TocEntry[]>([])
   // 稿件加载失败（409 needs_docx / 404 无正文）时由 ManuscriptView 回调上来。
   const [manuscriptError, setManuscriptError] = useState<unknown>(null)
-
-  const onClaim = async () => {
-    try {
-      await claimMut.mutateAsync({ resourceId: id, note: claimNote.trim() || undefined })
-      toast.success('认领申请已提交，等待编辑部审核')
-      setClaimOpen(false)
-      setClaimNote('')
-    } catch (err) {
-      toast.error(extractError(err, '认领失败'))
-    }
-  }
 
   if (isLoading) return <LoadingSkeleton rows={6} />
   if (isError || !data) {
@@ -201,11 +186,8 @@ function CatalogDetailPage() {
               )}
             </div>
             <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{data.title}</h1>
-            {cleanAuthors.length > 0 && (
-              <p className="mt-1 text-sm text-muted-foreground">
-                {cleanAuthors.join(', ')}
-              </p>
-            )}
+            {/* 作者行：优先用 authors_detail（v5）；未认领者邮箱/单位为 null，绝不展示 PDF 抓出来的私人邮箱。 */}
+            <AuthorRow detail={data.authors_detail ?? null} fallbackNames={cleanAuthors} />
           </div>
 
           {/* 四轨导语/摘要卡：论文=摘要，科普=导语，娱乐/吐槽=不渲染 */}
@@ -217,7 +199,7 @@ function CatalogDetailPage() {
             />
           ) : null}
 
-          {/* 认领卡 */}
+          {/* 认领卡：仅 claimable && 已登录 && 非作者本人；点击进入 /claim/{id} 表单页 */}
           {canClaim && (
             <Card className="mb-4 border-dashed">
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -227,9 +209,11 @@ function CatalogDetailPage() {
                     如果你是本文作者，可以发起认领，编辑部核实后会把文章挂到你的名下。
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => setClaimOpen(true)} disabled={claimMut.isPending}>
-                  <UserCheck className="h-4 w-4" />
-                  认领本文
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/claim/$resourceId" params={{ resourceId: String(id) }}>
+                    <UserCheck className="h-4 w-4" />
+                    去认领
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -256,6 +240,7 @@ function CatalogDetailPage() {
               hideTocNav
               onTocReady={setToc}
               onFatalError={setManuscriptError}
+              contentKind={kind}
             />
           )}
 
@@ -614,36 +599,6 @@ function CatalogDetailPage() {
         onOpenChange={setDeleteOpen}
         onConfirm={onDelete}
       />
-
-      <Dialog open={claimOpen} onOpenChange={setClaimOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>认领本文</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              申请提交后编辑部会核实作者身份，批准后文章将挂到你的账号名下。
-            </p>
-            <Label htmlFor="claim-note">申请说明（选填）</Label>
-            <Textarea
-              id="claim-note"
-              rows={3}
-              maxLength={500}
-              value={claimNote}
-              onChange={(e) => setClaimNote(e.target.value)}
-              placeholder="例：本文第一作者，原始投稿邮箱为 …，可提供底稿核对。"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClaimOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={() => void onClaim()} disabled={claimMut.isPending}>
-              {claimMut.isPending ? '提交中…' : '提交申请'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
@@ -1028,6 +983,35 @@ function MobileDetailActions({
       </BottomSheet>
     </>
   )
+}
+
+// 作者行：v5 用 authors_detail 渲染。第一作者 †、通讯 ✉、已认领徽标；
+// 未认领者邮箱/单位一律不展示（防 PDF 抓私人邮箱）。
+function AuthorRow({ detail, fallbackNames }: { detail: AuthorDetail[] | null; fallbackNames: string[] }) {
+  if (detail && detail.length > 0) {
+    const sorted = [...detail].sort((a, b) => a.order - b.order)
+    return (
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+        {sorted.map((a, i) => (
+          <span key={i} className="inline-flex items-center gap-1">
+            <span className="text-foreground">{a.name}</span>
+            {a.roles.includes('first') && <sup title="第一作者">†</sup>}
+            {a.roles.includes('corresponding') && <sup title="通讯作者">✉</sup>}
+            {a.claimed ? (
+              <Badge variant="secondary" className="ml-0.5 text-[10px]">已认领</Badge>
+            ) : (
+              <span className="ml-0.5 text-[11px] text-muted-foreground/70">未认领</span>
+            )}
+            {i < sorted.length - 1 && <span className="ml-2 text-border">·</span>}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  // 兜底：无 authors_detail 时用 authors 数组（不显示邮箱）
+  return fallbackNames.length > 0 ? (
+    <p className="mt-1 text-sm text-muted-foreground">{fallbackNames.join('、')}</p>
+  ) : null
 }
 
 // 相关文章

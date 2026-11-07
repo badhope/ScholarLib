@@ -223,6 +223,96 @@ export interface ResourceResponse extends ResourceBase {
   /** 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」 */
   clc_code?: string | null
   clc_label?: string | null
+  /** 结构化作者列表（v5）：未认领者 email/affiliation/user_id 为 null，
+   *  前端绝不能从 PDF/Word 抓私人邮箱展示。 */
+  authors_detail?: AuthorDetail[] | null
+}
+
+// --- Authors (v5) ---
+export type AuthorRole = 'first' | 'corresponding'
+
+export interface AuthorDetail {
+  name: string
+  order: number
+  roles: AuthorRole[]
+  claimed: boolean
+  user_id: number | null
+  affiliation: string | null
+  email: string | null
+}
+
+export interface AuthorEditInput {
+  name: string
+  affiliation: string
+  email?: string | null
+  roles: AuthorRole[]
+  order: number
+}
+
+// --- Claim (v5) ---
+export interface ClaimOwner {
+  user_id: number
+  username: string
+  claimed: boolean
+}
+
+export interface ClaimMine {
+  id: number
+  status: 'pending' | 'approved' | 'rejected'
+  author_position?: number | null
+  evidence_type?: 'email' | 'orcid' | 'manuscript_id' | null
+  evidence_value?: string | null
+  note?: string | null
+  created_at?: string
+}
+
+export interface ClaimStatusResponse {
+  claimable: boolean
+  state: 'open' | 'claimed' | string
+  mine: ClaimMine | null
+  owner: ClaimOwner | null
+}
+
+export type ClaimEvidenceType = 'email' | 'orcid' | 'manuscript_id'
+
+export interface ClaimSubmitRequest {
+  author_position: number
+  evidence_type: ClaimEvidenceType
+  evidence_value: string
+}
+
+export interface ClaimSubmitResponse {
+  id: number
+  status: 'pending'
+}
+
+export interface AdminClaimEntry {
+  id: number
+  resource_id: number
+  title: string
+  user_id: number
+  username: string
+  author_position: number
+  evidence_type: ClaimEvidenceType
+  evidence_value: string
+  status: 'pending' | 'approved' | 'rejected'
+  note?: string | null
+  created_at: string
+}
+
+export interface AdminClaimListResponse {
+  data: AdminClaimEntry[]
+}
+
+export interface AdminClaimDecideRequest {
+  approve: boolean
+  note?: string
+  author_position?: number
+}
+
+export interface AssignOwnerRequest {
+  user_id: number
+  author_position?: number
 }
 
 export interface JournalMetrics {

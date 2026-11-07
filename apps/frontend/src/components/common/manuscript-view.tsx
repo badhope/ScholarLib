@@ -87,6 +87,66 @@ interface ManuscriptViewProps {
   hideTocNav?: boolean
   /** 稿件加载失败（含 409 needs_docx）时回调，父级可据此渲染兜底 UI */
   onFatalError?: (err: unknown) => void
+  /** 内容轨道：fun/rant/sci_pop 时按规范在渲染前剥掉学术小节与邮箱 */
+  contentKind?: 'paper' | 'sci_pop' | 'fun' | 'rant' | 'plain'
+}
+
+// --- 轨道裁剪：在 Markdown 渲染前按 v3 规范剥掉学术小节 -------------------
+
+function headingMatches(title: string, patterns: RegExp[]): boolean {
+  const t = title.trim().replace(/[：:：\s]+$/, '')
+  return patterns.some((re) => re.test(t))
+}
+
+const ABSTRACT_RE = /^(摘[ \t\u3000]*要|Abstract|ABSTRACT)$/i
+const KEYWORDS_RE = /^(关键词|关键字|Keywords?)$/i
+const CLC_RE = /^(中图分类号|CLC)$/i
+const REFS_RE = /^(参考文献|References?|Bibliography)$/i
+const DECLS_RE =
+  /^(作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \t\u3000]*使用声明?|致谢|Acknowledg(e)?ments?)$/i
+const DOI_RE = /^(DOI|doi)$/i
+const SCORE_RE = /^(评分|质量等级|RQS|荒诞指数)$/i
+
+/**
+ * 按轨道裁剪 Markdown：删除指定的 ## / ### 小节。
+ * fun/rant：删 摘要/关键词/CLC/参考文献/声明/DOI；保留正文与「参考资料」
+ * sci_pop：删 摘要/关键词/CLC/评分/DOI；保留正文与「延伸阅读」
+ */
+export function stripAcademicSections(md: string, kind: string): string {
+  if (kind === 'paper' || kind === 'plain') return md
+  const dropPatterns: RegExp[] = [ABSTRACT_RE, KEYWORDS_RE, CLC_RE, DOI_RE]
+  if (kind === 'fun' || kind === 'rant') dropPatterns.push(REFS_RE, DECLS_RE)
+  else if (kind === 'sci_pop') dropPatterns.push(SCORE_RE)
+
+  const lines = md.split('\n')
+  const out: string[] = []
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    const m = /^(#{2,3})\s+(.*)$/.exec(line)
+    if (m) {
+      const level = m[1].length
+      if (headingMatches(m[2], dropPatterns)) {
+        i++
+        while (i < lines.length) {
+          const next = /^(#{1,3})\s+/.exec(lines[i])
+          if (next && next[1].length <= level) break
+          i++
+        }
+        continue
+      }
+    }
+    out.push(line)
+    i++
+  }
+  return out.join('\n')
+}
+
+// 邮箱脱敏：原稿 Markdown 里出现的邮箱一律替换为「未认领」。
+const EMAIL_SCRUB_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+
+export function scrubManuscriptEmails(md: string): string {
+  return md.replace(EMAIL_SCRUB_RE, '未认领')
 }
 
 function headingHash(text: string): string {
@@ -319,6 +379,7 @@ export function ManuscriptView({
   onTocReady,
   hideTocNav = false,
   onFatalError,
+  contentKind = 'paper',
 }: ManuscriptViewProps) {
    const scrollRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
@@ -352,7 +413,10 @@ export function ManuscriptView({
   })
 
   // 渲染前剥离 Word 转换残留的 HTML 注释（只在渲染层，不改存储原文）。
-  const cleaned = data ? stripHtmlComments(data) : data
+  // 再按轨道裁掉学术小节（fun/rant/sci_pop），并把原稿里的邮箱一律脱敏。
+  const cleaned = data
+    ? scrubManuscriptEmails(stripAcademicSections(stripHtmlComments(data), contentKind))
+    : data
 
   // 目录与正文/参考文献拆分：纯字符串操作，无需 memo
   const split = cleaned ? splitManuscript(cleaned) : { main: '', refs: '' }

@@ -3,9 +3,9 @@ import { Link } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
-import { useAdminClaims, useDecideClaim } from '@/hooks/api/use-modules'
-import type { AdminClaim } from '@/hooks/api/use-modules'
-import { extractError } from '@/lib/utils'
+import { useAdminClaims, useDecideClaim, useAssignOwner } from '@/hooks/api/use-modules'
+import type { AdminClaimEntry } from '@/lib/types'
+import { extractError, formatDateTime } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -32,7 +33,7 @@ export const Route = createFileRoute('/admin/claims')({
 const STATUS_LABEL: Record<string, string> = {
   pending: '待审',
   approved: '已批准',
-  rejected: '已拒绝',
+  rejected: '已驳回',
 }
 
 const STATUS_VARIANT: Record<string, 'default' | 'destructive' | 'outline' | 'secondary'> = {
@@ -41,31 +42,38 @@ const STATUS_VARIANT: Record<string, 'default' | 'destructive' | 'outline' | 'se
   rejected: 'destructive',
 }
 
+const EVIDENCE_LABEL: Record<string, string> = {
+  email: '原稿邮箱',
+  orcid: 'ORCID',
+  manuscript_id: '稿件编号',
+}
+
 /**
- * 作者认领审批台：作者对"无人认领"的存量文章发起认领后，
- * 编辑部在这里批准 / 拒绝。批准即把文章挂到认领人名下
- * （自动创建 accepted 关联投稿）并通知申请人。
+ * 作者认领审批台（v5）：卡片列表。
+ * 通过/驳回/驳回后指定给其他申请人（逐位调用 assign-owner）。
  */
 function ClaimsAdminPage() {
-  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>(
-    'pending',
-  )
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const decideMut = useDecideClaim()
-  // 拒绝原因走 Dialog：与角色申请审批页同款交互，原生 prompt 移动端样式割裂。
-  const [rejectTarget, setRejectTarget] = useState<AdminClaim | null>(null)
+  const assignMut = useAssignOwner()
+
+  const [rejectTarget, setRejectTarget] = useState<AdminClaimEntry | null>(null)
   const [rejectNote, setRejectNote] = useState('')
+  const [assignTarget, setAssignTarget] = useState<AdminClaimEntry | null>(null)
+  const [assignUserId, setAssignUserId] = useState('')
+  const [assignPosition, setAssignPosition] = useState<number>(1)
 
   const { data, isLoading, isError, refetch } = useAdminClaims(statusFilter)
+  const rows = data?.data ?? []
 
   const onReject = async () => {
     if (!rejectTarget) return
     try {
       await decideMut.mutateAsync({
         claimId: rejectTarget.id,
-        action: 'reject',
-        note: rejectNote.trim() || undefined,
+        body: { approve: false, note: rejectNote.trim() || undefined },
       })
-      toast.success('已拒绝并通知申请人')
+      toast.success('已驳回并通知申请人')
       setRejectTarget(null)
       setRejectNote('')
     } catch (err) {
@@ -73,12 +81,36 @@ function ClaimsAdminPage() {
     }
   }
 
-  const onApprove = async (row: AdminClaim) => {
+  const onApprove = async (row: AdminClaimEntry) => {
     try {
-      await decideMut.mutateAsync({ claimId: row.id, action: 'approve' })
-      toast.success('已批准：文章已挂到认领人名下')
+      await decideMut.mutateAsync({
+        claimId: row.id,
+        body: { approve: true, author_position: row.author_position },
+      })
+      toast.success('已通过：文章已挂到认领人名下')
     } catch (err) {
       toast.error(extractError(err, '操作失败'))
+    }
+  }
+
+  const onAssign = async () => {
+    if (!assignTarget) return
+    const uid = Number(assignUserId.trim())
+    if (!uid || Number.isNaN(uid)) {
+      toast.error('请填写正确的用户 ID')
+      return
+    }
+    try {
+      await assignMut.mutateAsync({
+        resourceId: assignTarget.resource_id,
+        body: { user_id: uid, author_position: assignPosition },
+      })
+      toast.success(`已指定用户 ${uid} 为第 ${assignPosition} 作者`)
+      setAssignTarget(null)
+      setAssignUserId('')
+      setAssignPosition(1)
+    } catch (err) {
+      toast.error(extractError(err, '指定失败'))
     }
   }
 
@@ -86,17 +118,17 @@ function ClaimsAdminPage() {
     <div>
       <PageHeader
         title="认领审批"
-        description="作者对无人认领的存量文章的认领申请。批准即创建关联投稿把文章挂到认领人名下。"
+        description="作者对无人认领的存量文章的认领申请。通过即挂到认领人名下；驳回后可指定给其他申请人。"
         actions={
           <div className="flex flex-wrap gap-1.5">
-            {(['pending', 'approved', 'rejected', 'all'] as const).map((s) => (
+            {(['pending', 'approved', 'rejected'] as const).map((s) => (
               <Button
                 key={s}
                 size="sm"
                 variant={statusFilter === s ? 'default' : 'outline'}
                 onClick={() => setStatusFilter(s)}
               >
-                {s === 'all' ? '全部' : STATUS_LABEL[s]}
+                {STATUS_LABEL[s]}
               </Button>
             ))}
           </div>
@@ -108,23 +140,22 @@ function ClaimsAdminPage() {
           <Loading />
         ) : isError ? (
           <ErrorState message="加载认领申请失败" onRetry={() => refetch()} />
-        ) : !data || data.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState
             title={statusFilter === 'pending' ? '没有待处理的认领申请' : '暂无记录'}
-            description={statusFilter === 'pending' ? '切到「全部」可查看历史记录。' : undefined}
           />
         ) : (
-          data.map((row) => (
+          rows.map((row) => (
             <Card key={row.id} className="py-4">
               <CardContent className="space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="font-medium">{row.username}</span>
+                    <span className="font-medium">@{row.username}</span>
                     <Badge variant={STATUS_VARIANT[row.status]}>
                       {STATUS_LABEL[row.status] ?? row.status}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(row.created_at).toLocaleString()}
+                      {formatDateTime(row.created_at)}
                     </span>
                   </div>
                   {row.status === 'pending' && (
@@ -134,7 +165,7 @@ function ClaimsAdminPage() {
                         disabled={decideMut.isPending}
                         onClick={() => void onApprove(row)}
                       >
-                        批准
+                        通过
                       </Button>
                       <Button
                         size="sm"
@@ -145,31 +176,45 @@ function ClaimsAdminPage() {
                           setRejectNote('')
                         }}
                       >
-                        拒绝
+                        驳回
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={assignMut.isPending}
+                        onClick={() => {
+                          setAssignTarget(row)
+                          setAssignPosition(row.author_position || 1)
+                          setAssignUserId('')
+                        }}
+                      >
+                        指定他人
                       </Button>
                     </div>
                   )}
                 </div>
-                {/* 标题单独一行且可换行：不与按钮挤同一行，避免窄屏截断 */}
                 <Link
                   to="/catalog/$resourceId"
                   params={{ resourceId: String(row.resource_id) }}
                   className="block text-sm leading-snug underline-offset-4 hover:underline"
                 >
-                  《{row.resource_title}》
+                  《{row.title}》
                 </Link>
-                {row.note ? (
-                  <p className="text-sm text-muted-foreground">申请说明：{row.note}</p>
-                ) : null}
-                {row.decision_note ? (
-                  <p className="text-xs text-muted-foreground">处理备注：{row.decision_note}</p>
-                ) : null}
+                <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
+                  <p>位次：第 {row.author_position} 作者</p>
+                  <p>依据类型：{EVIDENCE_LABEL[row.evidence_type] ?? row.evidence_type}</p>
+                  <p className="truncate">依据：{row.evidence_value}</p>
+                </div>
+                {row.note && (
+                  <p className="text-xs text-muted-foreground">处理备注：{row.note}</p>
+                )}
               </CardContent>
             </Card>
           ))
         )}
       </div>
 
+      {/* 驳回对话框 */}
       <Dialog
         open={rejectTarget !== null}
         onOpenChange={(open) => {
@@ -181,13 +226,13 @@ function ClaimsAdminPage() {
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>拒绝认领</DialogTitle>
+            <DialogTitle>驳回认领</DialogTitle>
             <DialogDescription>
-              原因会作为站内通知发给申请人；留空则发送默认文案。
+              驳回原因会作为站内通知发给申请人。
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="claim-reject-note">拒绝原因（选填）</Label>
+            <Label htmlFor="claim-reject-note">驳回原因（必填）</Label>
             <Textarea
               id="claim-reject-note"
               rows={3}
@@ -198,21 +243,63 @@ function ClaimsAdminPage() {
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setRejectTarget(null)
-                setRejectNote('')
-              }}
-            >
+            <Button variant="outline" onClick={() => { setRejectTarget(null); setRejectNote('') }}>
               取消
             </Button>
             <Button
               variant="destructive"
-              disabled={decideMut.isPending}
+              disabled={decideMut.isPending || !rejectNote.trim()}
               onClick={() => void onReject()}
             >
-              {decideMut.isPending ? '处理中…' : '确认拒绝'}
+              {decideMut.isPending ? '处理中…' : '确认驳回'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 指定他人对话框 */}
+      <Dialog
+        open={assignTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignTarget(null)
+            setAssignUserId('')
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>指定给其他申请人</DialogTitle>
+            <DialogDescription>
+              输入用户 ID 与位次，将本文直接绑定到该用户名下。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="assign-user-id">用户 ID</Label>
+              <Input
+                id="assign-user-id"
+                type="number"
+                value={assignUserId}
+                onChange={(e) => setAssignUserId(e.target.value)}
+                placeholder="例：42"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="assign-position">作者位次</Label>
+              <Input
+                id="assign-position"
+                type="number"
+                min={1}
+                value={assignPosition}
+                onChange={(e) => setAssignPosition(Number(e.target.value))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignTarget(null)}>取消</Button>
+            <Button disabled={assignMut.isPending} onClick={() => void onAssign()}>
+              {assignMut.isPending ? '绑定中…' : '确认绑定'}
             </Button>
           </DialogFooter>
         </DialogContent>

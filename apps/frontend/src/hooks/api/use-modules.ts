@@ -60,6 +60,13 @@ import type {
   QualityForm,
   DimensionScoreInput,
   QualityScoreResult,
+  AdminClaimDecideRequest,
+  AdminClaimListResponse,
+  AssignOwnerRequest,
+  AuthorEditInput,
+  ClaimStatusResponse,
+  ClaimSubmitRequest,
+  ClaimSubmitResponse,
 } from '@/lib/types'
 
 // query key 工厂，避免散落字符串
@@ -957,68 +964,94 @@ export function useRevokeRole() {
   })
 }
 
-// --- 作者认领（Author Claim） ----------------------------------------------
-
-export interface ClaimStatus {
-  claimable: boolean
-  state: 'open' | 'claimed'
-  claimer?: string | null
-  mine?: { id: number; status: string; created_at: string } | null
-}
+// --- 作者认领（Author Claim, v5） -----------------------------------------
 
 // 查询某篇文章当前可否被认领（登录后文章页据此显示认领入口）
 export function useClaimStatus(resourceId: number | null, enabled = true) {
-  return useQuery<ClaimStatus>({
+  return useQuery<ClaimStatusResponse>({
     queryKey: keys.claims.status(resourceId ?? 0),
     enabled: enabled && resourceId != null,
     queryFn: async () =>
-      (await api.get<ClaimStatus>(`/catalog/${resourceId}/claim-status`)).data,
+      (await api.get<ClaimStatusResponse>(`/catalog/${resourceId}/claim-status`)).data,
   })
 }
 
 // 发起认领（登录用户对"无人认领"的存量文章）
 export function useClaimResource() {
   const qc = useQueryClient()
-  return useMutation<{ id: number; status: string }, Error, { resourceId: number; note?: string }>({
-    mutationFn: async ({ resourceId, note }) =>
-      (await api.post(`/catalog/${resourceId}/claim`, { note })).data,
+  return useMutation<
+    ClaimSubmitResponse,
+    Error,
+    { resourceId: number; body: ClaimSubmitRequest }
+  >({
+    mutationFn: async ({ resourceId, body }) =>
+      (await api.post<ClaimSubmitResponse>(`/catalog/${resourceId}/claim`, body)).data,
     onSuccess: (_res, vars) => {
       void qc.invalidateQueries({ queryKey: keys.claims.status(vars.resourceId) })
     },
   })
 }
 
-export interface AdminClaim {
-  id: number
-  resource_id: number
-  resource_title: string
-  user_id: number
-  username: string
-  note: string | null
-  status: 'pending' | 'approved' | 'rejected'
-  decision_note: string | null
-  created_at: string
-  decided_at: string | null
-}
-
-// 编辑部：认领申请列表
-export function useAdminClaims(claimStatus: string) {
-  return useQuery<AdminClaim[]>({
-    queryKey: keys.admin.claims(claimStatus),
+// 编辑部：认领申请列表（?state=pending|approved|rejected）
+export function useAdminClaims(state: string) {
+  return useQuery<AdminClaimListResponse>({
+    queryKey: keys.admin.claims(state),
     queryFn: async () =>
-      (await api.get<AdminClaim[]>('/admin/claims', { params: { claim_status: claimStatus } }))
-        .data,
+      (await api.get<AdminClaimListResponse>('/admin/claims', { params: { state } })).data,
   })
 }
 
-// 编辑部：批准 / 拒绝认领
+// 编辑部：通过 / 驳回认领（v5 端点 POST /admin/claims/{id}/decide）
 export function useDecideClaim() {
   const qc = useQueryClient()
-  return useMutation<{ id: number; status: string }, Error, { claimId: number; action: 'approve' | 'reject'; note?: string }>({
-    mutationFn: async ({ claimId, action, note }) =>
-      (await api.post(`/admin/claims/${claimId}/decision`, { action, note })).data,
+  return useMutation<
+    { id: number; status: string },
+    Error,
+    { claimId: number; body: AdminClaimDecideRequest }
+  >({
+    mutationFn: async ({ claimId, body }) =>
+      (await api.post(`/admin/claims/${claimId}/decide`, body)).data,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['admin', 'claims'] })
+    },
+  })
+}
+
+// 编辑部：指定文章 owner（复议时一次指定多人，逐位调用）
+export function useAssignOwner() {
+  const qc = useQueryClient()
+  return useMutation<
+    unknown,
+    Error,
+    { resourceId: number; body: AssignOwnerRequest }
+  >({
+    mutationFn: async ({ resourceId, body }) =>
+      (await api.post(`/admin/resources/${resourceId}/assign-owner`, body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog'] })
+      void qc.invalidateQueries({ queryKey: ['admin', 'claims'] })
+    },
+  })
+}
+
+// 编辑部：PUT 作者列表（资源或稿件二选一，按路径调）
+export function usePutAuthors() {
+  const qc = useQueryClient()
+  return useMutation<
+    unknown,
+    Error,
+    { path: 'resource' | 'submission'; id: number; authors: AuthorEditInput[] }
+  >({
+    mutationFn: async ({ path, id, authors }) => {
+      const url =
+        path === 'resource'
+          ? `/admin/resources/${id}/authors`
+          : `/admin/submissions/${id}/authors`
+      return (await api.put(url, { authors })).data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['catalog'] })
+      void qc.invalidateQueries({ queryKey: ['submissions'] })
     },
   })
 }
