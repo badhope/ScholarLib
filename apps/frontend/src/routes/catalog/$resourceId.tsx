@@ -126,6 +126,10 @@ function CatalogDetailPage() {
 
   const isScholarly = isScholarlyContent(data.content_category, data.content_track)
   const kind: ContentKind = contentTrackKind(data.content_category, data.content_track)
+  // 以 content_track 为唯一判据：essay=娱乐轨，隐藏全部学术区块；paper=论文轨，
+  // 学术区块必须保留。不猜摘要/CLC 是否存在。
+  const isEssayTrack = data.content_track === 'essay'
+  const isPaperTrack = data.content_track === 'paper'
   const cleanAuthors = sanitizeAuthors(data.authors)
   const currentUsername = user?.username?.trim().toLowerCase() ?? ''
   const isAuthor =
@@ -163,12 +167,18 @@ function CatalogDetailPage() {
               <Badge variant="secondary">
                 {displayTypeLabel(data.type, data.content_category, data.content_track)}
               </Badge>
-              {isScholarly && data.content_category ? (
+              {isEssayTrack && (
+                <Badge className="border-amber-400/60 bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                  娱乐轨 · 不计分
+                </Badge>
+              )}
+              {!isEssayTrack && data.content_category ? (
                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25">
                   {contentCategoryLabel(data.content_category)}
                 </Badge>
               ) : null}
-              {isScholarly &&
+              {!isEssayTrack &&
+              isScholarly &&
               data.r_index != null &&
               (data.reads ?? 0) + (data.downloads ?? 0) + (data.saves ?? 0) >= 3 ? (
                 <Badge variant="outline" className="tabular-nums">
@@ -186,7 +196,7 @@ function CatalogDetailPage() {
           </div>
 
           {/* 四轨导语/摘要卡：论文=摘要，科普=导语，娱乐/吐槽=不渲染 */}
-          {(kind === 'paper' || kind === 'sci_pop') && data.abstract ? (
+          {!isEssayTrack && (kind === 'paper' || kind === 'sci_pop') && data.abstract ? (
             <AbstractCard
               text={data.abstract}
               collapsible={isMobile}
@@ -260,7 +270,7 @@ function CatalogDetailPage() {
             )}
 
             {/* 论文轨：文章信息 + 关键词 + CLC */}
-            {kind === 'paper' && (
+            {isPaperTrack && (
               <FoldCard title="文章信息" defaultOpen={!isMobile}>
                 <CardContent>
                   <MetaItem label="年份" value={String(data.year)} />
@@ -299,7 +309,7 @@ function CatalogDetailPage() {
             )}
 
             {/* 论文轨：评审信息 RQS（仅审稿/编辑端可见） */}
-            {kind === 'paper' && canSeeScores && (
+            {isPaperTrack && canSeeScores && (
               <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
                 <CardContent>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -360,7 +370,7 @@ function CatalogDetailPage() {
 
             <FoldCard title="阅读与影响" defaultOpen={false}>
               <CardContent>
-                {kind === 'paper' && (
+                {isPaperTrack && (
                   <>
                     <MetaItem label="R 指数" value={data.r_index != null ? String(data.r_index) : '—'} />
                     {canSeeScores && (
@@ -428,7 +438,7 @@ function CatalogDetailPage() {
                     Word 文档（.docx）
                   </a>
                 </Button>
-                {kind === 'paper' && (
+                {isPaperTrack && (
                   <Button asChild variant="outline" size="sm" className="w-full">
                     <a href={`/api/catalog/${id}/export?format=pdf`} download>
                       <FileDown className="h-4 w-4" />
@@ -440,6 +450,7 @@ function CatalogDetailPage() {
             </Card>
           )}
 
+          {!isEssayTrack && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">引用</CardTitle>
@@ -479,7 +490,9 @@ function CatalogDetailPage() {
               </div>
             </CardContent>
           </Card>
+          )}
 
+          {!isEssayTrack && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">文章信息</CardTitle>
@@ -489,16 +502,16 @@ function CatalogDetailPage() {
               <MetaItem label="页码" value={data.pages || '—'} />
               <MetaItem label="DOI" value={data.doi || '—'} />
               <MetaItem label="年份" value={String(data.year)} />
-              {kind === 'paper' && data.clc_code && (
+              {isPaperTrack && data.clc_code && (
                 <MetaItem label="中图分类号" value={`${data.clc_code}${data.clc_label ? ` · ${data.clc_label}` : ''}`} />
               )}
-              {canSeeScores && kind === 'paper' && data.quality_score != null && (
+              {canSeeScores && isPaperTrack && data.quality_score != null && (
                 <MetaItem
                   label="评分"
                   value={`${data.quality_score.toFixed(1)}${data.quality_grade ? `（${data.quality_grade}）` : ''}`}
                 />
               )}
-              {kind === 'paper' && data.r_factor != null && (
+              {isPaperTrack && data.r_factor != null && (
                 <MetaItem label="R 因子" value={data.r_factor.toFixed(1)} />
               )}
               <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -506,6 +519,7 @@ function CatalogDetailPage() {
               </p>
             </CardContent>
           </Card>
+          )}
 
           {isAuthenticated ? (
             <Button variant="outline" size="sm" className="w-full" onClick={() => setListOpen(true)}>
