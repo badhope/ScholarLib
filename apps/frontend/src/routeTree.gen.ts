@@ -54,6 +54,7 @@ import { Route as LibraryListIdRouteImport } from './routes/library/$listId'
 import { Route as ReaderResourceIdRouteImport } from './routes/reader/$resourceId'
 import { Route as ReviewAssignmentsRouteImport } from './routes/review/assignments'
 import { Route as SubmissionsIndexRouteImport } from './routes/submissions/index'
+import { Route as SubmissionsNewRouteImport } from './routes/submissions/new'
 import { Route as SubmissionsPendingRouteImport } from './routes/submissions/pending'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
 
@@ -282,6 +283,11 @@ const SubmissionsIndexRoute = SubmissionsIndexRouteImport.update({
   path: '/submissions/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SubmissionsNewRoute = SubmissionsNewRouteImport.update({
+  id: '/submissions/new',
+  path: '/submissions/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SubmissionsPendingRoute = SubmissionsPendingRouteImport.update({
   id: '/submissions/pending',
   path: '/submissions/pending',
@@ -332,6 +338,7 @@ export interface FileRoutesByFullPath {
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
@@ -381,6 +388,7 @@ export interface FileRoutesByTo {
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin': typeof AdminIndexRoute
   '/catalog': typeof CatalogIndexRoute
@@ -431,6 +439,7 @@ export interface FileRoutesById {
   '/library/$listId': typeof LibraryListIdRoute
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
+  '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
@@ -482,6 +491,7 @@ export interface FileRouteTypes {
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
     | '/catalog/'
@@ -531,6 +541,7 @@ export interface FileRouteTypes {
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/submissions/new'
     | '/submissions/pending'
     | '/admin'
     | '/catalog'
@@ -580,6 +591,7 @@ export interface FileRouteTypes {
     | '/library/$listId'
     | '/reader/$resourceId'
     | '/review/assignments'
+    | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
     | '/catalog/'
@@ -630,6 +642,7 @@ export interface RootRouteChildren {
   LibraryListIdRoute: typeof LibraryListIdRoute
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
   ReviewAssignmentsRoute: typeof ReviewAssignmentsRoute
+  SubmissionsNewRoute: typeof SubmissionsNewRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
   AdminIndexRoute: typeof AdminIndexRoute
   CatalogIndexRoute: typeof CatalogIndexRoute
@@ -958,6 +971,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmissionsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/submissions/new': {
+      id: '/submissions/new'
+      path: '/submissions/new'
+      fullPath: '/submissions/new'
+      preLoaderRoute: typeof SubmissionsNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/submissions/pending': {
       id: '/submissions/pending'
       path: '/submissions/pending'
@@ -1014,6 +1034,7 @@ const rootRouteChildren: RootRouteChildren = {
   LibraryListIdRoute: LibraryListIdRoute,
   ReaderResourceIdRoute: ReaderResourceIdRoute,
   ReviewAssignmentsRoute: ReviewAssignmentsRoute,
+  SubmissionsNewRoute: SubmissionsNewRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
   AdminIndexRoute: AdminIndexRoute,
   CatalogIndexRoute: CatalogIndexRoute,

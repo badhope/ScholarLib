@@ -8,7 +8,6 @@ import {
   useSearch,
 } from '@tanstack/react-router'
 import {
-  ChevronDown,
   Download,
   ExternalLink,
   FileText,
@@ -23,32 +22,23 @@ import { toast } from 'sonner'
 import { getAuthState } from '@/lib/auth'
 import {
   downloadSubmissionFile,
-  useCreateSubmission,
   useDeleteSubmission,
   useMySubmissions,
   useResubmitSubmission,
-  useSaveSubmissionMarkdown,
-  useSubmissionMarkdown,
   useSubmissionReports,
   useSubmissionVersions,
-  useUpdateSubmission,
-  useUploadSubmissionCover,
   useUploadSubmissionFile,
 } from '@/hooks/api/use-modules'
-import { MarkdownEditor } from '@/components/common/markdown-editor'
 import type {
   IngestResource,
   ReviewReportResponse,
-  SubmissionCreate,
   SubmissionResponse,
   SubmissionStatus,
-  SubmissionType,
 } from '@/lib/types'
 import { typeLabel } from '@/lib/resource-labels'
 import { useIsMobile } from '@/hooks/use-is-mobile'
-import { DISCIPLINES } from '@/lib/disciplines'
 import { useCapabilities } from '@/hooks/use-capabilities'
-import { extractError, parseListField } from '@/lib/utils'
+import { extractError } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
@@ -63,15 +53,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -103,13 +85,6 @@ interface SubmissionSearch {
   page?: number
 }
 
-const TYPE_OPTIONS: { value: SubmissionType; label: string }[] = [
-  { value: 'paper', label: '论文' },
-  { value: 'book', label: '图书' },
-  { value: 'dataset', label: '数据集' },
-  { value: 'tutorial', label: '教程' },
-]
-
 const STATUS_TABS: { value: SubmissionStatus | 'all'; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'pending', label: '待审核' },
@@ -120,108 +95,8 @@ const STATUS_TABS: { value: SubmissionStatus | 'all'; label: string }[] = [
   { value: 'rejected', label: '已拒绝' },
 ]
 
-interface FormState {
-  title: string
-  type: SubmissionType
-  authors: string
-  year: string
-  discipline: string
-  abstract: string
-  preview: string
-  venue: string
-  subdiscipline: string
-  tags: string
-  keywords: string
-  jel_codes: string
-  corresponding_author_email: string
-  doi: string
-  download_url: string
-  external_url: string
-  // 新建投稿时可选带上的稿件文件（先传文件，再填元数据）
-  file: File | null
-}
-
-const EMPTY_FORM: FormState = {
-  title: '',
-  type: 'paper',
-  authors: '',
-  year: String(new Date().getFullYear()),
-  discipline: '',
-  abstract: '',
-  preview: '',
-  venue: '',
-  subdiscipline: '',
-  tags: '',
-  keywords: '',
-  jel_codes: '',
-  corresponding_author_email: '',
-  doi: '',
-  download_url: '',
-  external_url: '',
-  file: null,
-}
-
-// 详情 → 表单：作者点「修改稿件」时把现有内容回填进同一套表单
-function submissionToForm(s: SubmissionResponse): FormState {
-  const validTypes: SubmissionType[] = ['paper', 'book', 'dataset', 'tutorial']
-  return {
-    title: s.title,
-    type: validTypes.includes(s.type as SubmissionType)
-      ? (s.type as SubmissionType)
-      : 'paper',
-    authors: s.authors.join(', '),
-    year: String(s.year),
-    discipline: s.discipline,
-    abstract: s.abstract,
-    preview: s.preview,
-    venue: s.venue ?? '',
-    subdiscipline: s.subdiscipline ?? '',
-    tags: s.tags.join(', '),
-    keywords: s.keywords.join(', '),
-    jel_codes: s.jel_codes.join(', '),
-    corresponding_author_email: s.corresponding_author_email ?? '',
-    doi: s.doi ?? '',
-    download_url: s.download_url ?? '',
-    external_url: s.external_url ?? '',
-    file: null,
-  }
-}
-
 // 作者可编辑内容的状态（与后端 update_submission 的状态门一致）
 const EDITABLE_STATUSES = ['pending', 'major_revision', 'minor_revision']
-
-// ingest 预填：IngestResource.type 是 SubmissionType 的超集，需收敛到合法值
-function presetToForm(p: IngestResource): FormState {
-  const validTypes: SubmissionType[] = ['paper', 'book', 'dataset', 'tutorial']
-  const type = validTypes.includes(p.type as SubmissionType)
-    ? (p.type as SubmissionType)
-    : 'paper'
-  return {
-    ...EMPTY_FORM,
-    title: p.title,
-    type,
-    // BibTeX/RIS 常给出 "Last, First" 形式：直接 join(', ') 会被
-    // parseListField 按逗号拆成多个作者，先规范成 "First Last"。
-    authors: p.authors
-      .map((a) => {
-        const parts = a
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean)
-        return parts.length >= 2 ? `${parts.slice(1).join(' ')} ${parts[0]}` : a
-      })
-      .join(', '),
-    year: p.year ? String(p.year) : EMPTY_FORM.year,
-    discipline: p.discipline,
-    abstract: p.abstract,
-    preview: p.abstract,
-    venue: p.venue ?? '',
-    subdiscipline: p.subdiscipline ?? '',
-    tags: p.tags.join(', '),
-    doi: p.doi ?? '',
-    file: null,
-  }
-}
 
 function statusBadge(status: SubmissionStatus) {
   switch (status) {
@@ -273,21 +148,10 @@ function SubmissionsPage() {
 
   const isMobile = useIsMobile()
   const { data, isLoading, isError, refetch } = useMySubmissions(status, page, 20)
-  const createMut = useCreateSubmission()
   const deleteMut = useDeleteSubmission()
   const uploadMut = useUploadSubmissionFile()
-  const uploadCoverMut = useUploadSubmissionCover()
   const resubmitMut = useResubmitSubmission()
-  const updateMut = useUpdateSubmission()
-  const saveBodyMut = useSaveSubmissionMarkdown()
 
-  const [createOpen, setCreateOpen] = useState(false)
-  // 投稿表单"更多信息（选填）"折叠区：新建默认收起（先填必填项），
-  // 编辑已有稿件时自动展开——否则用户会以为选填字段被清空了。
-  const [moreOpen, setMoreOpen] = useState(false)
-  // null = 新建模式；数字 = 正在编辑该 submission（复用同一套表单）
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [detail, setDetail] = useState<SubmissionResponse | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [resubmitOpen, setResubmitOpen] = useState(false)
@@ -296,18 +160,6 @@ function SubmissionsPage() {
   // 必须放在 detail useState 之后，否则 TS2448/2454 报"使用先于声明"。
   const reportsQ = useSubmissionReports(detail?.id ?? 0)
   const versionsQ = useSubmissionVersions(detail?.id ?? 0, detail !== null)
-  // 在线正文（Word 级编辑器）：编辑模式由后端回填，新建从空白开始；
-  // 提交时随表单一并 PUT（正文与书目字段同一事务语义）。
-  const [bodyDraft, setBodyDraft] = useState('')
-  const bodyLoadedRef = useRef<number | null>(null)
-  const bodyQ = useSubmissionMarkdown(editingId ?? 0, editingId !== null && createOpen)
-  useEffect(() => {
-    if (editingId === null) return
-    if (bodyQ.data && bodyLoadedRef.current !== editingId) {
-      bodyLoadedRef.current = editingId
-      setBodyDraft(bodyQ.data.content)
-    }
-  }, [bodyQ.data, editingId])
 
   const onUploadFile = async (file: File) => {
     if (!detail) return
@@ -349,17 +201,8 @@ function SubmissionsPage() {
     }
   }
 
-  // 作者修改稿件内容：复用新建表单，提交走 PATCH 而非 POST
-  const onStartEdit = () => {
-    if (!detail) return
-    setForm(submissionToForm(detail))
-    setEditingId(detail.id)
-    bodyLoadedRef.current = null // 允许重新加载该稿正文
-    setMoreOpen(true)
-    setCreateOpen(true)
-  }
-
-  // ingest 页 "提交到目录" 通过 router state 传预填数据
+  // ingest 页 "提交到目录" 通过 router state 传预填数据：
+  // 直接转交给四步向导页（由向导消费 preset 并清空 state）。
   const preset = useRouterState({
     select: (s) => s.location.state?.preset,
   })
@@ -367,11 +210,7 @@ function SubmissionsPage() {
   useEffect(() => {
     if (!preset || presetHandled.current) return
     presetHandled.current = true
-    setForm(presetToForm(preset))
-    setCreateOpen(true)
-    // 消费完就把 state 清掉：ref 只在本次 mount 内有效，用户后退/前进
-    // 导致重新挂载时 state 还在，会莫名其妙又弹出预填表单。
-    void navigate({ to: '/submissions', state: {}, replace: true })
+    void navigate({ to: '/submissions/new', state: { preset }, replace: true })
   }, [preset, navigate])
 
   const updateSearch = (patch: Partial<SubmissionSearch>) => {
@@ -380,77 +219,6 @@ function SubmissionsPage() {
       search: { ...search, ...patch },
       replace: true,
     })
-  }
-
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const body: SubmissionCreate = {
-      title: form.title,
-      type: form.type,
-      authors: parseListField(form.authors),
-      year: Number(form.year),
-      discipline: form.discipline,
-      abstract: form.abstract,
-      preview: form.preview,
-      tags: parseListField(form.tags),
-      keywords: parseListField(form.keywords),
-      jel_codes: parseListField(form.jel_codes),
-      corresponding_author_email: form.corresponding_author_email || undefined,
-      venue: form.venue || undefined,
-      subdiscipline: form.subdiscipline || undefined,
-      doi: form.doi || undefined,
-      download_url: form.download_url || undefined,
-      external_url: form.external_url || undefined,
-    }
-    try {
-      if (editingId !== null) {
-        // 编辑模式：PATCH 全量字段（表单已回填原值，未动的字段等值覆盖无副作用）
-        const updated = await updateMut.mutateAsync({ id: editingId, body })
-        // 正文编辑器有内容（或被清空）时一并保存，作者不必再单独点保存
-        if (bodyDraft.trim() !== '') {
-          await saveBodyMut.mutateAsync({ id: editingId, content: bodyDraft })
-        }
-        setDetail(updated)
-        toast.success('稿件已更新')
-      } else {
-        const created = await createMut.mutateAsync(body)
-        // 在线正文：非空时创建后立即保存（在线编辑器与文件上传互为补充）
-        if (bodyDraft.trim() !== '') {
-          await saveBodyMut.mutateAsync({ id: created.id, content: bodyDraft })
-        }
-        // 新建时若已选好稿件文件，直接一并上传，作者不必再进详情页补传
-        if (form.file) {
-          await uploadMut.mutateAsync({ id: created.id, file: form.file })
-          toast.success('提交成功，稿件文件已上传')
-        } else {
-          toast.success('提交成功，等待审核')
-        }
-      }
-      setCreateOpen(false)
-      setEditingId(null)
-      setBodyDraft('')
-      setForm(EMPTY_FORM)
-    } catch (err) {
-      // 投稿 403 rules_ack_required：作者没确认当版《投稿规范》。
-      // 只报"提交失败"会让作者以为站点坏了（线上实测的高频困惑），
-      // 必须直接引导去确认，确认后本页可重试。
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data
-        ?.detail as { code?: string } | string | undefined
-      const code = typeof detail === 'object' && detail !== null ? detail.code : undefined
-      if (code === 'rules_ack_required') {
-        toast.error('投稿前需要先阅读并确认《投稿与编辑规范》', {
-          description: '正在为你打开确认页…',
-          duration: 6000,
-        })
-        void navigate({ to: '/authors' })
-        return
-      }
-      toast.error(extractError(err, editingId !== null ? '更新失败' : '提交失败'))
-    }
   }
 
   const onConfirmDelete = async () => {
@@ -473,11 +241,7 @@ function SubmissionsPage() {
         actions={
           <Button
             onClick={() => {
-              setForm(EMPTY_FORM)
-              setMoreOpen(false)
-              setEditingId(null)
-              setBodyDraft('') // 新建从空白正文开始
-              setCreateOpen(true)
+              void navigate({ to: '/submissions/new' })
             }}
           >
             <Plus className="h-4 w-4" />
@@ -891,10 +655,18 @@ function SubmissionsPage() {
                   </ol>
                 </div>
               )}
-              {/* 操作区：可编辑状态下开放「修改稿件」；大修/小修额外开放「重投」 */}
+              {/* 操作区：可编辑状态下开放「修改稿件」（跳转四步向导）；大修/小修额外开放「重投」 */}
               {EDITABLE_STATUSES.includes(detail.status) && (
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={onStartEdit}>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void navigate({
+                        to: '/submissions/new',
+                        search: { edit: detail.id },
+                      })
+                    }}
+                  >
                     <Pencil className="h-4 w-4" />
                     修改稿件
                   </Button>
@@ -922,354 +694,6 @@ function SubmissionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* 新建 / 修改稿件 Dialog（复用同一套表单，editingId 区分模式） */}
-      <Dialog
-        open={createOpen}
-        onOpenChange={(o) => {
-          setCreateOpen(o)
-          if (!o) setEditingId(null)
-        }}
-      >
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingId !== null ? '修改稿件' : '新建提交'}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={onCreate} className="space-y-4">
-            {/* 稿件文件：投稿的核心是先交论文，放在表单最前面（可选，提交后也可在详情里补传） */}
-            <div className="space-y-2 rounded-md border border-dashed p-3">
-              <Label>稿件文件（可选；PDF / Word / Markdown / LaTeX / 图表 / 源码包均可）</Label>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                单文件上限 {uploadMaxMb} MB。更大的数据集、代码仓库或补充材料，
-                请在下方「代码与数据链接」里填网盘或开源仓库地址——比塞进压缩包更容易被审稿人复现。
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-sm hover:bg-muted/70">
-                  <Upload className="h-4 w-4" />
-                  {form.file ? '替换文件' : '选择文件'}
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept={acceptAttr}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) {
-                        if (f.size > maxUploadBytes) {
-                          toast.error(
-                            `文件 ${(f.size / 1024 / 1024).toFixed(1)} MB 超过 ${uploadMaxMb} MB 上限，请改用网盘或仓库链接`,
-                          )
-                        } else {
-                          set('file', f)
-                        }
-                      }
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-                {form.file ? (
-                  <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                    <FileText className="h-4 w-4" />
-                    <span className="max-w-[16rem] truncate">
-                      {form.file.name}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-1 text-destructive"
-                      onClick={() => set('file', null)}
-                    >
-                      移除
-                    </Button>
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground">
-                    未选择文件（可先提交，稍后在详情里补传）
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* 封面：作者可上传，未上传时按学科自动分配默认封面 */}
-            <div className="space-y-2 rounded-lg border p-3">
-              <div className="flex items-center justify-between">
-                <Label>封面图</Label>
-                <span className="text-[11px] text-muted-foreground">
-                  PNG/JPEG/WebP · ≤5MB · 不上传则自动配图
-                </span>
-              </div>
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:text-primary"
-                onChange={async (e) => {
-                  const f = e.target.files?.[0]
-                  if (!f || !detail) return
-                  try {
-                    const updated = await uploadCoverMut.mutateAsync({ id: detail.id, file: f })
-                    setDetail(updated)
-                    toast.success('封面上传成功')
-                  } catch (err) {
-                    toast.error(extractError(err, '封面上传失败'))
-                  }
-                }}
-                disabled={uploadCoverMut.isPending}
-              />
-            </div>
-            {/* 赛道选择已随赛道下线移除：后端统一按 serious 处理，
-                文章气质由编辑部的荒诞指数（0–10）标注。 */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="type">类型</Label>
-                <Select
-                  value={form.type}
-                  onValueChange={(v) => set('type', v as SubmissionType)}
-                >
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TYPE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="year">年份</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  value={form.year}
-                  onChange={(e) => set('year', e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="title">标题</Label>
-              <Input
-                id="title"
-                value={form.title}
-                onChange={(e) => set('title', e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="authors">作者（逗号分隔）</Label>
-              <Input
-                id="authors"
-                value={form.authors}
-                onChange={(e) => set('authors', e.target.value)}
-                placeholder="Alice Smith, Bob Jones"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="discipline">学科</Label>
-                {/* datalist 选择器：选项来自 2026 学科目录，保留自由输入
-                    兜底（本刊为讽刺性期刊，允许自创学科）。存学科名。 */}
-                <Input
-                  id="discipline"
-                  list="submission-discipline-options"
-                  value={form.discipline}
-                  onChange={(e) => set('discipline', e.target.value)}
-                  placeholder="选择或输入学科"
-                  required
-                />
-                <datalist id="submission-discipline-options">
-                  {DISCIPLINES.flatMap((c) => c.items).map((d) => (
-                    <option key={d.code} value={d.name}>
-                      {d.name}（{d.code}）
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="subdiscipline">子学科</Label>
-                {/* 子学科同样走 datalist：目录为一级学科名，可自由输入 */}
-                <Input
-                  id="subdiscipline"
-                  list="submission-subdiscipline-options"
-                  value={form.subdiscipline}
-                  onChange={(e) => set('subdiscipline', e.target.value)}
-                  placeholder="选择或输入子学科"
-                />
-                <datalist id="submission-subdiscipline-options">
-                  {DISCIPLINES.flatMap((c) => c.items).map((d) => (
-                    <option key={d.code} value={d.name}>
-                      {d.name}（{d.code}）
-                    </option>
-                  ))}
-                </datalist>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="abstract">摘要</Label>
-              <Textarea
-                id="abstract"
-                value={form.abstract}
-                onChange={(e) => set('abstract', e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="body-editor">正文（在线编辑，支持标题层级 / 加粗 / 斜体 / 书名号等）</Label>
-              <p className="text-xs text-muted-foreground">
-                与上传文件互为补充：这里写好的正文会直接进入在线阅读、Word 下载件与 JATS 导出。
-              </p>
-              <MarkdownEditor
-                value={bodyDraft}
-                onChange={setBodyDraft}
-                minHeight={300}
-                placeholder={'# 1 引言\n\n写下正文……（Markdown 语法，工具栏可插入标题、加粗、书名号等）'}
-                testId="submission-body-editor"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="preview">预览（留空将自动截取摘要）</Label>
-              <Textarea
-                id="preview"
-                value={form.preview}
-                onChange={(e) => set('preview', e.target.value)}
-              />
-            </div>
-            {/* 选填区折叠：投稿第一眼只看到必填项，长表单不再劝退 */}
-            <button
-              type="button"
-              className="flex w-full items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-              onClick={() => setMoreOpen((v) => !v)}
-              aria-expanded={moreOpen}
-              data-testid="toggle-more-fields"
-            >
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${moreOpen ? 'rotate-180' : ''}`}
-              />
-              更多信息（选填：标签 / DOI / 代码数据链接等，可提高曝光与评审质量）
-            </button>
-            {moreOpen && (
-              <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="tags">标签（逗号分隔）</Label>
-                <Input
-                  id="tags"
-                  value={form.tags}
-                  onChange={(e) => set('tags', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="doi">DOI</Label>
-                <Input
-                  id="doi"
-                  value={form.doi}
-                  onChange={(e) => set('doi', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="venue">出版物</Label>
-                <Input
-                  id="venue"
-                  value={form.venue}
-                  onChange={(e) => set('venue', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="download_url">稿件直链（可选）</Label>
-                <Input
-                  id="download_url"
-                  type="url"
-                  placeholder="https://…/paper.pdf"
-                  value={form.download_url}
-                  onChange={(e) => set('download_url', e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  已经托管在其他地方？填直链即可，不必重复上传。
-                </p>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="external_url">代码与数据链接（推荐）</Label>
-                <Input
-                  id="external_url"
-                  type="url"
-                  placeholder="https://github.com/you/paper-code 或 网盘分享链接"
-                  value={form.external_url}
-                  onChange={(e) => set('external_url', e.target.value)}
-                />
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  开源仓库（GitHub / GitLab / Gitee / Zenodo / OSF）、可复现脚本、
-                  原始数据、补充图表都放这里。审稿人与读者会先看这个链接：
-                  有仓库的稿件，评审意见通常更具体，也更容易获得推荐与曝光。
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="keywords">关键词（逗号分隔）</Label>
-                <Input
-                  id="keywords"
-                  value={form.keywords}
-                  onChange={(e) => set('keywords', e.target.value)}
-                  placeholder="machine learning, transformers"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="jel_codes">JEL Codes（逗号分隔）</Label>
-                <Input
-                  id="jel_codes"
-                  value={form.jel_codes}
-                  onChange={(e) => set('jel_codes', e.target.value)}
-                  placeholder="C00, D83"
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="corresponding_author_email">
-                  通讯作者邮箱（可选）
-                </Label>
-                <Input
-                  id="corresponding_author_email"
-                  type="email"
-                  value={form.corresponding_author_email}
-                  onChange={(e) =>
-                    set('corresponding_author_email', e.target.value)
-                  }
-                  placeholder="corresponding@example.com"
-                />
-              </div>
-            </div>
-              </>
-            )}
-            <div className="flex justify-end gap-2 border-t pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setCreateOpen(false)
-                  setEditingId(null)
-                }}
-              >
-                取消
-              </Button>
-              <Button
-                type="submit"
-                disabled={createMut.isPending || updateMut.isPending}
-              >
-                {editingId !== null
-                  ? updateMut.isPending
-                    ? '保存中…'
-                    : '保存修改'
-                  : createMut.isPending
-                    ? '提交中…'
-                    : '提交'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       {/* 重投 Dialog：可附「针对审稿意见做了哪些修改」，随版本存档并通知编辑 */}
       <Dialog
