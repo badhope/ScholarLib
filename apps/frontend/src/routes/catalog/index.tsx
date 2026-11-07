@@ -47,7 +47,7 @@ export const Route = createFileRoute('/catalog/')({
 interface CatalogSearch {
   q?: string
   type?: ResourceType
-  category?: 'academic' | 'fun' | 'rant'
+  category?: 'academic' | 'fun' | 'rant' | 'essay'
   /** 轨道切换（v1.15）：paper=论文（学术），essay=娱乐（fun/rant 同属娱乐）。
    *  不写 = 全部。URL 持久化，刷新不丢。 */
   track?: 'paper' | 'essay'
@@ -58,7 +58,7 @@ interface CatalogSearch {
 }
 
 // 轨道分段控件选项。值与后端下发的 content_track 词汇对齐（paper|essay）；
-// 娱乐（essay）在请求侧落到既有 ?category=fun 参数（后端只支持单值精确匹配）。
+// 娱乐（essay）在请求侧用 ?category=essay（后端按 fun+rant 合并过滤）。
 const TRACK_OPTIONS: { value: 'paper' | 'essay' | undefined; label: string }[] = [
   { value: undefined, label: '全部' },
   { value: 'paper', label: '论文' },
@@ -81,10 +81,9 @@ function CatalogListPage() {
   const { isAdmin, isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
 
-  // 轨道切换 → 后端单值 category 参数：论文=academic，娱乐=fun。
-  // 后端 ?category 只接受 academic|fun|rant 精确值，娱乐轨道在请求侧落到 fun。
+  // 轨道切换 → 后端 category 参数：论文=academic，娱乐=essay（含 fun+rant）。
   const trackCategory =
-    search.track === 'paper' ? 'academic' : search.track === 'essay' ? 'fun' : undefined
+    search.track === 'paper' ? 'academic' : search.track === 'essay' ? 'essay' : undefined
 
   const params = {
     q: search.q || undefined,
