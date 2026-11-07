@@ -67,7 +67,7 @@ function useReadingPrefs() {
   return { prefs, update }
 }
 
-interface TocEntry {
+export interface TocEntry {
   id: string
   level: 2 | 3
   text: string
@@ -81,6 +81,12 @@ interface ManuscriptViewProps {
   useWindowScroll?: boolean
   /** 目录条目数变化时回调，供阅读页决定底部「目录」按钮是否出现 */
   onTocChange?: (count: number) => void
+  /** 目录条目就绪时回调，供父级把 TOC 渲染到自己的侧栏 */
+  onTocReady?: (toc: TocEntry[]) => void
+  /** 隐藏组件内置的左侧 TOC 导航（父级自己渲染侧栏时用） */
+  hideTocNav?: boolean
+  /** 稿件加载失败（含 409 needs_docx）时回调，父级可据此渲染兜底 UI */
+  onFatalError?: (err: unknown) => void
 }
 
 function headingHash(text: string): string {
@@ -310,6 +316,9 @@ export function ManuscriptView({
   onProgress,
   useWindowScroll = false,
   onTocChange,
+  onTocReady,
+  hideTocNav = false,
+  onFatalError,
 }: ManuscriptViewProps) {
    const scrollRef = useRef<HTMLDivElement>(null)
   const restoredRef = useRef(false)
@@ -329,7 +338,7 @@ export function ManuscriptView({
     return () => window.removeEventListener(TOC_OPEN_EVENT, onOpen)
   }, [])
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error: queryError, refetch } = useQuery({
     queryKey: ['catalog', 'manuscript', resourceId],
     staleTime: 5 * 60_000,
     retry: 0,
@@ -371,6 +380,7 @@ export function ManuscriptView({
  })
  if (refs) entries.push({ id: 'refs', level:2, text: '参考文献' })
  setToc(entries)
+ onTocReady?.(entries)
  }, [data, refs])
 
   // 超宽条图适配：宽高比 ≥ 4 的图（常见于从 PDF 里裁出来的一行公式截图），
@@ -472,6 +482,7 @@ export function ManuscriptView({
   }
 
   if (isError || !data) {
+    onFatalError?.(queryError)
     return (
       <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
         <EmptyState
@@ -550,7 +561,7 @@ export function ManuscriptView({
           </>
         )}
 
-        {toc.length > 2 && (
+        {toc.length > 2 && !hideTocNav && (
           <nav
             aria-label="文章目录"
             className="sticky top-0 hidden w-52 shrink-0 lg:mr-6 lg:block"

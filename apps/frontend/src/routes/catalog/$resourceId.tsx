@@ -2,13 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   Bookmark,
-  BookOpen,
   ChevronDown,
   ChevronLeft,
   Download,
   ExternalLink,
   FileDown,
-  Heart,
+  ListTree,
   MoreVertical,
   Pencil,
   Quote,
@@ -21,33 +20,29 @@ import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import {
-  useAuthorFollowStatus,
   useClaimResource,
   useClaimStatus,
   useDeleteResource,
-  useDisciplineSubscriptionStatus,
-  useFollowAuthor,
   useRecordView,
-  useReadingProgress,
   useResource,
   useResources,
-  useSubscribeDiscipline,
-  useUnfollowAuthor,
-  useUnsubscribeDiscipline,
   useUpdateResource,
 } from '@/hooks/api/use-modules'
-import type { ResourceResponse, ResourceUpdate } from '@/lib/types'
-import { extractError, formatDateTime, parseListField, sanitizeAuthors } from '@/lib/utils'
-import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
+import type { ResourceUpdate } from '@/lib/types'
+import { extractError, parseListField, sanitizeAuthors } from '@/lib/utils'
+import { safeHref } from '@/lib/url-safety'
 import {
   absurdityLevel,
   contentCategoryLabel,
+  contentTrackKind,
   displayTypeLabel,
   isScholarlyContent,
   languageLabel,
   qualityGrade,
   statusLabel,
+  type ContentKind,
 } from '@/lib/resource-labels'
+import { ManuscriptView, type TocEntry } from '@/components/common/manuscript-view'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -72,12 +67,11 @@ import { AddToListDialog } from '@/components/common/add-to-list-dialog'
 import { BottomSheet } from '@/components/common/bottom-sheet'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Comments } from '@/components/common/comments'
-import { ArticleCover } from '@/components/common/article-cover'
 import { MetaItem } from '@/components/common/meta-item'
-import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
+import { ErrorState, LoadingSkeleton } from '@/components/common/state'
 
 // 详情页向访客开放（后端 GET /catalog/{id} 本就是公开接口）。
-// 需登录的能力（阅读、进度、关注）在组件内按 isAuthenticated 降级为登录引导。
+// v5：点开即正文——标题/作者/标签后直接渲染 Markdown 正文，不再跳 /reader。
 export const Route = createFileRoute('/catalog/$resourceId')({
   component: CatalogDetailPage,
 })
@@ -89,21 +83,12 @@ function CatalogDetailPage() {
   const { isAdmin, isAuthenticated, user } = useAuth()
 
   const { data, isLoading, isError, refetch } = useResource(id)
-  const progress = useReadingProgress(id, { enabled: isAuthenticated })
   const recordView = useRecordView()
   const updateMut = useUpdateResource()
   const deleteMut = useDeleteResource()
   const isMobile = useIsMobile()
 
-  // ref guard: avoid double recordView call under React StrictMode
-  // 访客不上报浏览记录（后端该接口需要登录）。
-  // 存的是「已上报过的资源 id」而不是布尔量：StrictMode 下 effect 会
-  // effect → cleanup → effect 跑两遍，cleanup 里把标志复位等于把守卫
-  // 抹掉、反而上报两次——正是这段注释想避免的事。
   const viewRecordedRef = useRef<number | null>(null)
-  // ref-stabilize the mutation so the effect deps stay [id, isAuthenticated]
-  // (the mutation object is recreated each render; depending on it directly
-  // would reset the guard and re-record on every render).
   const recordViewRef = useRef(recordView)
   useEffect(() => {
     if (!isAuthenticated || viewRecordedRef.current === id) return
@@ -114,11 +99,15 @@ function CatalogDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
-  // 作者认领：登录用户可对"无人认领"的存量文章发起认领（编辑部审批）
   const [claimOpen, setClaimOpen] = useState(false)
   const [claimNote, setClaimNote] = useState('')
   const claimStatus = useClaimStatus(id, isAuthenticated)
   const claimMut = useClaimResource()
+
+  // ManuscriptView 把 TOC 上提到这里，供右侧 sticky 侧栏渲染。
+  const [toc, setToc] = useState<TocEntry[]>([])
+  // 稿件加载失败（409 needs_docx / 404 无正文）时由 ManuscriptView 回调上来。
+  const [manuscriptError, setManuscriptError] = useState<unknown>(null)
 
   const onClaim = async () => {
     try {
@@ -151,99 +140,87 @@ function CatalogDetailPage() {
     }
   }
 
-  // P0：娱乐稿（content_category=fun/rant 或 content_track=essay）不参与学术
-  // 评分体系——荒诞指数、R 因子/分区、RQS、quality_grade 一律不渲染。
-  // 阅读量/收藏/评论等内容侧数据保留。
   const isScholarly = isScholarlyContent(data.content_category, data.content_track)
-  // P0 兜底：数据侧清脏数据前，展示层先过滤掉姓名含 bigbad 的条目。
+  const kind: ContentKind = contentTrackKind(data.content_category, data.content_track)
   const cleanAuthors = sanitizeAuthors(data.authors)
-  // 认领卡：当前登录用户本身就是作者时，不向他自己展示"认领本文"。
   const currentUsername = user?.username?.trim().toLowerCase() ?? ''
   const isAuthor =
     !!currentUsername &&
     cleanAuthors.some((a) => a.trim().toLowerCase() === currentUsername)
-  // owner 已绑定（state=claimed）时后端已把 claimable 置 false；这里再显式
-  // 挡一道 state，防止缓存旧响应把认领入口漏出来。
   const ownerBound = claimStatus.data?.state === 'claimed'
   const canClaim =
     isAuthenticated && !isAuthor && !ownerBound && claimStatus.data?.claimable === true
 
   return (
-    <div className={isMobile ? 'pb-40' : ''}>
+    <div className={isMobile ? 'pb-20' : ''}>
       <Link
         to="/catalog"
-        className="mb-4 inline-flex min-h-[36px] items-center text-sm text-muted-foreground hover:text-primary"
+        className="mb-3 inline-flex min-h-[36px] items-center text-sm text-muted-foreground hover:text-primary"
       >
         <ChevronLeft className="mr-1 h-4 w-4" />
         返回目录
       </Link>
 
-      {/* 专题封面：详情页只作为视觉锚点，不占首屏正文空间（移动端 16:7 压缩） */}
-      <div className="mb-5 overflow-hidden rounded-xl border">
-        <ArticleCover resource={data} showDiscipline={false} className="aspect-[16/7] sm:aspect-[16/5]" />
-      </div>
-
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            {/* 类型 chip：学术稿显示资源类型（论文/图书/…），娱乐稿直接显示赛道名。 */}
-            <Badge variant="secondary">
-              {displayTypeLabel(data.type, data.content_category, data.content_track)}
-            </Badge>
-            {/* 类别副标：娱乐稿的类型 chip 已写明，不再重复打"娱乐/吐槽"副标；
-                学术稿保留"学术研究"副标以区分于图书/数据集等资源类型。 */}
-            {isScholarly && data.content_category ? (
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25">
-                {contentCategoryLabel(data.content_category)}
+      <div className="flex items-start gap-8">
+        {/* 主体 */}
+        <div className="min-w-0 flex-1" id="article">
+          {/* 类型 chip + 标题 + 作者 */}
+          <div className="mb-5">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">
+                {displayTypeLabel(data.type, data.content_category, data.content_track)}
               </Badge>
-            ) : null}
-            {/* 风格光谱（荒诞指数）：仅学术稿展示；娱乐稿不参与学术评分体系。 */}
-            {isScholarly
-              ? (() => {
-                  const level = absurdityLevel(data.absurdity_index)
-                  return level ? (
-                    <Badge
-                      variant={level.variant}
-                      title={`风格光谱 ${data.absurdity_index} / 10 · ${level.description}`}
-                    >
-                      {level.label} {data.absurdity_index?.toFixed(1)}
-                    </Badge>
-                  ) : null
-                })()
-              : null}
-            {/* R 指数 + 学科分区：仅学术稿展示。 */}
-            {isScholarly &&
-            data.r_index != null &&
-            (data.reads ?? 0) + (data.downloads ?? 0) + (data.saves ?? 0) >= 3 ? (
-              <Badge variant="outline" className="tabular-nums">
-                R {data.r_index.toFixed(1)}
-                {data.quartile ? ` · ${data.quartile}` : ''}
-              </Badge>
-            ) : null}
-            {data.publication_status !== 'published' && (
-              <Badge variant="outline">{statusLabel(data.publication_status)}</Badge>
+              {isScholarly && data.content_category ? (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/25">
+                  {contentCategoryLabel(data.content_category)}
+                </Badge>
+              ) : null}
+              {isScholarly
+                ? (() => {
+                    const level = absurdityLevel(data.absurdity_index)
+                    return level ? (
+                      <Badge
+                        variant={level.variant}
+                        title={`风格光谱 ${data.absurdity_index} / 10 · ${level.description}`}
+                      >
+                        {level.label} {data.absurdity_index?.toFixed(1)}
+                      </Badge>
+                    ) : null
+                  })()
+                : null}
+              {isScholarly &&
+              data.r_index != null &&
+              (data.reads ?? 0) + (data.downloads ?? 0) + (data.saves ?? 0) >= 3 ? (
+                <Badge variant="outline" className="tabular-nums">
+                  R {data.r_index.toFixed(1)}
+                  {data.quartile ? ` · ${data.quartile}` : ''}
+                </Badge>
+              ) : null}
+              {data.publication_status !== 'published' && (
+                <Badge variant="outline">{statusLabel(data.publication_status)}</Badge>
+              )}
+            </div>
+            <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{data.title}</h1>
+            {cleanAuthors.length > 0 && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {cleanAuthors.join(', ')}
+              </p>
             )}
           </div>
-          {/* 手机上标题占三到四行会把摘要挤出首屏，降到 xl 后两行内可见 */}
-          <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{data.title}</h1>
-          {/* 作者行：过滤掉姓名含 bigbad 的脏数据；过滤后为空时不补"编辑部"等替代文案。 */}
-          {cleanAuthors.length > 0 && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {cleanAuthors.join(', ')}
-            </p>
-          )}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* 主体 */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* 认领入口：登录 + 文章未挂 owner + 当前用户不是作者本人时才显示。
-              未登录一律不显示；owner 已绑定（state=claimed）由后端硬校验，
-              前端这里只是不展示。 */}
+          {/* 四轨导语/摘要卡：论文=摘要，科普=导语，娱乐/吐槽=不渲染 */}
+          {(kind === 'paper' || kind === 'sci_pop') && data.abstract ? (
+            <AbstractCard
+              text={data.abstract}
+              collapsible={isMobile}
+              label={kind === 'sci_pop' ? '导语' : '摘要'}
+            />
+          ) : null}
+
+          {/* 认领卡 */}
           {canClaim && (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+            <Card className="mb-4 border-dashed">
+              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">这篇文章还没有挂到任何站内账号名下</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
@@ -258,8 +235,8 @@ function CatalogDetailPage() {
             </Card>
           )}
           {isAuthenticated && claimStatus.data?.mine && (
-            <Card className="border-primary/30 bg-primary/5">
-              <CardContent className="py-4">
+            <Card className="mb-4 border-primary/30 bg-primary/5">
+              <CardContent className="py-3">
                 <p className="text-sm">
                   你已提交认领申请（{claimStatus.data.mine.status === 'pending' ? '待编辑部审核' : claimStatus.data.mine.status === 'approved' ? '已批准' : '未通过'}）。
                 </p>
@@ -267,301 +244,231 @@ function CatalogDetailPage() {
             </Card>
           )}
 
-          <AbstractCard text={data.abstract} collapsible={isMobile} />
+          {/* 正文：ManuscriptView 内联渲染，window 原生滚动 */}
+          {manuscriptError ? (
+            <ScannedPdfFallback resourceId={id} hasFile={Boolean(data.has_file)} />
+          ) : (
+            <ManuscriptView
+              resourceId={id}
+              initialPercent={0}
+              onProgress={() => {}}
+              useWindowScroll
+              hideTocNav
+              onTocReady={setToc}
+              onFatalError={setManuscriptError}
+            />
+          )}
 
-          <CitationCard resource={data} />
-
-          <FoldCard title="元数据" defaultOpen={!isMobile}>
-            <CardContent>
-              <MetaItem label="年份" value={String(data.year)} />
-              <MetaItem label="出版物" value={data.venue} />
-              <MetaItem label="学科" value={data.discipline} />
-              <MetaItem label="子学科" value={data.subdiscipline} />
-              <MetaItem label="DOI" value={data.doi} />
-              <MetaItem
-                label="卷/期/页"
-                value={
-                  [data.volume, data.issue, data.pages]
-                    .filter(Boolean)
-                    .join(' / ') || null
-                }
-              />
-              <MetaItem label="语言" value={languageLabel(data.language)} />
-              {data.keywords && data.keywords.length > 0 && (
-                <MetaItem label="关键词" value={data.keywords.join('；')} />
-              )}
-              <MetaItem label="ISSN" value={data.issn} />
-              <MetaItem label="ISBN" value={data.isbn} />
-            </CardContent>
-          </FoldCard>
-
-          {/* 评审信息：RQS v4.0 七维明细。仅学术稿展示——娱乐稿不参与学术评分体系，
-              即使后端历史数据带了 quality_grade / quality_breakdown 也不渲染。 */}
-          {isScholarly && (
-          <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
-            <CardContent>
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                {(() => {
-                  const grade = qualityGrade(data.quality_grade)
-                  if (!grade) {
-                    return <span className="text-sm text-muted-foreground">尚未评分</span>
-                  }
-                  return (
-                    <>
-                      <Badge variant="outline" className={grade.className}>
-                        {grade.label}
+          {/* 文末折叠区 */}
+          <div className="mt-8 space-y-4">
+            {data.tags.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">标签</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {data.tags.map((t) => (
+                      <Badge key={t} variant="outline">
+                        {t}
                       </Badge>
-                      <span className="font-serif text-2xl font-semibold tabular-nums">
-                        {data.quality_score?.toFixed(1)}
-                        <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span>
-                      </span>
-                    </>
-                  )
-                })()}
-              </div>
-              {/* 编辑部评语存于 quality_breakdown.comment（与七维分数同源），
-                  ResourceResponse 没有独立的 quality_comment 字段，直接从 breakdown 取 */}
-              {(() => {
-                const comment = (data.quality_breakdown as Record<string, unknown> | null)?.comment
-                return typeof comment === 'string' && comment.trim() ? (
-                  <div className="mt-3 rounded-md border bg-muted/40 p-3">
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">编辑部评价</p>
-                    <p className="text-sm leading-relaxed">{comment}</p>
+                    ))}
                   </div>
-                ) : null
-              })()}
-              {data.quality_breakdown && (
-                <div className="mt-3 space-y-1.5">
-                  {Object.entries(data.quality_breakdown)
-                    .filter(([key]) => key !== 'comment')
-                    .map(([key, dim]) => (
-                    <div key={key} className="flex items-center gap-2 text-xs">
-                      <span className="w-24 shrink-0 text-muted-foreground">{dim.label}</span>
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary/70"
-                          style={{ width: `${Math.min(100, (dim.score / Math.max(dim.max, 1)) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="w-14 shrink-0 text-right tabular-nums text-muted-foreground">
-                        {dim.score} / {dim.max}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                评分为七维加权（问题价值 / 论证链 / 方法透明度 / 证据强度 / 创新与定位 /
-                学术诚信 / 表达清晰度，按稿件类型另有分档权重，学术诚信 0 分一票否决）；
-                口径冻结在评分规范 v3.0，不随月份变化。
-              </p>
-            </CardContent>
-          </FoldCard>
-          )}
+                </CardContent>
+              </Card>
+            )}
 
-          <FoldCard title="阅读与影响" defaultOpen={false}>
-            <CardContent>
-              {/* R 指数 / 学科分区 / 荒诞指数均为学术评分体系指标，娱乐稿不展示；
-                  阅读量/下载/收藏是内容侧数据，保留。 */}
-              {isScholarly && (
-                <>
-                  <MetaItem label="R 指数" value={data.r_index != null ? String(data.r_index) : '—'} />
+            {/* 论文轨：文章信息 + 关键词 + CLC */}
+            {kind === 'paper' && (
+              <FoldCard title="文章信息" defaultOpen={!isMobile}>
+                <CardContent>
+                  <MetaItem label="年份" value={String(data.year)} />
+                  <MetaItem label="出版物" value={data.venue} />
+                  <MetaItem label="学科" value={data.discipline} />
+                  <MetaItem label="子学科" value={data.subdiscipline} />
+                  <MetaItem label="DOI" value={data.doi} />
                   <MetaItem
-                    label="学科分区"
-                    value={data.quartile ?? '样本不足'}
+                    label="卷/期/页"
+                    value={
+                      [data.volume, data.issue, data.pages]
+                        .filter(Boolean)
+                        .join(' / ') || null
+                    }
                   />
-                </>
-              )}
-              <MetaItem label="阅读次数" value={String(data.reads ?? 0)} />
-              <MetaItem label="下载次数" value={String(data.downloads ?? 0)} />
-              <MetaItem label="收藏次数" value={String(data.saves ?? 0)} />
-              {isScholarly && (
-                <MetaItem
-                  label="荒诞指数"
-                  value={
-                    data.absurdity_index != null
-                      ? `${data.absurdity_index.toFixed(1)} / 10 · ${absurdityLevel(data.absurdity_index)?.description ?? ''}`
-                      : '未评定'
-                  }
-                />
-              )}
-              {isScholarly && (
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  R 指数与荒诞指数均为本刊自设计指标：前者衡量站内注意力，
-                  后者由编辑部评定内容气质；口径属编辑部内部标准，不等同于影响因子。
-                </p>
-              )}
-            </CardContent>
-          </FoldCard>
+                  <MetaItem label="语言" value={languageLabel(data.language)} />
+                  {data.keywords && data.keywords.length > 0 && (
+                    <MetaItem label="关键词" value={data.keywords.join('；')} />
+                  )}
+                  {data.clc_code && (
+                    <MetaItem label="中图分类号" value={`${data.clc_code}${data.clc_label ? ` · ${data.clc_label}` : ''}`} />
+                  )}
+                  <MetaItem label="ISSN" value={data.issn} />
+                  <MetaItem label="ISBN" value={data.isbn} />
+                </CardContent>
+              </FoldCard>
+            )}
 
-          {data.tags.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">标签</CardTitle>
-              </CardHeader>
+            {/* 论文轨：评审信息 RQS */}
+            {kind === 'paper' && (
+              <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
+                <CardContent>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    {(() => {
+                      const grade = qualityGrade(data.quality_grade)
+                      if (!grade) {
+                        return <span className="text-sm text-muted-foreground">尚未评分</span>
+                      }
+                      return (
+                        <>
+                          <Badge variant="outline" className={grade.className}>
+                            {grade.label}
+                          </Badge>
+                          <span className="font-serif text-2xl font-semibold tabular-nums">
+                            {data.quality_score?.toFixed(1)}
+                            <span className="ml-1 text-sm font-normal text-muted-foreground">/ 100</span>
+                          </span>
+                        </>
+                      )
+                    })()}
+                  </div>
+                  {(() => {
+                    const comment = (data.quality_breakdown as Record<string, unknown> | null)?.comment
+                    return typeof comment === 'string' && comment.trim() ? (
+                      <div className="mt-3 rounded-md border bg-muted/40 p-3">
+                        <p className="mb-1 text-xs font-medium text-muted-foreground">编辑部评价</p>
+                        <p className="text-sm leading-relaxed">{comment}</p>
+                      </div>
+                    ) : null
+                  })()}
+                  {data.quality_breakdown && (
+                    <div className="mt-3 space-y-1.5">
+                      {Object.entries(data.quality_breakdown)
+                        .filter(([key]) => key !== 'comment')
+                        .map(([key, dim]) => (
+                          <div key={key} className="flex items-center gap-2 text-xs">
+                            <span className="w-24 shrink-0 text-muted-foreground">{dim.label}</span>
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-primary/70"
+                                style={{ width: `${Math.min(100, (dim.score / Math.max(dim.max, 1)) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="w-14 shrink-0 text-right tabular-nums text-muted-foreground">
+                              {dim.score} / {dim.max}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                    评分为七维加权（问题价值 / 论证链 / 方法透明度 / 证据强度 / 创新与定位 /
+                    学术诚信 / 表达清晰度，按稿件类型另有分档权重，学术诚信 0 分一票否决）。
+                  </p>
+                </CardContent>
+              </FoldCard>
+            )}
+
+            <FoldCard title="阅读与影响" defaultOpen={false}>
               <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {data.tags.map((t) => (
-                    <Badge key={t} variant="outline">
-                      {t}
-                    </Badge>
-                  ))}
-                </div>
+                {kind === 'paper' && (
+                  <>
+                    <MetaItem label="R 指数" value={data.r_index != null ? String(data.r_index) : '—'} />
+                    <MetaItem label="学科分区" value={data.quartile ?? '样本不足'} />
+                  </>
+                )}
+                <MetaItem label="阅读次数" value={String(data.reads ?? 0)} />
+                <MetaItem label="下载次数" value={String(data.downloads ?? 0)} />
+                <MetaItem label="收藏次数" value={String(data.saves ?? 0)} />
+                {kind === 'paper' && (
+                  <MetaItem
+                    label="荒诞指数"
+                    value={
+                      data.absurdity_index != null
+                        ? `${data.absurdity_index.toFixed(1)} / 10 · ${absurdityLevel(data.absurdity_index)?.description ?? ''}`
+                        : '未评定'
+                    }
+                  />
+                )}
               </CardContent>
-            </Card>
-          )}
+            </FoldCard>
 
-          {data.preview && data.preview.trim() !== data.abstract.trim() && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">预览</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-7 whitespace-pre-wrap text-muted-foreground">
-                  {data.preview}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          <RelatedResources resourceId={id} discipline={data.discipline} />
-
-          <Comments resourceId={id} />
+            <RelatedResources resourceId={id} discipline={data.discipline} />
+            <Comments resourceId={id} />
+          </div>
         </div>
 
-        {/* 右侧操作区（移动端隐藏：操作移入底部固定操作栏） */}
-        <div className="space-y-4">
-          {!isMobile && (
+        {/* 右侧 sticky 侧栏：≥1280px（xl）才渲染 */}
+        <aside className="sticky top-24 hidden w-72 shrink-0 self-start space-y-4 xl:block">
+          {toc.length > 2 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">操作</CardTitle>
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <ListTree className="h-4 w-4" />
+                  目录
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="max-h-[55vh] space-y-0.5 overflow-y-auto border-l border-border">
+                  {toc.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        onClick={() => {
+                          const el = document.getElementById(t.id)
+                          if (el) {
+                            const top = el.getBoundingClientRect().top + window.scrollY - 88
+                            window.scrollTo({ top, behavior: 'smooth' })
+                          }
+                        }}
+                        className={
+                          'block w-full truncate rounded px-2 py-1 text-left text-xs transition-colors hover:bg-muted hover:text-primary ' +
+                          (t.level === 3 ? 'pl-5 text-muted-foreground' : 'font-medium')
+                        }
+                        title={t.text}
+                      >
+                        {t.text}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {data.has_file && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">下载</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button asChild className="w-full">
-                  <Link
-                    to="/reader/$resourceId"
-                    params={{ resourceId: String(id) }}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    在线阅读
-                  </Link>
+                <Button asChild variant="outline" size="sm" className="w-full">
+                  <a href={`/api/catalog/${id}/export?format=docx`} download>
+                    <FileDown className="h-4 w-4" />
+                    Word 文档（.docx）
+                  </a>
                 </Button>
-                {data.has_file && (
-                  <Button asChild variant="outline" className="w-full">
-                    <a href={`/api/catalog/${id}/file`} download>
-                      <Download className="h-4 w-4" />
-                      原稿文件
+                {kind === 'paper' && (
+                  <Button asChild variant="outline" size="sm" className="w-full">
+                    <a href={`/api/catalog/${id}/export?format=pdf`} download>
+                      <FileDown className="h-4 w-4" />
+                      规范化 PDF
                     </a>
                   </Button>
-                )}
-                {data.has_file && (
-                  <>
-                    <Button asChild variant="outline" className="w-full">
-                      <a href={`/api/catalog/${id}/export?format=pdf`} download>
-                        <Download className="h-4 w-4" />
-                        规范化 PDF
-                      </a>
-                    </Button>
-                    <Button asChild variant="outline" className="w-full">
-                      <a href={`/api/catalog/${id}/export?format=docx`} download>
-                        <Download className="h-4 w-4" />
-                        Word 文档
-                      </a>
-                    </Button>
-                  </>
-                )}
-                {isAuthenticated ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setListOpen(true)}
-                    >
-                      <Bookmark className="h-4 w-4" />
-                      加入阅读列表
-                    </Button>
-                  </>
-                ) : (
-                  <p className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                    游客模式：可阅读与下载全部已刊内容，进度保存在本设备。
-                    <Link to="/login" search={{ redirect: `/catalog/${id}` }} className="text-primary hover:underline">
-                      登录
-                    </Link>
-                    后可收藏、跨设备同步并参与评论。
-                  </p>
-                )}
-                {data.external_url && (
-                  <Button asChild variant="outline" className="w-full">
-                    <a
-                      // H1：作者可控外链走协议白名单，javascript: 等一律降级。
-                      href={safeHref(data.external_url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={
-                        isSafeExternalUrl(data.external_url)
-                          ? data.external_url
-                          : '该链接协议不安全，已禁用'
-                      }
-                      aria-disabled={!isSafeExternalUrl(data.external_url)}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      外部链接
-                    </a>
-                  </Button>
-                )}
-                {isAdmin && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="w-full text-muted-foreground">
-                        <MoreVertical className="h-4 w-4" />
-                        管理此条
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                        <Pencil className="h-4 w-4" />
-                        编辑题录
-                      </DropdownMenuItem>
-                      {data.publication_status === 'draft' && (
-                        <DropdownMenuItem
-                          disabled={updateMut.isPending}
-                          onClick={() => {
-                            // 刊前整理完成 → 刊出（可逆：改回 draft 即可撤回）
-                            updateMut.mutate(
-                              { id, body: { publication_status: 'published' } },
-                              {
-                                onSuccess: () =>
-                                  toast.success('已刊出：该条目现已进入公开目录'),
-                                onError: () => toast.error('刊出失败，请稍后再试'),
-                              },
-                            )
-                          }}
-                        >
-                          <Send className="h-4 w-4" />
-                          刊出（进入公开目录）
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => setDeleteOpen(true)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        删除资源
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
                 )}
               </CardContent>
             </Card>
           )}
 
-          <FoldCard title="引用与分享" defaultOpen={!isMobile}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">引用</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-2">
               <p className="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                 {cleanAuthors.length > 0 ? cleanAuthors.join('，') : data.authors.join('，')}：{data.title}[Z]．Rubbish，{data.year}．
               </p>
               <Button
                 variant="outline"
+                size="sm"
                 className="w-full"
                 onClick={async () => {
                   const cite = `${cleanAuthors.length > 0 ? cleanAuthors.join('，') : data.authors.join('，')}：${data.title}[Z]．Rubbish，${data.year}．`
@@ -573,95 +480,98 @@ function CatalogDetailPage() {
                   }
                 }}
               >
-                <Quote className="h-4 w-4" />
+                <Quote className="h-3.5 w-3.5" />
                 复制引用格式
               </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(window.location.href)
-                    toast.success('链接已复制')
-                  } catch {
-                    toast.error('复制失败')
-                  }
-                }}
-              >
-                <Share2 className="h-4 w-4" />
-                复制分享链接
-              </Button>
-              {/* 引用文件导出：复用公开 /api/export（BibTeX / RIS），
-                  供 Zotero / EndNote / Mendeley 直接导入 */}
               <div className="grid grid-cols-2 gap-2">
                 <Button asChild variant="ghost" size="sm">
                   <a href={`/api/export?ids=${id}&format=bibtex`} download>
-                    <FileDown className="h-3.5 w-3.5" />
                     BibTeX
                   </a>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
                   <a href={`/api/export?ids=${id}&format=ris`} download>
-                    <FileDown className="h-3.5 w-3.5" />
                     RIS
                   </a>
                 </Button>
               </div>
             </CardContent>
-          </FoldCard>
+          </Card>
 
-          {isAuthenticated && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">阅读进度</CardTitle>
+              <CardTitle className="text-sm">文章信息</CardTitle>
             </CardHeader>
-            <CardContent>
-              {progress.isLoading ? (
-                <LoadingSkeleton rows={6} />
-              ) : progress.data ? (
-                <div className="space-y-1.5 text-sm">
-                  <MetaItem
-                    label="页码"
-                    value={progress.data.page ? String(progress.data.page) : '—'}
-                  />
-                  <MetaItem
-                    label="进度"
-                    value={
-                      progress.data.progress_percent != null
-                        ? `${progress.data.progress_percent}%`
-                        : '—'
-                    }
-                  />
-                  <MetaItem
-                    label="总时长"
-                    value={`${Math.round(progress.data.duration_sec / 60)} 分钟`}
-                  />
-                  <MetaItem
-                    label="访问次数"
-                    value={String(progress.data.visit_count)}
-                  />
-                  <MetaItem
-                    label="最近阅读"
-                    value={formatDateTime(progress.data.last_read_at)}
-                  />
-                  {progress.data.completed && (
-                    <Badge variant="secondary">已完成</Badge>
-                  )}
-                </div>
-              ) : (
-                <EmptyState title="暂无阅读记录" />
-              )}
+            <CardContent className="space-y-1.5 text-xs">
+              <MetaItem label="卷期" value={[data.volume, data.issue].filter(Boolean).join(' / ') || '—'} />
+              <MetaItem label="页码" value={data.pages || '—'} />
+              <MetaItem label="DOI" value={data.doi || '—'} />
+              <MetaItem label="年份" value={String(data.year)} />
+              <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                本文以 CC BY-NC 4.0 许可发布；转载需注明出处并保持非商业用途。
+              </p>
             </CardContent>
           </Card>
+
+          {isAuthenticated ? (
+            <Button variant="outline" size="sm" className="w-full" onClick={() => setListOpen(true)}>
+              <Bookmark className="h-3.5 w-3.5" />
+              加入阅读列表
+            </Button>
+          ) : (
+            <p className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              游客模式：可阅读与下载全部已刊内容。
+              <Link to="/login" search={{ redirect: `/catalog/${id}` }} className="text-primary hover:underline">
+                登录
+              </Link>
+              后可收藏并参与评论。
+            </p>
           )}
 
-          <FollowCard
-            authorName={cleanAuthors[0] ?? ''}
-            discipline={data.discipline}
-          />
-        </div>
+          {isAdmin && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+                  <MoreVertical className="h-4 w-4" />
+                  管理此条
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                  <Pencil className="h-4 w-4" />
+                  编辑题录
+                </DropdownMenuItem>
+                {data.publication_status === 'draft' && (
+                  <DropdownMenuItem
+                    disabled={updateMut.isPending}
+                    onClick={() => {
+                      updateMut.mutate(
+                        { id, body: { publication_status: 'published' } },
+                        {
+                          onSuccess: () => toast.success('已刊出'),
+                          onError: () => toast.error('刊出失败'),
+                        },
+                      )
+                    }}
+                  >
+                    <Send className="h-4 w-4" />
+                    刊出
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  删除资源
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </aside>
       </div>
 
+      {/* 移动端底部浮动条：下载 / 收藏 / 更多，高 ≤56px */}
       {isMobile && (
         <MobileDetailActions
           resourceId={id}
@@ -670,6 +580,7 @@ function CatalogDetailPage() {
           externalUrl={data.external_url}
           onEdit={() => setEditOpen(true)}
           onDelete={() => setDeleteOpen(true)}
+          onSave={() => setListOpen(true)}
         />
       )}
 
@@ -704,7 +615,6 @@ function CatalogDetailPage() {
         onConfirm={onDelete}
       />
 
-      {/* 认领申请弹窗：说明选填，编辑部审批后文章挂到名下 */}
       <Dialog open={claimOpen} onOpenChange={setClaimOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -738,7 +648,29 @@ function CatalogDetailPage() {
   )
 }
 
-// 编辑表单字段精简：title/authors/year/discipline/abstract/tags/preview
+// 扫描版 PDF 兜底卡：manuscript 409/needs_docx 时显示，禁止 pdf.js 回退。
+function ScannedPdfFallback({ resourceId, hasFile }: { resourceId: number; hasFile: boolean }) {
+  return (
+    <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+      <CardContent className="py-6 text-center">
+        <p className="text-sm font-medium">本文原件为扫描版 PDF</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          暂不支持在线阅读，可下载原件或等编辑部补 Word 版。
+        </p>
+        {hasFile && (
+          <Button asChild variant="outline" size="sm" className="mt-3">
+            <a href={`/api/catalog/${resourceId}/file`} download>
+              <Download className="h-4 w-4" />
+              下载原件
+            </a>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// 编辑表单字段精简
 interface EditFormState {
   title: string
   authors: string
@@ -922,132 +854,22 @@ function EditDialog({
   )
 }
 
-// 关注作者 + 订阅学科操作卡片。
-// 仅在已登录时显示；未登录时整张卡片不渲染（路由层已挡，这里是双保险）。
-function FollowCard({
-  authorName,
-  discipline,
-}: {
-  authorName: string
-  discipline: string
-}) {
-  const { isAuthenticated } = useAuth()
-  if (!isAuthenticated || !authorName) return null
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">关注</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <FollowAuthorRow authorName={authorName} />
-        {discipline && <SubscribeDisciplineRow discipline={discipline} />}
-      </CardContent>
-    </Card>
-  )
-}
-
-function FollowAuthorRow({ authorName }: { authorName: string }) {
-  const { data } = useAuthorFollowStatus(authorName)
-  const followMut = useFollowAuthor()
-  const unfollowMut = useUnfollowAuthor()
-  const following = data?.following ?? false
-  const followersCount = data?.followers_count ?? 0
-
-  const onToggle = async () => {
-    const mut = following ? unfollowMut : followMut
-    try {
-      await mut.mutateAsync(authorName)
-      toast.success(following ? `已取消关注 ${authorName}` : `已关注 ${authorName}`)
-    } catch (err) {
-      toast.error(extractError(err, '操作失败'))
-    }
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="min-w-0">
-          <span className="text-muted-foreground">作者</span>
-          <p className="truncate font-medium">{authorName}</p>
-        </span>
-        <Button
-          variant={following ? 'outline' : 'default'}
-          size="sm"
-          onClick={onToggle}
-          disabled={followMut.isPending || unfollowMut.isPending}
-        >
-          <Heart className={following ? 'h-4 w-4 fill-current' : 'h-4 w-4'} />
-          {following ? '已关注' : '关注'}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {followersCount} 人关注
-      </p>
-    </div>
-  )
-}
-
-function SubscribeDisciplineRow({ discipline }: { discipline: string }) {
-  const { data } = useDisciplineSubscriptionStatus(discipline)
-  const subMut = useSubscribeDiscipline()
-  const unsubMut = useUnsubscribeDiscipline()
-  const subscribed = data?.subscribed ?? false
-  const subscribersCount = data?.subscribers_count ?? 0
-
-  const onToggle = async () => {
-    const mut = subscribed ? unsubMut : subMut
-    try {
-      await mut.mutateAsync(discipline)
-      toast.success(
-        subscribed ? `已取消订阅 ${discipline}` : `已订阅 ${discipline}`,
-      )
-    } catch (err) {
-      toast.error(extractError(err, '操作失败'))
-    }
-  }
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="min-w-0">
-          <span className="text-muted-foreground">学科</span>
-          <p className="truncate font-medium">{discipline}</p>
-        </span>
-        <Button
-          variant={subscribed ? 'outline' : 'default'}
-          size="sm"
-          onClick={onToggle}
-          disabled={subMut.isPending || unsubMut.isPending}
-        >
-          <Bookmark className={subscribed ? 'h-4 w-4 fill-current' : 'h-4 w-4'} />
-          {subscribed ? '已订阅' : '订阅'}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {subscribersCount} 人订阅
-      </p>
-    </div>
-  )
-}
-
-// 摘要卡：桌面端完整铺开；移动端超过 5 行先截断，点「展开全文」再看。
-// 详情页真正的正文在阅读器里，首屏只需要让人判断「要不要点进去」。
-function AbstractCard({ text, collapsible }: { text: string; collapsible: boolean }) {
-  const [open, setOpen] = useState(false)
+// 摘要卡：可折叠，默认展开；科普轨标题写"导语"，论文轨写"摘要"。
+function AbstractCard({ text, collapsible, label = '摘要' }: { text: string; collapsible: boolean; label?: string }) {
+  const [open, setOpen] = useState(true)
   const [overflowing, setOverflowing] = useState(false)
   const ref = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
-    if (!collapsible) return
-    const el = ref.current
-    if (!el) return
-    setOverflowing(el.scrollHeight > el.clientHeight + 4)
-  }, [collapsible, text])
+    if (ref.current) {
+      setOverflowing(ref.current.scrollHeight > ref.current.clientHeight + 4)
+    }
+  }, [text])
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">摘要</CardTitle>
+    <Card className="mb-4">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">{label}</CardTitle>
       </CardHeader>
       <CardContent>
         <p
@@ -1059,7 +881,7 @@ function AbstractCard({ text, collapsible }: { text: string; collapsible: boolea
         >
           {text}
         </p>
-        {collapsible && (overflowing || open) && (
+        {collapsible && (overflowing || !open) && (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -1073,9 +895,7 @@ function AbstractCard({ text, collapsible }: { text: string; collapsible: boolea
   )
 }
 
-// 可折叠信息卡：桌面端默认展开（信息完整），移动端默认收起（把首屏
-// 让给摘要与正文）。用原生 <details> 而非 Radix Collapsible——不需要
-// 额外依赖、键盘与读屏行为天然正确，也避免再引入一个受控状态。
+// 可折叠信息卡
 function FoldCard({
   title,
   defaultOpen = true,
@@ -1096,12 +916,7 @@ function FoldCard({
   )
 }
 
-// 移动端底部固定操作栏：在线阅读（主操作）+ 下载 + 更多。
-// 仅移动端渲染；桌面端沿用右侧"操作"卡片，互不复用。
-//
-// 为什么「更多」用底部抽屉而不是 DropdownMenu：触发器贴在屏幕下沿，
-// Radix 计算出的可用高度只有 ~10px，点开等于什么都不显示。抽屉从底部
-// 整宽展开，天然避开了这个定位问题。
+// 移动端底部固定操作栏：下载 / 收藏 / 更多，高 ≤56px。
 function MobileDetailActions({
   resourceId,
   isAdmin,
@@ -1109,6 +924,7 @@ function MobileDetailActions({
   externalUrl,
   onEdit,
   onDelete,
+  onSave,
 }: {
   resourceId: number
   isAdmin: boolean
@@ -1116,35 +932,39 @@ function MobileDetailActions({
   externalUrl?: string | null
   onEdit: () => void
   onDelete: () => void
+  onSave: () => void
 }) {
   const [moreOpen, setMoreOpen] = useState(false)
   return (
     <>
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-40 flex items-center gap-2 border-t bg-background/95 p-3 backdrop-blur">
-        <Button asChild className="flex-1">
-          <Link
-            to="/reader/$resourceId"
-            params={{ resourceId: String(resourceId) }}
-          >
-            <BookOpen className="h-4 w-4" />
-            在线阅读
-          </Link>
-        </Button>
+      <div className="fixed inset-x-0 bottom-0 z-40 flex h-14 items-center gap-2 border-t bg-background/95 px-3 backdrop-blur">
         {hasFile && (
-          <Button asChild variant="outline" className="shrink-0 gap-1 px-3">
-            <a href={`/api/catalog/${resourceId}/file`} download aria-label="下载 PDF">
-              <Download className="h-4 w-4" />
+          <Button asChild variant="ghost" size="sm" className="flex-1 gap-1">
+            <a href={`/api/catalog/${resourceId}/export?format=docx`} download aria-label="下载 Word">
+              <FileDown className="h-4 w-4" />
               下载
             </a>
           </Button>
         )}
         <Button
-          variant="outline"
-          size="icon"
+          variant="ghost"
+          size="sm"
+          className="flex-1 gap-1"
+          onClick={onSave}
+          aria-label="收藏"
+        >
+          <Bookmark className="h-4 w-4" />
+          收藏
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="flex-1 gap-1"
           aria-label="更多操作"
           onClick={() => setMoreOpen(true)}
         >
-          <MoreVertical className="h-5 w-5" />
+          <MoreVertical className="h-4 w-4" />
+          更多
         </Button>
       </div>
 
@@ -1168,17 +988,10 @@ function MobileDetailActions({
           </button>
           {externalUrl && (
             <a
-              // H1：作者可控外链走协议白名单，javascript: 等一律降级。
               href={safeHref(externalUrl)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setMoreOpen(false)}
-              title={
-                isSafeExternalUrl(externalUrl)
-                  ? externalUrl
-                  : '该链接协议不安全，已禁用'
-              }
-              aria-disabled={!isSafeExternalUrl(externalUrl)}
               className="flex min-h-[48px] items-center gap-3 rounded-md px-2 text-left text-sm hover:bg-accent"
             >
               <ExternalLink className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -1217,9 +1030,7 @@ function MobileDetailActions({
   )
 }
 
-
-// 相关文章：同类型的高相关条目（优先同学科），帮助读者从"一篇"到"一批"。
-// 用公开目录接口，取 4 条、排除自身；无结果时整块不渲染（不留空壳）。
+// 相关文章
 function RelatedResources({
   resourceId,
   discipline,
@@ -1262,7 +1073,6 @@ function RelatedResources({
                   <>
                     {clean.slice(0, 2).join('、')}
                     {clean.length > 2 ? ' 等' : ''} · {r.year}
-                    {isScholarlyContent(r.content_category, r.content_track) && r.absurdity_index != null && r.absurdity_index >= 7.5 ? ' · 离谱' : ''}
                   </>
                 )
               })()}
@@ -1271,75 +1081,5 @@ function RelatedResources({
         ))}
       </CardContent>
     </Card>
-  )
-}
-
-/**
- * 「引用本文」卡：GB/T 7714-2015 顺序编码制 + BibTeX 双格式一键复制。
- * 为什么放详情页顶部而不是藏在导出菜单：引用是读者拿到一篇论文后的
- * 第一个动作（写综述、挂参考文献），藏在下拉里等于没有。
- */
-function CitationCard({ resource }: { resource: ResourceResponse }) {
-  const safeAuthors = sanitizeAuthors(resource.authors)
-  const firstAuthor = safeAuthors[0] ?? '佚名'
-  const authorPart =
-    safeAuthors.length > 3
-      ? `${firstAuthor}, 等`
-      : safeAuthors.join(', ')
-  const pagesPart = resource.pages ? `: ${resource.pages}` : ''
-  const venuePart = resource.venue || 'Rubbish'
-  const gbt7714 =
-    `${authorPart}. ${resource.title}[J]. ${venuePart}, ${resource.year}` +
-    `${resource.volume ? `, ${resource.volume}` : ''}${resource.issue ? `(${resource.issue})` : ''}${pagesPart}.`
-  const bibtex = [
-    `@article{rubbish${resource.id}${resource.year},`,
-    `  title  = {${resource.title}},`,
-    `  author = {${safeAuthors.join(' and ')}},`,
-    `  journal= {${venuePart}},`,
-    `  year   = {${resource.year}},`,
-    resource.volume ? `  volume = {${resource.volume}},` : null,
-    resource.issue ? `  number = {${resource.issue}},` : null,
-    resource.pages ? `  pages  = {${resource.pages}},` : null,
-    resource.doi ? `  doi    = {${resource.doi}},` : null,
-    `}`,
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-  const [copied, setCopied] = useState<'gbt' | 'bib' | null>(null)
-  const copy = async (kind: 'gbt' | 'bib') => {
-    const text = kind === 'gbt' ? gbt7714 : bibtex
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopied(kind)
-      toast.success(kind === 'gbt' ? '已复制 GB/T 7714 引用' : '已复制 BibTeX')
-      window.setTimeout(() => setCopied(null), 1600)
-    } catch {
-      toast.error('复制失败，请手动选择文本')
-    }
-  }
-
-  return (
-    <FoldCard title="引用本文" defaultOpen={false}>
-      <CardContent className="space-y-3">
-        <div>
-          <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-            GB/T 7714-2015（顺序编码制）
-          </p>
-          <div className="rounded-md border bg-muted/40 px-3 py-2 font-serif text-[13px] leading-relaxed">
-            {gbt7714}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => copy('gbt')}>
-            <Quote className="h-3.5 w-3.5" />
-            {copied === 'gbt' ? '已复制' : '复制 GB/T 7714'}
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => copy('bib')}>
-            {copied === 'bib' ? '已复制 BibTeX' : '复制 BibTeX'}
-          </Button>
-        </div>
-      </CardContent>
-    </FoldCard>
   )
 }

@@ -188,3 +188,33 @@ export function displayTypeLabel(
   return typeLabel(type)
 }
 
+// ---------------------------------------------------------------------------
+// 四轨呈现（v3 规范表）：决定详情页渲染哪些块。
+// - paper    学术论文：摘要/关键词/CLC/参考文献/四项声明/评分/DOI 全有
+// - sci_pop  科普：导语 + 正文 + 延伸阅读；无摘要/关键词/CLC/评分/DOI
+// - fun      娱乐：正文 + 标签 + 可选参考资料；无学术块
+// - rant     吐槽：正文 + 标签；无学术块
+// - plain    未知：只渲染正文，不渲染任何学术块（兜底）
+//
+// 判定以 content_category 为准（后续会批量改分类）；content_track 仅作
+// essay 兜底。后续新增科普类值（science/science_pop/popular/科普）在此加。
+// ---------------------------------------------------------------------------
+export type ContentKind = 'paper' | 'sci_pop' | 'fun' | 'rant' | 'plain'
+
+export function contentTrackKind(
+  contentCategory: string | null | undefined,
+  contentTrack?: string | null,
+): ContentKind {
+  const cat = (contentCategory ?? '').toLowerCase()
+  if (cat === 'fun') return 'fun'
+  if (cat === 'rant') return 'rant'
+  if (cat === 'science' || cat === 'science_pop' || cat === 'popular' || cat === 'scipop' || cat === '科普') {
+    return 'sci_pop'
+  }
+  if (cat === 'academic' || cat === 'paper') return 'paper'
+  // content_track=essay 但 category 不是 fun/rant：归 plain（只渲染正文）
+  if (contentTrack === 'essay') return 'plain'
+  // 缺省：保守按 paper 处理（本刊默认是学术刊）
+  return 'paper'
+}
+

@@ -158,8 +158,9 @@ function ContinueReadingCard() {
         {items.map((h) => (
           <Link
             key={h.resource_id}
-            to="/reader/$resourceId"
+            to="/catalog/$resourceId"
             params={{ resourceId: String(h.resource_id) }}
+            hash="article"
             className="block rounded-lg border bg-card px-3 py-2 transition-colors hover:border-primary/40"
           >
             <p className="line-clamp-1 text-sm font-medium">{h.title}</p>

@@ -220,6 +220,9 @@ export interface ResourceResponse extends ResourceBase {
   quartile?: string | null
   /** 荒诞指数：编辑部评定（0–10），未评定为 null */
   absurdity_index?: number | null
+  /** 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」 */
+  clc_code?: string | null
+  clc_label?: string | null
 }
 
 export interface JournalMetrics {
