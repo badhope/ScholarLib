@@ -281,6 +281,11 @@ class AuthorClaim(Base, TenantScopedMixin):
     # 认领说明（申请人填写，如"我是本文作者"）。
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    # P1：申请人认领的作者位（1-based，对应 authors_detail 顺序）。
+    author_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # 认领证据类型：email / orcid / manuscript_id；evidence_value 为证据值。
+    evidence_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    evidence_value: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # 编辑部决定说明（批准/拒绝理由，通知里带给申请人）。
     decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_by: Mapped[int | None] = mapped_column(

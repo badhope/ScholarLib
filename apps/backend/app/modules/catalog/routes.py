@@ -13,7 +13,7 @@ import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 from uuid import UUID
 
@@ -1606,6 +1606,10 @@ async def delete_resource(
 
 class ClaimCreate(BaseModel):
     note: str | None = None
+    # P1：申请人认领的作者位（1-based）与认领证据。
+    author_position: int | None = None
+    evidence_type: Literal["email", "orcid", "manuscript_id"] | None = None
+    evidence_value: str | None = None
 
 
 async def _notify_editors(
@@ -1663,10 +1667,15 @@ async def _resource_claim_state(
     """
     # 已绑定作者：以 owner_id 为准（这是新的唯一权威归属）。
     if resource.owner_id is not None:
-        owner = (
+        owner_name = (
             await db.execute(select(User.username).where(User.id == resource.owner_id))
         ).scalar_one_or_none()
-        return {"claimable": False, "state": "claimed", "claimer": owner}
+        owner = {
+            "user_id": resource.owner_id,
+            "username": owner_name,
+            "claimed": True,
+        }
+        return {"claimable": False, "state": "claimed", "claimer": owner_name, "owner": owner}
 
     # owner_id 未绑定：检查是否有 pending 申请（审批流）。
     pending = (
@@ -1688,8 +1697,8 @@ async def _resource_claim_state(
 
     if pending:
         # 有 pending 申请：审批中，不再开放认领。
-        return {"claimable": False, "state": "pending_review", "mine": mine}
-    return {"claimable": True, "state": "open", "mine": None}
+        return {"claimable": False, "state": "pending_review", "mine": mine, "owner": None}
+    return {"claimable": True, "state": "open", "mine": None, "owner": None}
 
 
 @router.get("/{resource_id}/claim-status")
@@ -1754,12 +1763,18 @@ async def claim_resource(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该文章已被认领")
 
     note = (body.note if body else None) or None
+    author_position = body.author_position if body else None
+    evidence_type = body.evidence_type if body else None
+    evidence_value = body.evidence_value if body else None
     claim = AuthorClaim(
         tenant_id=tenant_id,
         resource_id=resource_id,
         user_id=viewer.id,
         note=note,
         status="pending",
+        author_position=author_position,
+        evidence_type=evidence_type,
+        evidence_value=evidence_value,
     )
     db.add(claim)
     await db.flush()

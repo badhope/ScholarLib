@@ -27,6 +27,42 @@ from app.core.tracks import (
 )
 
 
+def _build_authors_detail(
+    authors: list[str] | None,
+    authors_meta: list[Any] | None,
+) -> list[AuthorDetail]:
+    """由 authors（字符串列表）+ authors_meta（结构化位）构建对外作者位。
+
+    隐私铁律：未认领（claimed=False）的作者位，email 一律为 None——
+    不下发 PDF/Word 解析出的私人邮箱。已认领位的 email 已在批准时
+    从账号资料拷入 authors_meta，此处直接透出。
+    """
+    names = authors or []
+    meta = authors_meta or []
+    out: list[AuthorDetail] = []
+    for i, name in enumerate(names):
+        raw = meta[i] if i < len(meta) else {}
+        # Pydantic 校验后 entry 可能是 AuthorMeta 对象，统一转 dict。
+        if hasattr(raw, "model_dump"):
+            raw = raw.model_dump()
+        entry = raw if isinstance(raw, dict) else {}
+        claimed = bool(entry.get("claimed"))
+        roles_raw = entry.get("roles") or (["first"] if i == 0 else [])
+        roles = [r for r in roles_raw if r in ("first", "corresponding")]
+        out.append(
+            AuthorDetail(
+                name=name,
+                order=i + 1,
+                roles=roles,
+                claimed=claimed,
+                user_id=entry.get("user_id") if claimed else None,
+                affiliation=entry.get("affiliation"),
+                email=entry.get("email") if claimed else None,
+            )
+        )
+    return out
+
+
 class AuthorMeta(BaseModel):
     """Per-author enrichment object.
 
@@ -42,6 +78,10 @@ class AuthorMeta(BaseModel):
     orcid: str | None = Field(default=None, max_length=20)
     affiliation: str | None = Field(default=None, max_length=300)
     email: str | None = Field(default=None, max_length=255)
+    # P1：认领状态与角色（公开面由 _build_authors_detail 统一透出）。
+    claimed: bool = False
+    user_id: int | None = None
+    roles: list[str] = Field(default_factory=list)
 
     @field_validator("orcid")
     @classmethod
@@ -220,6 +260,22 @@ class ResourceUpdate(BaseModel):
         return normalize_track(v) if isinstance(v, str) else v
 
 
+class AuthorDetail(BaseModel):
+    """P1 对外作者位：含认领状态与归属。
+
+    未认领（claimed=false）的作者位，user_id / affiliation / email 一律为 null，
+    不下发 PDF/Word 解析出的私人邮箱。已认领位的 email 取自账号资料。
+    """
+
+    name: str
+    order: int
+    roles: list[str] = Field(default_factory=list)  # ["first","corresponding"]
+    claimed: bool = False
+    user_id: int | None = None
+    affiliation: str | None = None
+    email: str | None = None
+
+
 class ResourceResponse(ResourceBase):
     """Response body for read endpoints.
 
@@ -248,6 +304,8 @@ class ResourceResponse(ResourceBase):
     r_index: float | None = None
     quartile: str | None = None
     # absurdity_index 继承自 ResourceBase（编辑部评定，0–10，可空）。
+    # P1：作者位明细（含认领状态）。未认领位 email 强制 null。
+    authors_detail: list[AuthorDetail] | None = None
 
     @model_validator(mode="after")
     def _derive_derived_fields(self) -> "ResourceResponse":
@@ -256,6 +314,7 @@ class ResourceResponse(ResourceBase):
         P0 收口：娱乐稿（content_track=essay）不下发任何学术评分字段——
         absurdity_index / quality_score / quality_grade 一律置 null，
         学术稿（paper）保持原值。
+        P1：构建 authors_detail；未认领作者位 email 一律 null（隐私）。
         """
         from app.modules.submission.clc import clc_status_of
 
@@ -265,6 +324,7 @@ class ResourceResponse(ResourceBase):
             self.absurdity_index = None
             self.quality_score = None
             self.quality_grade = None
+        self.authors_detail = _build_authors_detail(self.authors, self.authors_meta)
         return self
 
 

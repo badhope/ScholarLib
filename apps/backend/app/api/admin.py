@@ -13,7 +13,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -627,6 +627,38 @@ class ClaimDecision(BaseModel):
     note: str | None = None
 
 
+def _mark_author_position_claimed(
+    resource: Any, position: int | None, user_id: int, user_email: str | None
+) -> None:
+    """把 resource.authors_meta 里对应作者位标记为已认领。
+
+    - position 为 1-based；缺失时默认第 1 位。
+    - 未初始化 authors_meta 时按 authors 列表补齐（全部 claimed=false）。
+    - 已认领位的 email 在此拷入账号邮箱，公开面才透出；未认领位 email 为 null。
+    """
+    count = len(resource.authors or [])
+    if count == 0:
+        return
+    pos = position or 1
+    idx = max(0, min(pos - 1, count - 1))
+    meta = list(resource.authors_meta or [])
+    # 补齐到与 authors 等长，每条至少带 name（AuthorMeta 必填）
+    while len(meta) < count:
+        meta.append({"name": resource.authors[len(meta)]})
+    entry = dict(meta[idx] or {})
+    entry.setdefault("name", resource.authors[idx])
+    entry["claimed"] = True
+    entry["user_id"] = user_id
+    if user_email:
+        entry["email"] = user_email
+    roles = entry.get("roles") or (["first"] if idx == 0 else [])
+    entry["roles"] = [r for r in roles if r in ("first", "corresponding")] or (
+        ["first"] if idx == 0 else []
+    )
+    meta[idx] = entry
+    resource.authors_meta = meta
+
+
 @router.get("/claims")
 async def list_claims(
     claim_status: str = Query(default="pending", pattern="^(pending|approved|rejected|all)$"),
@@ -657,6 +689,9 @@ async def list_claims(
             "username": username,
             "note": claim.note,
             "status": claim.status,
+            "author_position": claim.author_position,
+            "evidence_type": claim.evidence_type,
+            "evidence_value": claim.evidence_value,
             "decision_note": claim.decision_note,
             "created_at": claim.created_at,
             "decided_at": claim.decided_at,
@@ -714,6 +749,11 @@ async def decide_claim(
     if body.action == "approve":
         # P0：批准即绑定 owner_id——这是认领的权威归属，POST claim 据此 403。
         resource.owner_id = claim.user_id
+        # P1：把对应作者位标记为已认领，拷入账号邮箱（公开面据此透出）。
+        claimer_email = (
+            await db.execute(select(User.email).where(User.id == claim.user_id))
+        ).scalar_one_or_none()
+        _mark_author_position_claimed(resource, claim.author_position, claim.user_id, claimer_email)
         # 防重复：同一资源已有该用户名下的投稿就不重复建
         existing_sub = (
             await db.execute(
@@ -786,3 +826,179 @@ async def decide_claim(
     )
     await db.commit()
     return {"id": claim.id, "status": claim.status}
+
+
+class AssignOwnerBody(BaseModel):
+    user_id: int
+    author_position: int | None = None
+
+
+@router.post("/resources/{resource_id}/assign-owner")
+async def assign_owner(
+    resource_id: int,
+    body: AssignOwnerBody,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """驳回后把某作者位直接绑给指定用户（逐位绑定，可多次调用）。
+
+    - 设置 resource.owner_id = user_id（权威归属）；
+    - 标记对应 author_position 为已认领，拷入该用户账号邮箱；
+    - 每次写审计日志。
+    """
+    from app.modules.catalog.models import Resource
+
+    tenant_id = require_tenant_id()
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == resource_id, Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    target_email = (
+        await db.execute(select(User.email).where(User.id == body.user_id))
+    ).scalar_one_or_none()
+    if target_email is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="目标用户不存在")
+
+    resource.owner_id = body.user_id
+    _mark_author_position_claimed(resource, body.author_position, body.user_id, target_email)
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="catalog.resource.assign_owner",
+            target_type="resource",
+            target_id=str(resource_id),
+            payload={"user_id": body.user_id, "author_position": body.author_position},
+        )
+    )
+    await db.commit()
+    return {"resource_id": resource_id, "owner_id": body.user_id, "author_position": body.author_position}
+
+
+class AuthorInput(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    affiliation: str | None = Field(default=None, max_length=300)
+    email: str | None = Field(default=None, max_length=255)
+    roles: list[str] = Field(default_factory=list)
+    order: int = Field(ge=1)
+
+
+class AuthorsEditBody(BaseModel):
+    authors: list[AuthorInput] = Field(min_length=1)
+
+
+def _validate_authors(authors: list[AuthorInput]) -> None:
+    """校验：≥1 位；第一作者唯一；通讯作者唯一（允许留空）；order 连续唯一；
+    通讯位 email 格式合法。"""
+    orders = [a.order for a in authors]
+    if sorted(orders) != list(range(1, len(authors) + 1)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="order 必须从 1 连续且唯一")
+    first = [a for a in authors if "first" in a.roles]
+    if len(first) != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="必须有且仅有一位第一作者")
+    corr = [a for a in authors if "corresponding" in a.roles]
+    if len(corr) > 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="通讯作者至多一位")
+    import re
+    for a in corr:
+        if a.email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", a.email):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="通讯作者邮箱格式不合法")
+
+
+@router.put("/resources/{resource_id}/authors")
+async def edit_resource_authors(
+    resource_id: int,
+    body: AuthorsEditBody,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """管理端编辑文章作者位（发布前）：保存 names + structured authors_meta。"""
+    from app.modules.catalog.models import Resource
+
+    tenant_id = require_tenant_id()
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == resource_id, Resource.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    _validate_authors(body.authors)
+    ordered = sorted(body.authors, key=lambda a: a.order)
+    resource.authors = [a.name for a in ordered]
+    prev_meta = list(resource.authors_meta or [])
+    new_meta: list[dict[str, Any]] = []
+    for i, a in enumerate(ordered):
+        prior = prev_meta[i] if i < len(prev_meta) and isinstance(prev_meta[i], dict) else {}
+        new_meta.append(
+            {
+                "name": a.name,
+                "affiliation": a.affiliation,
+                "email": a.email,
+                "roles": [r for r in a.roles if r in ("first", "corresponding")]
+                or (["first"] if i == 0 else []),
+                # 保留既有认领状态（管理员手动改稿不剥夺已认领位）
+                "claimed": bool(prior.get("claimed")),
+                "user_id": prior.get("user_id"),
+            }
+        )
+    resource.authors_meta = new_meta
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="catalog.resource.authors_edit",
+            target_type="resource",
+            target_id=str(resource_id),
+            payload={"authors": [a.name for a in ordered]},
+        )
+    )
+    await db.commit()
+    return {"resource_id": resource_id, "authors": resource.authors}
+
+
+@router.put("/submissions/{submission_id}/authors")
+async def edit_submission_authors(
+    submission_id: int,
+    body: AuthorsEditBody,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """管理端编辑投稿作者位（发布前）：保存到 submission.authors。"""
+    from app.modules.submission.models import Submission
+
+    tenant_id = require_tenant_id()
+    sub = (
+        await db.execute(
+            select(Submission).where(
+                Submission.id == submission_id, Submission.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if sub is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    _validate_authors(body.authors)
+    ordered = sorted(body.authors, key=lambda a: a.order)
+    sub.authors = [a.name for a in ordered]
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="catalog.submission.authors_edit",
+            target_type="submission",
+            target_id=str(submission_id),
+            payload={"authors": [a.name for a in ordered]},
+        )
+    )
+    await db.commit()
+    return {"submission_id": submission_id, "authors": sub.authors}
