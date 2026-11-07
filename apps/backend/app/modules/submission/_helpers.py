@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_tenant_id
 from app.core import search as fulltext
 from app.core.db import paginate
-from app.core.tracks import normalize_track
+from app.core.tracks import derive_content_track, normalize_track
 from app.modules.catalog import cover_defaults
 from app.modules.catalog.models import Resource as ResourceORM
 from app.modules.submission.models import Submission, SubmissionVersion
@@ -103,6 +103,9 @@ async def _materialize_resource_from_submission(
         publication_status=publication_status,
         type=submission.type,
         title=submission.title,
+        # 发布即绑定作者（P0）：owner_id = 投稿人。已绑定的文章不再可被他人
+        # 认领（POST claim 返回 403）；历史批量导入稿 owner_id 为 NULL 才可走认领。
+        owner_id=submission.submitted_by,
         # 赛道随物化带过去。目录的公开面按 track 分组，丢失这一列等于
         # 让读者无法区分"这是真研究"与"这是荒诞研究"——本刊的立身之本。
         track=normalize_track(getattr(submission, "track", None)),
@@ -122,6 +125,9 @@ async def _materialize_resource_from_submission(
         # jel_codes 不在此物化——catalog.Resource 没有该列（功能未落地），
         # 此处不声称不存在的字段对齐。
         keywords=submission.keywords or None,
+        # 中图分类号（P0）：随稿件一并带到目录。
+        clc_code=getattr(submission, "clc_code", None),
+        clc_label=getattr(submission, "clc_label", None),
         # 封面随物化带到目录；空则按学科回填默认封面——「已发布必有封面」
         # 是 v1.11 生态规范的硬约束，无封面的内容不允许以裸态上线。
         cover_image=submission.cover_image
@@ -135,6 +141,8 @@ async def _materialize_resource_from_submission(
             normalize_track(getattr(submission, "track", None))
         ),
     )
+    # 内容赛道派生值（P0）：academic→paper，fun/rant→essay。
+    resource.content_track = derive_content_track(resource.content_category, None)
     db.add(resource)
     await db.flush()
     if not resource.download_url and submission.file_path:

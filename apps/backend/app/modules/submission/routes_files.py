@@ -209,38 +209,64 @@ async def upload_submission_file(
     await get_storage().save(rel_path, contents, content_type=stored_type)
     entry.file_path = rel_path
 
-    # 在线阅读用 Markdown：尽力转换，失败静默（阅读器回退 PDF 视图）。
+    # 在线阅读用 Markdown：按文件头识别格式，质量闸门不达标则标 needs_docx
+    # （写侧car 原因），不再静默回退 PDF 视图。
+    from app.modules.submission.clc import parse_clc
     from app.modules.submission.manuscript import (
-        convert_to_markdown_async,
+        convert_manuscript_async,
         markdown_storage_key,
+        needs_docx_storage_key,
     )
 
     old_md = entry.markdown_path
+    old_sidecar = needs_docx_storage_key(rel_path)
     # 转换放到工作线程并带硬超时：pymupdf4llm 解析一份 50MB PDF 是数秒
     # 到数分钟的纯 CPU 工作，直接 await 会把整个事件循环（所有租户、
-    # 所有请求，含 /health）一起卡死。转换是 best-effort 的增值能力，
-    # 超时就放弃并回退 PDF 视图——"预览转不出来"绝不能升级成"全站不可用"。
-    md_text = await convert_to_markdown_async(contents, original_filename)
-    if md_text and old_path != rel_path:
-        md_key = markdown_storage_key(rel_path)
-        await get_storage().save(md_key, md_text.encode("utf-8"), content_type="text/markdown")
-        entry.markdown_path = md_key
-    else:
+    # 所有请求，含 /health）一起卡死。
+    result = await convert_manuscript_async(contents, original_filename)
+    warnings: list[str] = []
+    if result.extension_mismatch:
+        warnings.append("扩展名与实际格式不一致（已按文件头识别）")
+    if result.needs_docx or not result.markdown:
         entry.markdown_path = None
+        reason = result.reason or "无法在线阅读，请下载原件"
+        # 把具体原因落侧car，阅读端点据此明确告知"不可在线阅读 + 可下载原件"。
+        await get_storage().save(
+            old_sidecar,
+            reason.encode("utf-8"),
+            content_type="text/plain; charset=utf-8",
+        )
+        if result.reason:
+            warnings.append(result.reason)
+    else:
+        md_key = markdown_storage_key(rel_path)
+        await get_storage().save(md_key, result.markdown.encode("utf-8"), content_type="text/markdown")
+        entry.markdown_path = md_key
+        # 清除可能存在的旧 needs_docx 侧car（重新上传成功）。
+        await _try_delete_storage(old_sidecar)
+        # 从正文 front-matter 解析中图分类号；非法值原样保留并标待校正。
+        clc = parse_clc(result.markdown)
+        if clc.code:
+            entry.clc_code = clc.code
+            entry.clc_label = clc.label
+            if clc.status == "needs_correction":
+                warnings.append(f"中图分类号 {clc.code} 格式待校正")
 
     await db.commit()
     await db.refresh(entry)
-    # 替换式上传会覆盖 file_path，被替换的旧文件（及旧 md）若不清会变成孤儿对象。
+    # 替换式上传会覆盖 file_path，被替换的旧文件（及旧 md/侧car）若不清会变成孤儿对象。
     await _try_delete_storage(old_path)
     await _try_delete_storage(old_md)
 
     resp = _to_response(entry)
     # 结构报告：作者上传后立刻知道"离《投稿规范》还差什么"，而不是等
     # 编辑部初审退修。转换失败（无 md）就不报——没有内容可分析。
-    if md_text:
+    if result.markdown:
         from app.modules.submission.markdown_clean import analyze_structure
 
-        resp.format_report = analyze_structure(md_text)
+        resp.format_report = analyze_structure(result.markdown)
+    if warnings:
+        resp.upload_warnings = warnings
     return resp
 
 

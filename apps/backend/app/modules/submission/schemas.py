@@ -215,6 +215,9 @@ class SubmissionResponse(BaseModel):
     reviewed_at: datetime | None = None
     # 结构报告：仅上传文件端点返回（详情/列表不返回，避免重复计算）
     format_report: FormatReport | None = None
+    # 上传结果提示（P0）：扩展名与实际格式不一致、needs_docx 原因、
+    # 中图分类号待校正等。仅上传端点返回。
+    upload_warnings: list[str] = []
 
 
 class SubmissionListResponse(BaseModel):

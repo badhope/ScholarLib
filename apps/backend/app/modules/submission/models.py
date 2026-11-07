@@ -141,8 +141,16 @@ class Submission(Base, TenantScopedMixin):
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # 在线阅读用 Markdown 稿件（上传 PDF/Word 后服务端转换，见
-    # manuscript.py）；可空 = 未转换或转换失败，阅读器回退 PDF 视图。
+    # manuscript.py）；可空 = 未转换或转换失败（needs_docx，见
+    # ``{file_path}.needs_docx`` 侧car 存具体原因）。
     markdown_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # 中图分类号（P0）：从正文 front-matter ``clc`` / ``clc_label`` 解析，
+    # 入库两列；非法值原样保留并由 clc_status_of 标记待校正。
+    clc_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    clc_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # 内容赛道派生值（P0）：paper|essay。与历史 track(serious|absurd)
+    # 无关——由 content_category 派生（academic→paper，fun/rant→essay）。
+    content_track: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

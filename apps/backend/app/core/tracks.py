@@ -23,6 +23,35 @@ from typing import Final, Literal
 
 Track = Literal["serious"]
 
+# 内容赛道（P0）：由 content_category 派生，与历史 track(serious|absurd)
+# 完全无关。paper = 学术研究（进 R 因子/篇均指标）；essay = 娱乐/吐槽（不进）。
+ContentTrack = Literal["paper", "essay"]
+
+DEFAULT_CONTENT_TRACK: Final[ContentTrack] = "paper"
+
+# content_category → content_track。fun / rant 均为娱乐稿（essay）。
+_CATEGORY_TO_TRACK: Final[dict[str, ContentTrack]] = {
+    "academic": "paper",
+    "fun": "essay",
+    "rant": "essay",
+}
+
+
+def derive_content_track(content_category: str | None, db_value: str | None = None) -> ContentTrack:
+    """按 content_category 派生 content_track（paper|essay）。
+
+    DB 值缺失时回退到 content_category 计算；两者都缺省时按学术稿（paper）
+    保守处理——本刊默认是学术刊。
+    """
+    if db_value in ("paper", "essay"):
+        return db_value  # type: ignore[return-value]
+    return _CATEGORY_TO_TRACK.get((content_category or "").lower(), DEFAULT_CONTENT_TRACK)
+
+
+def is_paper_track(content_category: str | None, db_value: str | None = None) -> bool:
+    """是否学术稿（paper）：R 因子/篇均指标只统计 paper。"""
+    return derive_content_track(content_category, db_value) == "paper"
+
 DEFAULT_TRACK: Final[Track] = "serious"
 ALL_TRACKS: Final[tuple[Track, ...]] = ("serious",)
 
@@ -59,11 +88,15 @@ def track_label(value: str | None, *, short: bool = False) -> str:
 
 __all__ = [
     "ALL_TRACKS",
+    "DEFAULT_CONTENT_TRACK",
     "DEFAULT_TRACK",
     "TRACK_DESCRIPTIONS",
     "TRACK_LABELS",
     "TRACK_SHORT_LABELS",
+    "ContentTrack",
     "Track",
+    "derive_content_track",
+    "is_paper_track",
     "normalize_track",
     "track_label",
 ]

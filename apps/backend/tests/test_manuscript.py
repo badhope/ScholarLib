@@ -16,7 +16,18 @@ from tests.test_catalog import _SAMPLE
 def _make_pdf(text: str = "奶蛙叙事的演化路径考察") -> bytes:
     doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_text((72, 100), text, fontname="china-s")
+    # P0 质量闸门要求正文 ≥300 字：样例 PDF 用一长段不重复中文，
+    # 使闸门通过；断言仍校验关键短语出现在抽取结果里。
+    body = text + "。" + "".join(
+        f"第{i}段：这是用于凑足质量闸门阈值的不重复中文正文，讨论{n}话题的相关内容。"
+        for i, n in enumerate(
+            ["分布一致性", "事务隔离", "容错恢复", "排队论", "数据建模", "系统设计",
+             "缓存策略", "负载均衡", "监控告警", "容量规划", "灰度发布", "容灾备份",
+             "权限模型", "审计日志", "接口契约", "测试覆盖", "性能调优", "成本核算"],
+            start=1,
+        )
+    )
+    page.insert_textbox(pymupdf.Rect(50, 50, 545, 780), body, fontname="china-s", fontsize=10)
     data = doc.tobytes()
     doc.close()
     return data
@@ -26,10 +37,18 @@ def _make_pdf_with_image(text: str = "含图论文") -> bytes:
     """含位图的 PDF：pymupdf4llm 会抽取图片并在 Markdown 里留文件引用。"""
     doc = pymupdf.open()
     page = doc.new_page()
-    page.insert_text((72, 100), text, fontname="china-s")
+    body = text + "。" + "".join(
+        f"第{i}段：这是凑足质量闸门阈值的不重复中文正文，讨论{n}话题的相关内容。"
+        for i, n in enumerate(
+            ["一致性", "隔离", "容错", "建模", "设计", "缓存", "均衡", "告警",
+             "规划", "灰度", "容灾", "权限", "审计", "契约", "覆盖"],
+            start=1,
+        )
+    )
+    page.insert_textbox(pymupdf.Rect(50, 50, 545, 220), body, fontname="china-s", fontsize=9)
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(200)
-    page.insert_image(pymupdf.Rect(72, 140, 300, 260), pixmap=pix)
+    page.insert_image(pymupdf.Rect(72, 260, 300, 380), pixmap=pix)
     data = doc.tobytes()
     doc.close()
     return data

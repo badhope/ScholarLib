@@ -20,7 +20,11 @@ from pydantic import (
 )
 
 from app.core.schemas import Authors, PaginationMeta
-from app.core.tracks import Track, normalize_track
+from app.core.tracks import (
+    Track,
+    derive_content_track,
+    normalize_track,
+)
 
 
 class AuthorMeta(BaseModel):
@@ -69,6 +73,10 @@ class ResourceBase(BaseModel):
     # 内容类别：academic（学术研究）/ fun（娱乐向）/ rant（吐槽向）。
     # 可空：历史数据由迁移 019 回填，新发布由物化流程折算，编辑部可改口。
     content_category: ContentCategory | None = None
+    # 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」。
+    # 从稿件 front-matter 解析；非法值原样保留，详情接口 clc_status 标待校正。
+    clc_code: str | None = Field(default=None, max_length=20)
+    clc_label: str | None = Field(default=None, max_length=80)
     title: str = Field(min_length=1, max_length=1000)
     authors: Authors = Field(min_length=1, max_length=200)
     year: int = Field(ge=-3000, le=2100)
@@ -229,6 +237,10 @@ class ResourceResponse(ResourceBase):
     has_file: bool = False
     # 是否有在线阅读用 Markdown 稿件（列表与详情都返回）
     has_markdown: bool = False
+    # 内容赛道派生值（P0）：paper|essay。DB 值缺失时按 content_category 回退。
+    content_track: str | None = None
+    # 中图分类号校正状态：valid / needs_correction / absent（由 clc_code 反推）。
+    clc_status: str | None = None
     # 互动指标（R 指数）：列表与详情都返回，未取到时为 None
     reads: int | None = None
     downloads: int | None = None
@@ -236,6 +248,15 @@ class ResourceResponse(ResourceBase):
     r_index: float | None = None
     quartile: str | None = None
     # absurdity_index 继承自 ResourceBase（编辑部评定，0–10，可空）。
+
+    @model_validator(mode="after")
+    def _derive_derived_fields(self) -> "ResourceResponse":
+        """content_track 按 content_category 回退派生；clc_status 由 clc_code 反推。"""
+        from app.modules.submission.clc import clc_status_of
+
+        self.content_track = derive_content_track(self.content_category, self.content_track)
+        self.clc_status = clc_status_of(self.clc_code)
+        return self
 
 
 class ResourceListResponse(BaseModel):

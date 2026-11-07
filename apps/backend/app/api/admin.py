@@ -712,6 +712,8 @@ async def decide_claim(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
 
     if body.action == "approve":
+        # P0：批准即绑定 owner_id——这是认领的权威归属，POST claim 据此 403。
+        resource.owner_id = claim.user_id
         # 防重复：同一资源已有该用户名下的投稿就不重复建
         existing_sub = (
             await db.execute(

@@ -323,18 +323,22 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
 
     # R 因子：全刊已发表记录 R 指数的均值。复用与单篇一致的最大值归一，
     # 因此一篇孤立的新文章不会因为全刊流量小而虚高。
-    r_factor: float | None = None
+    # P0：娱乐稿（fun/rant → essay）不进 R 因子/篇均指标——只统计 paper。
+    from app.core.tracks import is_paper_track
+
     published_rows = list(
         (await db.execute(select(Resource).where(*published_filter))).scalars().all()
     )
-    if published_rows:
-        raw = await load_raw_engagement(db, [r.id for r in published_rows], tenant_id)
-        total_events = sum(sum(raw.get(r.id, (0, 0, 0))) for r in published_rows)
+    paper_rows = [r for r in published_rows if is_paper_track(r.content_category, r.content_track)]
+    r_factor: float | None = None
+    if paper_rows:
+        raw = await load_raw_engagement(db, [r.id for r in paper_rows], tenant_id)
+        total_events = sum(sum(raw.get(r.id, (0, 0, 0))) for r in paper_rows)
         if total_events >= MIN_R_FACTOR_SAMPLE:
-            maxima = _discipline_maxima(published_rows, raw)
+            maxima = _discipline_maxima(paper_rows, raw)
             scores = [
                 _score(*raw.get(r.id, (0, 0, 0)), maxima.get(r.discipline, (0, 0, 0)))
-                for r in published_rows
+                for r in paper_rows
             ]
             r_factor = round(sum(scores) / len(scores), 2)
 

@@ -27,14 +27,51 @@ import math
 import os
 import re
 import tempfile
+from collections import Counter
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 
 import pymupdf
 
+from app.modules.submission.fileformat import (
+    FMT_DOC,
+    FMT_DOCX,
+    FMT_MARKDOWN,
+    FMT_PDF,
+    FMT_RTF,
+    FMT_TEXT,
+    detect_format,
+)
+
 logger = logging.getLogger(__name__)
 
 _MD_SUFFIX = ".md"
+
+# PDF 质量闸门阈值（P0）。任一不达标即标 needs_docx，绝不产出半截 Markdown。
+_PDF_MIN_TEXT_CHARS = 300
+_PDF_MIN_CJK_RATIO = 0.30  # 中文稿 CJK 占比下限
+_PDF_MAX_BAD_CHAR_RATIO = 0.02  # 替换符/控制符占比上限
+_PDF_MAX_REPEATED_LINE_RATIO = 0.30  # 连续重复页眉行占比上限
+_PDF_MIN_AVG_PARAGRAPH_LEN = 10  # 段落平均长度下限（过碎=版面抽取异常）
+
+
+@dataclass(frozen=True)
+class ManuscriptResult:
+    """稿件转换的结构化结果（P0）。
+
+    - ``markdown`` 非空 = 可在线阅读；
+    - ``needs_docx`` 为真 = 不可在线阅读，``reason`` 给出具体原因，
+      前端应引导作者另存为 .docx，**不得**回退 pdf.js 渲染；
+    - ``actual_format`` 为文件头判定的真实格式；
+    - ``extension_mismatch`` 为真时上传结果需提示"扩展名与实际格式不一致"。
+    """
+
+    markdown: str | None
+    actual_format: str
+    extension_mismatch: bool
+    needs_docx: bool = False
+    reason: str | None = None
 
 
 def _original_simple_pdf_image(doc: pymupdf.Document) -> bytes | None:
@@ -163,6 +200,58 @@ def _pdf_to_markdown(contents: bytes) -> str | None:
         doc.close()
 
 
+def _pdf_raw_text(contents: bytes) -> str:
+    """抽取 PDF 纯文本（用于质量闸门）。不做版面重排，逐页拼接即可。"""
+    doc = pymupdf.open(stream=contents, filetype="pdf")
+    try:
+        if doc.is_encrypted:
+            return ""
+        parts = [page.get_text("text") for page in doc]
+        return "\n".join(parts)
+    finally:
+        doc.close()
+
+
+def _pdf_quality_gate(text: str) -> tuple[bool, str | None]:
+    """PDF 质量闸门：任一不达标返回 (False, 具体原因)。
+
+    - 抽取文本 < 300 字符        → 无文本层（扫描件/图片 PDF）
+    - 中文稿 CJK 占比 < 30%      → 乱码/外文稿
+    - 替换符/控制符 ≥ 2%         → 乱码超标
+    - 重复页眉行 ≥ 30%           → 页眉噪声污染
+    - 段落平均长度 < 10         → 版面抽取过碎
+    """
+    stripped = (text or "").strip()
+    if len(stripped) < _PDF_MIN_TEXT_CHARS:
+        return False, "无文本层或文本过少（疑似扫描件/图片 PDF），请另存为 .docx 后重新上传"
+
+    cjk = sum(1 for ch in stripped if "\u4e00" <= ch <= "\u9fff")
+    if cjk > 0:
+        ratio = cjk / max(len(stripped), 1)
+        if ratio < _PDF_MIN_CJK_RATIO:
+            return False, f"中文占比过低（{ratio:.0%}），疑似乱码，请另存为 .docx 后重新上传"
+
+    bad = sum(
+        1 for ch in stripped if ch == "\ufffd" or (ord(ch) < 32 and ch not in "\n\r\t")
+    )
+    if bad / max(len(stripped), 1) >= _PDF_MAX_BAD_CHAR_RATIO:
+        return False, "乱码/控制符占比过高，请另存为 .docx 后重新上传"
+
+    lines = [ln.strip() for ln in stripped.splitlines() if ln.strip()]
+    if lines:
+        repeated = sum(c for c in Counter(lines).values() if c > 1)
+        if repeated / len(lines) > _PDF_MAX_REPEATED_LINE_RATIO:
+            return False, "重复页眉行占比过高，请另存为 .docx 后重新上传"
+
+    paras = [p for p in re.split(r"\n\s*\n", stripped) if p.strip()]
+    if paras:
+        avg = sum(len(p) for p in paras) / len(paras)
+        if avg < _PDF_MIN_AVG_PARAGRAPH_LEN:
+            return False, "段落过碎，疑似版面抽取异常，请另存为 .docx 后重新上传"
+
+    return True, None
+
+
 def _docx_to_markdown(contents: bytes) -> str | None:
     """docx → Markdown（mammoth 语义 HTML + markdownify + 段落重组）。"""
     import mammoth
@@ -177,25 +266,55 @@ def _docx_to_markdown(contents: bytes) -> str | None:
     return reflow_paragraphs(md) or None
 
 
-def convert_to_markdown(contents: bytes, filename: str) -> str | None:
-    """尽力把上传稿件转成 Markdown；不支持或失败一律返回 None。"""
-    ext = os.path.splitext(filename or "")[1].lower()
-    try:
-        result = _convert_to_markdown_inner(contents, ext)
-        if result is None:
-            return None
-        # 排印统一放在最后一步：标题编号补空格、图表题注独立、中英混排间距、
-        # 断行表格补管、连续空行折叠。规则幂等，重复上传不会二次漂移。
-        from app.modules.submission.normalize import normalize_markdown
+def _normalize_markdown(md: str) -> str:
+    """排印统一：标题编号补空格、图表题注独立、中英混排间距、断行表格补管、
+    连续空行折叠；剔除孤立代理对。规则幂等，重复上传不会二次漂移。"""
+    from app.modules.submission.normalize import normalize_markdown
 
-        result = normalize_markdown(result)
-        # PDF 内嵌的数学斜体等字符偶尔以孤立代理对形式出现（\ud835…），
-        # 存储层 UTF-8 编码会直接抛异常。这些残缺字形无法还原，直接剔除。
-        return re.sub(r"[\ud800-\udfff]", "", result)
+    result = normalize_markdown(md)
+    return re.sub(r"[\ud800-\udfff]", "", result)
+
+
+def convert_manuscript(contents: bytes, filename: str) -> ManuscriptResult:
+    """结构化转换（P0）：按文件头分流，失败给具体原因而不是 None。
+
+    返回 ``ManuscriptResult``：``markdown`` 可在线阅读；``needs_docx`` 为真
+    时 ``reason`` 说明为什么不能在线阅读（加密/扫描件/老 .doc/乱码…）。
+    """
+    try:
+        result = _convert_manuscript_inner(contents, filename)
     except Exception:
-        # 转换是增值能力：损坏/加密/超纲的输入一律静默降级。
-        logger.warning("manuscript_convert_failed ext=%s", ext, exc_info=True)
-        return None
+        logger.warning("manuscript_convert_failed filename=%s", filename, exc_info=True)
+        return ManuscriptResult(
+            markdown=None,
+            actual_format="unknown",
+            extension_mismatch=False,
+            needs_docx=True,
+            reason="文件损坏或无法解析，请另存为 .docx 后重新上传",
+        )
+    if result.markdown:
+        try:
+            md = _normalize_markdown(result.markdown)
+        except Exception:
+            logger.warning("manuscript_normalize_failed", exc_info=True)
+            return result
+        return ManuscriptResult(
+            markdown=md,
+            actual_format=result.actual_format,
+            extension_mismatch=result.extension_mismatch,
+            needs_docx=False,
+            reason=None,
+        )
+    return result
+
+
+def convert_to_markdown(contents: bytes, filename: str) -> str | None:
+    """尽力把上传稿件转成 Markdown；不支持或失败一律返回 None。
+
+    保留此签名以兼容历史调用方与既有测试；新代码请用
+    :func:`convert_manuscript` 拿到 needs_docx 原因。
+    """
+    return convert_manuscript(contents, filename).markdown
 
 
 # 转换的硬超时（秒）。超过即放弃 Markdown、回退 PDF 视图。
@@ -243,33 +362,116 @@ async def convert_to_markdown_async(
         return None
 
 
-def _convert_to_markdown_inner(contents: bytes, ext: str) -> str | None:
+def _needs_docx(actual: str, mismatch: bool, reason: str) -> ManuscriptResult:
+    return ManuscriptResult(
+        markdown=None,
+        actual_format=actual,
+        extension_mismatch=mismatch,
+        needs_docx=True,
+        reason=reason,
+    )
+
+
+def _convert_manuscript_inner(contents: bytes, filename: str) -> ManuscriptResult:
+    """按文件头分流的核心转换（P0）。"""
+    detected = detect_format(contents, filename)
+    actual = detected.actual
+    mismatch = detected.extension_mismatch
+
+    if actual == FMT_PDF:
+        # 1) 先跑质量闸门：加密/扫描件/乱码一律 needs_docx，不进版面重排。
+        try:
+            probe = pymupdf.open(stream=contents, filetype="pdf")
+        except Exception:
+            return _needs_docx(actual, mismatch, "文件损坏或不是有效 PDF，请另存为 .docx 后重新上传")
+        try:
+            if probe.is_encrypted:
+                return _needs_docx(actual, mismatch, "加密 PDF，无法抽取文本，请另存为 .docx 后重新上传")
+            raw_text = "\n".join(page.get_text("text") for page in probe)
+        finally:
+            probe.close()
+        ok, reason = _pdf_quality_gate(raw_text)
+        if not ok:
+            return _needs_docx(actual, mismatch, reason)
+        # 2) 闸门通过才做版面重排（pymupdf4llm）。
+        md = _pdf_to_markdown(contents)
+        if not md:
+            return _needs_docx(actual, mismatch, "PDF 版面抽取失败，请另存为 .docx 后重新上传")
+        from app.modules.submission.markdown_clean import clean
+
+        md = clean(md)
+        if not md:
+            return _needs_docx(actual, mismatch, "PDF 抽取结果为空，请另存为 .docx 后重新上传")
+        return ManuscriptResult(
+            markdown=md, actual_format=actual, extension_mismatch=mismatch
+        )
+
+    if actual == FMT_DOCX:
+        md = _docx_to_markdown(contents)
+        if not md:
+            return _needs_docx(actual, mismatch, "Word 文档解析失败，文件可能损坏，请另存为 .docx 后重新上传")
+        return ManuscriptResult(markdown=md, actual_format=actual, extension_mismatch=mismatch)
+
+    if actual == FMT_DOC:
+        # 老式 OLE2 二进制 Word：明确拒绝，不静默回退。
+        return _needs_docx(actual, mismatch, "检测到老式 .doc 二进制格式，请在 Word 中另存为 .docx 后重新上传")
+
+    if actual == FMT_RTF:
+        return _needs_docx(actual, mismatch, "检测到 RTF 格式，请另存为 .docx 后重新上传")
+
+    if actual in (FMT_MARKDOWN, FMT_TEXT):
+        text = contents.decode("utf-8", errors="replace").strip()
+        if not text:
+            return _needs_docx(actual, mismatch, "文件为空，请上传含正文的稿件")
+        from app.modules.submission.markdown_clean import reflow_paragraphs
+
+        md = reflow_paragraphs(text)
+        if not md:
+            return _needs_docx(actual, mismatch, "未能从文本中解析出正文")
+        return ManuscriptResult(markdown=md, actual_format=actual, extension_mismatch=mismatch)
+
+    return _needs_docx(actual, mismatch, "无法识别文件格式，请另存为 .docx 后重新上传")
+
+
+async def convert_manuscript_async(
+    contents: bytes, filename: str, *, timeout: float = CONVERT_TIMEOUT_SECONDS
+) -> ManuscriptResult:
+    """``convert_manuscript`` 的异步安全版本（线程池 + 硬超时）。
+
+    超时/异常返回 needs_docx 结果，而不是让调用方拿到 None 后悄悄回退。
+    """
+    import asyncio
+
+    import anyio
+
+    def _run() -> ManuscriptResult:
+        return convert_manuscript(contents, filename)
+
     try:
-        if ext == ".pdf":
-            md = _pdf_to_markdown(contents)
-            # 统一清洗：去 HTML 标签/刊头重跑行/页码，摘要升为 H2。
-            # 与历史 267 篇导入稿使用同一函数，保证新旧稿件阅读体验一致。
-            from app.modules.submission.markdown_clean import clean
-
-            return clean(md) if md else md
-        if ext in (".docx",):
-            return _docx_to_markdown(contents)
-        if ext in (".txt", ".md", ".markdown"):
-            text = contents.decode("utf-8", errors="replace").strip()
-            if not text:
-                return None
-            # 1.6.0：TXT 直通时 Markdown 会把单换行当空格——整篇粘成一段。
-            # 按论文阅读习惯重组：空行分段、段内续行、行尾空格清理。
-            from app.modules.submission.markdown_clean import reflow_paragraphs
-
-            return reflow_paragraphs(text) or None
-        # .doc / .ps / .zip：不转换（阅读器回退 PDF 视图）。
-        logger.info("manuscript_convert_skipped reason=unsupported ext=%s", ext)
-        return None
+        return await asyncio.wait_for(anyio.to_thread.run_sync(_run), timeout=timeout)
+    except (TimeoutError, asyncio.TimeoutError):
+        logger.warning(
+            "manuscript_convert_timeout filename=%s bytes=%s timeout=%ss",
+            filename,
+            len(contents),
+            timeout,
+        )
+        return ManuscriptResult(
+            markdown=None,
+            actual_format="pdf",
+            extension_mismatch=False,
+            needs_docx=True,
+            reason="转换超时，请另存为 .docx 后重新上传",
+        )
     except Exception:
-        # 转换是增值能力：损坏/加密/超纲的输入一律静默降级。
-        logger.warning("manuscript_convert_failed ext=%s", ext, exc_info=True)
-        return None
+        logger.warning("manuscript_convert_async_failed", exc_info=True)
+        return ManuscriptResult(
+            markdown=None,
+            actual_format="unknown",
+            extension_mismatch=False,
+            needs_docx=True,
+            reason="转换失败，请另存为 .docx 后重新上传",
+        )
 
 
 def markdown_storage_key(file_path: str) -> str:
@@ -279,4 +481,16 @@ def markdown_storage_key(file_path: str) -> str:
     return str(path.with_suffix(_MD_SUFFIX)).replace("\\", "/")
 
 
-__all__ = ["convert_to_markdown", "markdown_storage_key"]
+def needs_docx_storage_key(file_path: str) -> str:
+    """needs_docx 原因侧car key：``{file_path}.needs_docx``。"""
+    return f"{file_path}.needs_docx".replace("\\", "/")
+
+
+__all__ = [
+    "ManuscriptResult",
+    "convert_manuscript",
+    "convert_manuscript_async",
+    "convert_to_markdown",
+    "markdown_storage_key",
+    "needs_docx_storage_key",
+]

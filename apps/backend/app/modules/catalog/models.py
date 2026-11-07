@@ -126,6 +126,20 @@ class Resource(Base, TenantScopedMixin):
     # 等级，层级只与创作者经验挂钩；同类别内容才能互相比对（排行/推荐
     # 均按本字段分域）。发布时必填（无值由发布流程按荒诞指数折算回填）。
     content_category: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # 内容赛道派生值（P0）：paper|essay。academic→paper，fun/rant→essay。
+    # DB 可空时由响应层按 content_category 回退计算；R 因子/篇均指标只统计 paper。
+    content_track: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # 中图分类号（P0）：clc_code 如 TP3、clc_label 如「计算技术、计算机技术」。
+    clc_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    clc_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    # 作者归属（P0）：发布时写 submissions.submitted_by；认领批准时写认领人。
+    # 已绑定（IS NOT NULL）的文章不可再被他人认领（POST claim 返回 403）。
+    owner_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # 归类键：封面主题、专题聚合使用（如 universe / lab / ocean / society）。
     cover_theme: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

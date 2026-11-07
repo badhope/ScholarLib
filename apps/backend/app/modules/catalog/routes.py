@@ -136,6 +136,8 @@ async def list_resources(
     year: int | None = None,
     volume: str | None = None,
     issue: str | None = None,
+    # 中图分类号前缀筛选（P0）：?clc=TP 命中 TP / TP3 / TP311.13 等。
+    clc: str | None = Query(default=None, pattern=r"^[A-Za-z]{1,2}\d{0,3}$"),
     q: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
@@ -221,6 +223,9 @@ async def list_resources(
         stmt = stmt.where(Resource.volume == volume)
     if issue:
         stmt = stmt.where(Resource.issue == issue)
+    # 中图分类号前缀筛选：?clc=TP → clc_code 以 TP 开头（大小写不敏感）。
+    if clc:
+        stmt = stmt.where(Resource.clc_code.ilike(f"{clc.upper()}%"))
     # 排序扩展：卷期归档按「卷 → 期 → 期内序号」排（pages 存三位期内序号）。
     # 注意不能先 stmt.order_by(...) 再交给 paginate：paginate 会以传入的
     # order_by 覆盖（空元组等于清空排序）。
@@ -933,12 +938,16 @@ async def get_resource_manuscript(
     viewer: User | None = Depends(get_current_user_optional),
 ) -> Response:
     """在线阅读用 Markdown 稿件（0.6.2）：可见性边界与 /file 完全一致
-    （published 公开；未刊稿仅刊前预览者，无权限 404）。无 md 的资源
-    返回 404，前端回退 PDF 视图。
+    （published 公开；未刊稿仅刊前预览者，无权限 404）。
+
+    P0：无 Markdown 时不再假装回退 pdf.js 渲染——若该稿件被质量闸门判为
+    needs_docx（加密/扫描件/老 .doc/乱码），明确返回 409 + 原因 + 可下载原件，
+    由前端引导作者另存为 .docx。
     """
-    from fastapi.responses import Response
+    from fastapi.responses import JSONResponse, Response
 
     from app.core.storage import get_storage
+    from app.modules.submission.manuscript import needs_docx_storage_key
 
     tenant_id = require_tenant_id()
     result = await db.execute(
@@ -956,15 +965,14 @@ async def get_resource_manuscript(
 
     from app.modules.submission.models import Submission
 
+    # 取一篇带正文的投稿：优先有 Markdown 的；没有就退而取带 file_path 的那篇，
+    # 用于判定 needs_docx 原因侧car。
     submission = (
         (
             await db.execute(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                    # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
-                    # 必须取有正文的那条且结果确定——空正文路径与无序 first()
-                    # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
                     Submission.markdown_path.is_not(None),
                     Submission.markdown_path != "",
                 ).order_by(Submission.id.asc())
@@ -974,6 +982,38 @@ async def get_resource_manuscript(
         .first()
     )
     if submission is None or not submission.markdown_path:
+        # 无 Markdown：查 needs_docx 侧car，明确告知"不可在线阅读 + 可下载原件"。
+        any_sub = (
+            (
+                await db.execute(
+                    select(Submission).where(
+                        Submission.resource_id == resource_id,
+                        Submission.tenant_id == tenant_id,
+                        Submission.file_path.is_not(None),
+                    ).order_by(Submission.id.asc())
+                )
+            )
+            .scalars()
+            .first()
+        )
+        reason: str | None = None
+        if any_sub is not None:
+            sidecar = needs_docx_storage_key(any_sub.file_path)
+            try:
+                raw = await get_storage().load(sidecar)
+                reason = raw.decode("utf-8", errors="replace").strip() or None
+            except FileNotFoundError:
+                reason = None
+        if reason is not None:
+            return JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "readable": False,
+                    "reason": reason,
+                    "downloadable": any_sub is not None,
+                    "download_url": f"/api/catalog/{resource_id}/file",
+                },
+            )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="This resource has no online manuscript",
@@ -1612,43 +1652,44 @@ async def _notify_editors(
 
 
 async def _resource_claim_state(
-    db: AsyncSession, resource_id: int, tenant_id: UUID, viewer: User | None
+    db: AsyncSession, resource: Resource, viewer: User | None
 ) -> dict[str, object]:
-    """汇总一篇资源当前的认领状态（claim-status 与 claim 共用）。"""
-    approved = (
-        await db.execute(
-            select(AuthorClaim)
-            .where(
-                AuthorClaim.resource_id == resource_id,
-                AuthorClaim.tenant_id == tenant_id,
-                AuthorClaim.status == "approved",
-            )
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if approved is not None:
-        claimer = (
-            await db.execute(select(User.username).where(User.id == approved.user_id))
+    """汇总一篇资源当前的认领状态（claim-status 与 claim 共用）。
+
+    P0 口径：
+    - ``owner_id`` 已绑定（发布时写入或认领批准时写入）→ 已认领，不可再认；
+    - ``owner_id`` 为 NULL 且无 pending 申请 → 才可认领；
+    - 有 pending 申请 → 审批中（不再"点一下就认领"）。
+    """
+    # 已绑定作者：以 owner_id 为准（这是新的唯一权威归属）。
+    if resource.owner_id is not None:
+        owner = (
+            await db.execute(select(User.username).where(User.id == resource.owner_id))
         ).scalar_one_or_none()
-        return {"claimable": False, "state": "claimed", "claimer": claimer}
+        return {"claimable": False, "state": "claimed", "claimer": owner}
+
+    # owner_id 未绑定：检查是否有 pending 申请（审批流）。
+    pending = (
+        await db.execute(
+            select(AuthorClaim).where(
+                AuthorClaim.resource_id == resource.id,
+                AuthorClaim.tenant_id == resource.tenant_id,
+                AuthorClaim.status == "pending",
+            ).order_by(AuthorClaim.created_at.asc())
+        )
+    ).scalars().all()
 
     mine = None
     if viewer is not None:
-        row = (
-            await db.execute(
-                select(AuthorClaim)
-                .where(
-                    AuthorClaim.resource_id == resource_id,
-                    AuthorClaim.tenant_id == tenant_id,
-                    AuthorClaim.user_id == viewer.id,
-                    AuthorClaim.status == "pending",
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if row is not None:
-            mine = {"id": row.id, "status": row.status, "created_at": row.created_at}
-    return {"claimable": mine is None, "state": "open", "mine": mine}
+        for row in pending:
+            if row.user_id == viewer.id:
+                mine = {"id": row.id, "status": row.status, "created_at": row.created_at}
+                break
+
+    if pending:
+        # 有 pending 申请：审批中，不再开放认领。
+        return {"claimable": False, "state": "pending_review", "mine": mine}
+    return {"claimable": True, "state": "open", "mine": None}
 
 
 @router.get("/{resource_id}/claim-status")
@@ -1668,7 +1709,7 @@ async def get_claim_status(
     ).scalar_one_or_none()
     if resource is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
-    return await _resource_claim_state(db, resource_id, tenant_id, viewer)
+    return await _resource_claim_state(db, resource, viewer)
 
 
 @router.post("/{resource_id}/claim")
@@ -1680,8 +1721,10 @@ async def claim_resource(
 ) -> dict[str, object]:
     """发起认领：创建 pending 申请并通知编辑部。
 
-    同一用户对同一资源只能有一条申请（唯一约束兜底）；同一资源已有
-    被批准的认领时拒绝（先到先得，争议由编辑部仲裁）。
+    P0：
+    - ``owner_id`` 已绑定 → 403（文章已归属，不能再认）；
+    - 已有 pending 申请 → 409（审批中）；
+    - 批准权仍在编辑部（author_claims 审批流），不再点一下就认领。
     """
     tenant_id = require_tenant_id()
     if viewer is None:
@@ -1696,12 +1739,19 @@ async def claim_resource(
     if resource is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
 
-    state = await _resource_claim_state(db, resource_id, tenant_id, viewer)
-    if not state["claimable"]:
+    # P0：已绑定 owner_id 的文章一律 403，前端隐藏不隐藏都拦得住。
+    if resource.owner_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="该文章已被认领" if state.get("claimer") else "你已提交过认领申请，请等待编辑部处理",
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该文章已归属作者，不可再被认领",
         )
+
+    state = await _resource_claim_state(db, resource, viewer)
+    if not state["claimable"]:
+        if state.get("state") == "pending_review":
+            msg = "你已提交过认领申请，请等待编辑部处理" if state.get("mine") else "该文章已有认领申请在审批中"
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="该文章已被认领")
 
     note = (body.note if body else None) or None
     claim = AuthorClaim(
