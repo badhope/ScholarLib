@@ -66,25 +66,7 @@ function MePage() {
 
   const owned = data.identities.filter((i) => i in data.levels)
   const multi = owned.length > 1
-  const active = owned.includes('author') ? 'author' : owned[0]
 
-  return (
-    <MePageInner data={data} owned={owned} multi={multi} initial={active} />
-  )
-}
-
-function MePageInner({
-  data,
-  owned,
-  multi,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  initial: _initial,
-}: {
-  data: NonNullable<ReturnType<typeof useMeProfile>['data']>
-  owned: string[]
-  multi: boolean
-  initial: string
-}) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -119,9 +101,23 @@ function MePageInner({
         </div>
       </Card>
 
-      {/* 身份内等级（激励轴）：单身份直接展示，多身份用 Tab */}
+      {/* 身份内等级（激励轴）：单身份直接展示，多身份用 Tab；无轨则给空态 */}
       {owned.length === 0 ? (
-        <p className="text-sm text-muted-foreground">暂无身份等级数据。</p>
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            {data.permission_role === 'editor_in_chief' ? (
+              <>
+                <p className="font-medium text-foreground">主编（不设等级）</p>
+                <p className="mt-1">主编为最高权限档，不参与 L/R/E 等级轨，也不与其他身份并列。</p>
+              </>
+            ) : (
+              <>
+                <p>暂无等级轨。</p>
+                <p className="mt-1">投稿或文章被认领后，作者等级轨将在此展示。</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
       ) : multi ? (
         <MultiIdentityTabbed owned={owned} levels={data.levels} />
       ) : (

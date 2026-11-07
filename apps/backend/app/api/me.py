@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -23,6 +24,7 @@ from app.api.deps import (
 from app.core.db import get_db
 from app.models import User
 from app.modules.gamification import levels_axis
+from app.modules.gamification.models import PointEvent
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -60,19 +62,58 @@ _PERMISSIONS = {
 }
 
 
-def _identities_for_role(permission_role: str) -> list[str]:
-    """根据权限档位列出该账号实际具备哪些身份轨（用于分轨展示）。
+async def _has_author_activity(db: AsyncSession, user: User) -> bool:
+    """该账号是否真的有作者产出（投稿 / 被认领稿）。
 
-    大身份包含小身份：主编天然也是编辑/审稿人/作者；但等级轨各自独立，
-    数值互不混排。
+    没有产出就不展示「作者」等级轨——避免一个只读过文章的账号在个人中心
+    看到一枚无意义的 L1。
     """
-    rank = PERMISSION_RANK[permission_role]
-    out = ["author"]
-    if rank >= PERMISSION_RANK["reviewer"]:
-        out.append("reviewer")
-    if rank >= PERMISSION_RANK["editor"]:
-        out.append("editor")
-    return out
+    from app.modules.submission.models import Submission
+
+    submitted = (
+        await db.execute(
+            select(func.count(Submission.id)).where(
+                Submission.tenant_id == user.tenant_id,
+                Submission.submitted_by == user.id,
+            )
+        )
+    ).scalar_one()
+    if int(submitted or 0) > 0:
+        return True
+    # 认领通过（claim.approve）会写 author 轨 point_event，也算作者活动。
+    authored = (
+        await db.execute(
+            select(func.count(PointEvent.id)).where(
+                PointEvent.tenant_id == user.tenant_id,
+                PointEvent.user_id == user.id,
+                PointEvent.identity == "author",
+                PointEvent.delta > 0,
+            )
+        )
+    ).scalar_one()
+    return int(authored or 0) > 0
+
+
+async def _identities_for_role(db: AsyncSession, user: User, permission_role: str) -> list[str]:
+    """按账号**实际持有身份**决定展示哪几条等级轨。
+
+    口径（v1.14 定稿）：
+    - editor_in_chief → 只显示「主编」，不挂任何 L/R/E 等级轨；
+    - editor         → 只显示「编辑」轨；
+    - reviewer       → 只显示「审稿人」轨；若同时有作者产出，再额外加「作者」轨；
+    - user           → 有作者产出才显示「作者」轨，否则不展示等级轨。
+    """
+    if permission_role == "editor_in_chief":
+        return []
+    if permission_role == "editor":
+        return ["editor"]
+    if permission_role == "reviewer":
+        out = ["reviewer"]
+        if await _has_author_activity(db, user):
+            out.append("author")
+        return out
+    # user：仅在确有作者产出时展示作者轨。
+    return ["author"] if await _has_author_activity(db, user) else []
 
 
 @router.get("/profile")
@@ -82,10 +123,11 @@ async def my_profile(
 ) -> dict[str, object]:
     """当前身份 + 各身份轨等级 + 权限清单。
 
-    只返回当前账号具备的身份轨；A 身份的等级数值不会混进 B 身份段。
+    只返回当前账号实际具备的身份轨；A 身份的等级数值不会混进 B 身份段。
+    主编不挂任何等级轨。
     """
     permission_role = await effective_permission_role(db, current_user)
-    identities = _identities_for_role(permission_role)
+    identities = await _identities_for_role(db, current_user, permission_role)
 
     level_sections: dict[str, dict[str, object]] = {}
     for ident in identities:
@@ -105,6 +147,7 @@ async def my_profile(
         "permission_label": PERMISSION_LABELS[permission_role],
         "permissions": perms,
         # 等级轴：分轨快照，键为 identity（author/reviewer/editor）。
+        # 主编为空列表（不设等级）。
         "identities": identities,
         "levels": level_sections,
         "rules_accepted": current_user.rules_ack_version is not None,
@@ -119,7 +162,8 @@ async def my_points(
 ) -> dict[str, object]:
     """某一身份轨的积分流水（只显示该身份，不跨身份合并）。"""
     permission_role = await effective_permission_role(db, current_user)
-    if identity not in _identities_for_role(permission_role):
+    allowed = await _identities_for_role(db, current_user, permission_role)
+    if identity not in allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"当前账号不具备 {identity} 身份轨",

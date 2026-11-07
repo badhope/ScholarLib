@@ -1,4 +1,11 @@
-"""身份（权限轴）+ 等级（激励轴）双轴的集成测试（v1.14）。"""
+"""身份（权限轴）+ 等级（激励轴）双轴的集成测试（v1.14 定稿口径）。
+
+口径：
+- chief 只显示「主编」，identities=[]（不挂任何 L/R/E 轨）；
+- editor 只显示 editor 轨；
+- reviewer 只显示 reviewer 轨（有作者产出才加 author 轨）；
+- user 有作者产出才显示 author 轨，否则不展示。
+"""
 
 from __future__ import annotations
 
@@ -18,37 +25,23 @@ from conftest import auth_headers, register_reviewer, register_user
 async def warmed_db(
     client: AsyncClient, db_session: AsyncSession
 ) -> AsyncGenerator[AsyncSession, None]:
-    """先经 client 触发 lifespan/建表暖场，再给 db_session。
-
-    直接在测试函数里并列请求 db_session 会让 pytest-asyncio 在
-    autouse fresh_database 之前开 session，导致「no such table: tenants」。
-    """
     yield db_session
 
 
-async def test_me_profile_user_identity_and_cross_identity_forbidden(
-    client: AsyncClient, test_user: dict
-) -> None:
+async def test_plain_reader_has_no_level_tracks(client: AsyncClient, test_user: dict) -> None:
+    """普通读者（无投稿/无认领）不展示任何等级轨。"""
     r = await client.get("/api/me/profile", headers=auth_headers(test_user))
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["permission_role"] == "user"
-    assert "author" in body["identities"]
-    assert "reviewer" not in body["identities"]
-    assert "editor" not in body["identities"]
-    assert "author" in body["levels"]
-    assert "editor" not in body["levels"]
+    assert body["identities"] == []
+    assert body["levels"] == {}
 
+    # 无作者轨时取 author 流水 → 403。
     forbidden = await client.get(
-        "/api/me/points", params={"identity": "editor"}, headers=auth_headers(test_user)
-    )
-    assert forbidden.status_code == 403, forbidden.text
-
-    ok = await client.get(
         "/api/me/points", params={"identity": "author"}, headers=auth_headers(test_user)
     )
-    assert ok.status_code == 200, ok.text
-    assert ok.json()["identity"] == "author"
+    assert forbidden.status_code == 403, forbidden.text
 
 
 async def test_award_points_idempotent_and_essay_zero(
@@ -72,6 +65,11 @@ async def test_award_points_idempotent_and_essay_zero(
     snap = await levels_axis.level_snapshot(warmed_db, user, "author")
     assert snap["points"] == 20
 
+    # 有了 author 积分后，author 轨应出现在 identities 里。
+    prof = await client.get("/api/me/profile", headers=auth_headers(test_user))
+    assert prof.status_code == 200, prof.text
+    assert "author" in prof.json()["identities"]
+
     essay = await levels_axis.award_points(
         warmed_db,
         user,
@@ -85,7 +83,7 @@ async def test_award_points_idempotent_and_essay_zero(
     assert snap2["points"] == 20
 
 
-async def test_reviewer_sees_reviewer_track_and_403_on_editor_api(
+async def test_reviewer_only_reviewer_track_and_403_on_editor_api(
     client: AsyncClient, admin_user: dict
 ) -> None:
     reviewer = await register_reviewer(client, admin_user, "rev1", "rev1@example.com")
@@ -93,9 +91,20 @@ async def test_reviewer_sees_reviewer_track_and_403_on_editor_api(
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["permission_role"] == "reviewer"
-    assert "author" in body["identities"]
-    assert "reviewer" in body["identities"]
+    # reviewer 没有作者产出，只有 reviewer 轨，不并列 author 轨。
+    assert body["identities"] == ["reviewer"]
     assert "editor" not in body["identities"]
+    assert "author" not in body["identities"]
 
     resp = await client.get("/api/submissions/pending", headers=auth_headers(reviewer))
     assert resp.status_code == 403, resp.text
+
+
+async def test_chief_has_no_level_tracks(client: AsyncClient, admin_user: dict) -> None:
+    """主编：identities 为空，不出现 L/R/E 任何等级轨。"""
+    r = await client.get("/api/me/profile", headers=auth_headers(admin_user))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["permission_role"] == "editor_in_chief"
+    assert body["identities"] == []
+    assert body["levels"] == {}
