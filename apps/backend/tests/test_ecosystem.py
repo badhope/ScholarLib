@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from app.api import deps
+from app.core.tracks import canonicalize_track_category
 from app.modules.catalog import cover_defaults
-from app.modules.submission._helpers import _category_from_track
 
 
 def test_discipline_cover_mapping():
@@ -19,10 +19,19 @@ def test_default_cover_path_deterministic():
     assert a == b and a.startswith("/covers/computer-science-")
 
 
-def test_category_from_track():
-    assert _category_from_track("serious") == "academic"
-    assert _category_from_track("absurd") == "fun"
-    assert _category_from_track(None) == "academic"
+def test_track_category_single_authority():
+    """单一权威口径：content_track 权威，category 由 track 推导。"""
+    # paper 强制 academic——带 fun 也落 academic
+    assert canonicalize_track_category("paper", "fun") == ("paper", "academic")
+    # essay 缺省 fun
+    assert canonicalize_track_category("essay", None) == ("essay", "fun")
+    # essay + rant 透传
+    assert canonicalize_track_category("essay", "rant") == ("essay", "rant")
+    # track 缺失时 category 回推赛道
+    assert canonicalize_track_category(None, "academic") == ("paper", "academic")
+    assert canonicalize_track_category(None, "fun") == ("essay", "fun")
+    # 全缺省：本刊默认学术刊
+    assert canonicalize_track_category(None, None) == ("paper", "academic")
 
 
 def test_role_chain_constants():

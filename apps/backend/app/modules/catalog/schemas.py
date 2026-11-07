@@ -22,8 +22,9 @@ from pydantic import (
 from app.core.schemas import Authors, PaginationMeta
 from app.core.tracks import (
     Track,
-    derive_content_track,
     normalize_track,
+    resolve_category,
+    resolve_content_track,
 )
 
 
@@ -111,8 +112,12 @@ class ResourceBase(BaseModel):
     # 旧客户端传 absurd 等值由 before-validator 归一为 serious，不 422。
     track: Track = "serious"
     # 内容类别：academic（学术研究）/ fun（娱乐向）/ rant（吐槽向）。
-    # 可空：历史数据由迁移 019 回填，新发布由物化流程折算，编辑部可改口。
+    # 子类型标签——由 content_track 权威推导（paper→academic，essay→fun/rant），
+    # 写入统一走 core.tracks.canonicalize_track_category，见 ResourceResponse 校正。
     content_category: ContentCategory | None = None
+    # 内容赛道（唯一权威）：paper=学术研究（进 R 因子/篇均指标），
+    # essay=娱乐/吐槽。缺省按 paper（本刊默认学术刊）。
+    content_track: Literal["paper", "essay"] | None = None
     # 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」。
     # 从稿件 front-matter 解析；非法值原样保留，详情接口 clc_status 标待校正。
     clc_code: str | None = Field(default=None, max_length=20)
@@ -246,6 +251,10 @@ class ResourceUpdate(BaseModel):
     cover_image: str | None = Field(default=None, max_length=500)
     cover_theme: str | None = Field(default=None, max_length=50)
     publish_at: datetime | None = None
+    # 内容赛道/类别：content_track 为唯一权威；只传类别时按类别回推赛道
+    # （academic→paper，fun/rant→essay）。落库由 routes 统一走 canonicalize。
+    content_track: Literal["paper", "essay"] | None = None
+    content_category: ContentCategory | None = None
 
     @field_validator("track", mode="before")
     @classmethod
@@ -289,7 +298,7 @@ class ResourceResponse(ResourceBase):
     has_file: bool = False
     # 是否有在线阅读用 Markdown 稿件（列表与详情都返回）
     has_markdown: bool = False
-    # 内容赛道派生值（P0）：paper|essay。DB 值缺失时按 content_category 回退。
+    # 内容赛道（唯一权威）：paper|essay。响应层按 track 校正 content_category。
     content_track: str | None = None
     # 中图分类号校正状态：valid / needs_correction / absent（由 clc_code 反推）。
     clc_status: str | None = None
@@ -304,7 +313,10 @@ class ResourceResponse(ResourceBase):
 
     @model_validator(mode="after")
     def _derive_derived_fields(self) -> "ResourceResponse":
-        """content_track 按 content_category 回退派生；clc_status 由 clc_code 反推。
+        """读口径校正：content_track 为权威，content_category 按 track 反推。
+
+        历史脏数据（paper+fun / essay+academic / 漏迁移）在响应层一律按
+        track 覆盖，外部看到的永远自洽：paper→academic，essay→fun/rant。
 
         P0 收口：娱乐稿（content_track=essay）不下发任何学术评分字段——
         quality_score / quality_grade 一律置 null，学术稿（paper）保持原值。
@@ -312,7 +324,8 @@ class ResourceResponse(ResourceBase):
         """
         from app.modules.submission.clc import clc_status_of
 
-        self.content_track = derive_content_track(self.content_category, self.content_track)
+        self.content_track = resolve_content_track(self.content_track, self.content_category)
+        self.content_category = resolve_category(self.content_track, self.content_category)
         self.clc_status = clc_status_of(self.clc_code)
         if self.content_track == "essay":
             self.quality_score = None

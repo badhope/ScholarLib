@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_tenant_id
 from app.core import search as fulltext
 from app.core.db import paginate
-from app.core.tracks import derive_content_track, normalize_track
+from app.core.tracks import canonicalize_track_category, normalize_track
 from app.modules.catalog import cover_defaults
 from app.modules.catalog.models import Resource as ResourceORM
 from app.modules.submission.models import Submission, SubmissionVersion
@@ -135,14 +135,13 @@ async def _materialize_resource_from_submission(
             submission.discipline,
             seed=sum(ord(c) for c in (submission.title or "x")),
         ),
-        # 内容类别（v1.11）：类别是一等公民属性，物化时先按赛道折算
-        # （serious→学术，absurd→娱乐向），编辑部可在目录后台改口。
-        content_category=_category_from_track(
-            normalize_track(getattr(submission, "track", None))
-        ),
     )
-    # 内容赛道派生值（P0）：academic→paper，fun/rant→essay。
-    resource.content_track = derive_content_track(resource.content_category, None)
+    # 内容赛道（唯一权威）：以 submission.content_track 为准（缺省 paper），
+    # content_category 由 track 推导——paper→academic，essay→fun。
+    # submissions 表无 content_category 列；编辑部要 rant 可在目录后台改口。
+    resource.content_track, resource.content_category = canonicalize_track_category(
+        getattr(submission, "content_track", None), None
+    )
     db.add(resource)
     await db.flush()
     if not resource.download_url and submission.file_path:
@@ -153,11 +152,6 @@ async def _materialize_resource_from_submission(
     # 搜索路由按 id 回读 DB，查不到的命中会被静默丢弃。
     await fulltext.index_resource(resource)
     return resource
-
-
-def _category_from_track(track: str | None) -> str:
-    """赛道折算内容类别：serious→学术，absurd→娱乐向。吐槽向由编辑部改口。"""
-    return "fun" if (track or "serious") == "absurd" else "academic"
 
 
 def _to_response(entry: Submission) -> SubmissionResponse:

@@ -1535,6 +1535,13 @@ async def create_resource(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
 
+    # 单一权威口径：content_track 权威，content_category 由 track 推导。
+    # paper 强制 academic；essay 只允许 fun/rant（缺省 fun）。
+    from app.core.tracks import canonicalize_track_category
+
+    ct_track, ct_category = canonicalize_track_category(
+        payload.content_track, payload.content_category
+    )
     resource = Resource(
         tenant_id=tenant_id,
         slug=payload.slug,
@@ -1563,6 +1570,8 @@ async def create_resource(
         language=payload.language,
         publication_status=payload.publication_status,
         publish_at=payload.publish_at,
+        content_track=ct_track,
+        content_category=ct_category,
         authors_meta=(
             [m.model_dump() for m in payload.authors_meta]
             if payload.authors_meta is not None
@@ -1666,6 +1675,19 @@ async def update_resource(
 
     for field, value in update_data.items():
         setattr(resource, field, value)
+
+    # 单一权威口径：PATCH 动了 track / category 任一者，落库前统一规范化。
+    # track 权威胜出；只传 category 时按类别回推赛道（academic→paper，
+    # fun/rant→essay）；paper 恒 academic，essay 缺省 fun。
+    if "content_track" in update_data or "content_category" in update_data:
+        from app.core.tracks import canonicalize_track_category
+
+        resource.content_track, resource.content_category = (
+            canonicalize_track_category(
+                update_data.get("content_track", resource.content_track),
+                update_data.get("content_category", resource.content_category),
+            )
+        )
 
     # Audit: record which fields the admin touched (values may be large,
     # so we log field names only; the Resource row keeps the new state).

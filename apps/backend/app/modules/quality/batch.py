@@ -113,10 +113,27 @@ async def apply_review_items(
         resource.quality_grade = str(evaluation["grade"])
         resource.quality_breakdown = evaluation  # JSON 列：保留完整明细可追溯
         resource.absurdity_index = float(item.absurdity_index)
-        category_changed = False
-        if item.content_category and item.content_category != resource.content_category:
-            resource.content_category = item.content_category
-            category_changed = True
+        # 单一权威口径：content_track 权威，content_category 由 track 推导。
+        # 编辑部显式类别 = 赛道子类型声明（academic→paper，fun/rant→essay）；
+        # 未显式指定时，仅在现有 track 合法的前提下按 track 校正 category，
+        # 修历史 paper+fun / essay+academic 漂移；track 缺失不擅自改判。
+        from app.core.tracks import canonicalize_track_category
+
+        if item.content_category is not None:
+            new_track, new_category = canonicalize_track_category(
+                None, item.content_category
+            )
+        elif resource.content_track in ("paper", "essay"):
+            new_track, new_category = canonicalize_track_category(
+                resource.content_track, resource.content_category
+            )
+        else:
+            new_track, new_category = resource.content_track, resource.content_category
+        category_changed = (
+            new_category != resource.content_category or new_track != resource.content_track
+        )
+        resource.content_track = new_track
+        resource.content_category = new_category
         updated += 1
 
         db.add(

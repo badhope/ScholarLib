@@ -23,13 +23,17 @@ from typing import Final, Literal
 
 Track = Literal["serious"]
 
-# 内容赛道（P0）：由 content_category 派生，与历史 track(serious|absurd)
-# 完全无关。paper = 学术研究（进 R 因子/篇均指标）；essay = 娱乐/吐槽（不进）。
+# 内容赛道（P0，2026-11 收口为唯一权威口径）：
+#   content_track（paper|essay）是唯一权威轨道字段；
+#   content_category 退化为子类型标签——paper 恒为 academic，
+#   essay 为 fun（娱乐向）或 rant（吐槽向）。
+# 历史上 category→track 派生，已翻转：track→category 推导（见 resolve_category）。
 ContentTrack = Literal["paper", "essay"]
 
 DEFAULT_CONTENT_TRACK: Final[ContentTrack] = "paper"
 
 # content_category → content_track。fun / rant 均为娱乐稿（essay）。
+# 仅供 track 缺失时的兜底回推，不再是写入方向。
 _CATEGORY_TO_TRACK: Final[dict[str, ContentTrack]] = {
     "academic": "paper",
     "fun": "essay",
@@ -37,20 +41,59 @@ _CATEGORY_TO_TRACK: Final[dict[str, ContentTrack]] = {
 }
 
 
-def derive_content_track(content_category: str | None, db_value: str | None = None) -> ContentTrack:
-    """按 content_category 派生 content_track（paper|essay）。
+def resolve_content_track(
+    track: str | None, category: str | None = None
+) -> ContentTrack:
+    """规范化 content_track：合法 track 权威胜出；缺失时按 category 回推。
 
-    DB 值缺失时回退到 content_category 计算；两者都缺省时按学术稿（paper）
-    保守处理——本刊默认是学术刊。
+    fun / rant → essay；academic 或两者都缺省时按学术稿（paper）保守处理——
+    本刊默认是学术刊。
     """
-    if db_value in ("paper", "essay"):
-        return db_value  # type: ignore[return-value]
-    return _CATEGORY_TO_TRACK.get((content_category or "").lower(), DEFAULT_CONTENT_TRACK)
+    if track in ("paper", "essay"):
+        return track  # type: ignore[return-value]
+    return _CATEGORY_TO_TRACK.get((category or "").lower(), DEFAULT_CONTENT_TRACK)
+
+
+def resolve_category(track: str | None, category: str | None = None) -> str:
+    """由权威 content_track 推导/校正 content_category（单一权威口径）。
+
+    - paper → 恒 academic（任何 fun/rant 输入一律覆盖，杜绝 paper+fun 漂移）；
+    - essay → fun/rant 透传，缺省或非法值兜底 fun；
+    - track 缺失时按 paper 保守处理（academic）。
+    """
+    track = resolve_content_track(track, category)
+    if track == "paper":
+        return "academic"
+    return category if category in ("fun", "rant") else "fun"
+
+
+def canonicalize_track_category(
+    track: str | None, category: str | None = None
+) -> tuple[str, str]:
+    """写入路径统一入口：返回 (track, category) 规范组合。
+
+    track 合法时权威胜出；track 缺失时 category 回推赛道
+    （academic→paper，fun/rant→essay）。任何写 content_track /
+    content_category 的路径都必须经过本函数，禁止出现
+    paper+fun、essay+academic 这类矛盾组合。
+    """
+    normalized_track = resolve_content_track(track, category)
+    return normalized_track, resolve_category(normalized_track, category)
+
+
+def derive_content_track(content_category: str | None, db_value: str | None = None) -> ContentTrack:
+    """【兼容壳】按 content_category 派生 content_track。
+
+    新口径下 content_track 才是权威；本函数保留是为了存量读路径
+    （engagement.is_paper_track 等）——DB 有 track 值时 track 胜出，
+    缺失才回退 category。语义等价于 resolve_content_track(db_value, category)。
+    """
+    return resolve_content_track(db_value, content_category)
 
 
 def is_paper_track(content_category: str | None, db_value: str | None = None) -> bool:
     """是否学术稿（paper）：R 因子/篇均指标只统计 paper。"""
-    return derive_content_track(content_category, db_value) == "paper"
+    return resolve_content_track(db_value, content_category) == "paper"
 
 DEFAULT_TRACK: Final[Track] = "serious"
 ALL_TRACKS: Final[tuple[Track, ...]] = ("serious",)
@@ -95,8 +138,11 @@ __all__ = [
     "TRACK_SHORT_LABELS",
     "ContentTrack",
     "Track",
+    "canonicalize_track_category",
     "derive_content_track",
     "is_paper_track",
     "normalize_track",
+    "resolve_category",
+    "resolve_content_track",
     "track_label",
 ]
