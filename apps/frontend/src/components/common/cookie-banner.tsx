@@ -88,11 +88,11 @@ export function CookieBanner() {
       aria-live="polite"
       aria-label="Cookie 使用同意"
       data-testid="cookie-banner"
-      className="relative z-40 mx-4 mt-3 max-h-[30vh] overflow-y-auto rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur sm:fixed sm:bottom-5 sm:left-5 sm:right-auto sm:top-auto sm:m-0 sm:w-[20rem] sm:p-4"
+      className="relative z-40 mx-4 mt-2 max-h-[26vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:fixed sm:bottom-5 sm:left-5 sm:right-auto sm:top-auto sm:m-0 sm:w-[20rem] sm:rounded-xl sm:p-4 sm:shadow-lg"
     >
-      <div className="flex flex-col gap-2.5 sm:gap-3">
-        <div className="text-xs leading-relaxed text-foreground/90">
-          <p className="text-[13px] font-medium">本站使用 Cookie</p>
+      <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-stretch sm:gap-3">
+        <div className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90">
+          <p className="text-[13px] font-medium leading-tight">本站使用 Cookie</p>
           <p className="mt-1 hidden text-foreground/70 sm:block">
             必要 Cookie 用于保持登录与防跨站伪造；本站无广告、无第三方追踪。
             <a href="/privacy" className="ml-1 underline hover:text-foreground">
@@ -100,12 +100,12 @@ export function CookieBanner() {
             </a>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="h-8 px-2.5 text-xs sm:h-9 sm:flex-1"
             onClick={essentialOnly}
             data-testid="cookie-banner-essential"
           >
@@ -114,7 +114,7 @@ export function CookieBanner() {
           <Button
             type="button"
             size="sm"
-            className="flex-1"
+            className="h-8 px-3 text-xs sm:h-9 sm:flex-1"
             onClick={accept}
             data-testid="cookie-banner-accept"
           >
