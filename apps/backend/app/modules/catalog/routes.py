@@ -1066,6 +1066,15 @@ async def get_resource_manuscript(
     out_data = data
     try:
         md_text = data.decode("utf-8")
+        # 娱乐轨不展示作者个人邮箱/手机号：在线阅读与下载件都做脱敏，
+        # 论文轨保留通信作者邮箱（学术惯例）。
+        if (resource.content_track or "").lower() == "essay":
+            import re as _re
+
+            md_text = _re.sub(
+                r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md_text
+            )
+            md_text = _re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md_text)
         rewritten = rewrite_embedded_images(md_text, resource_id)
         if rewritten != md_text:
             out_data = rewritten.encode("utf-8")
@@ -1358,6 +1367,11 @@ async def export_resource_manuscript(
     )
 
     md_text = preprocess_md(data.decode("utf-8", errors="replace"))
+    if (resource.content_track or "").lower() == "essay":
+        import re as _re
+
+        md_text = _re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md_text)
+        md_text = _re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md_text)
     # 署名行：作者 · 发表日期（来自 Resource 元数据）
     authors_str = "、".join(resource.authors or [])
     pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
