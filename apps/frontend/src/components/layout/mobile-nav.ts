@@ -48,12 +48,12 @@ export interface MobileMoreItem {
 export const MOBILE_MORE_GROUP_ORDER = ['我的', '工作台', '期刊', '消息', '设置', '站点管理'] as const
 
 // 底部固定 4 Tab：首页 / 目录 / 论坛 / 我的。
-// 「我的」暂时指向 /profile（/me 由另一位同事在做，落地后把 to 换成 '/me'）。
+// 「我的」指向 /me（身份等级同事已落地；/profile 会重定向到 /me）。
 export const MOBILE_TABS: MobileTab[] = [
   { to: '/', label: '首页', icon: Home },
   { to: '/catalog', label: '目录', icon: BookOpen },
   { to: '/forum', label: '论坛', icon: MessagesSquare },
-  { to: '/profile', label: '我的', icon: User },
+  { to: '/me', label: '我的', icon: User },
 ]
 
 // 折叠菜单（header 右上角"⋯"弹出）：收进抽屉时代的次级入口，
