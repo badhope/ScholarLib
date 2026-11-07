@@ -9,7 +9,6 @@ import type { ResourceType } from '@/lib/types'
 import { extractError, formatAuthors, cn } from '@/lib/utils'
 import { contentCategoryLabel, displayTypeLabel, isScholarlyContent } from '@/lib/resource-labels'
 import { PageHeader } from '@/components/common/page-header'
-import { ArticleCover } from '@/components/common/article-cover'
 import { EmptyState, ErrorState } from '@/components/common/state'
 import { Pagination } from '@/components/common/pagination'
 import { Badge } from '@/components/ui/badge'
@@ -18,6 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { ResourceCard } from '@/components/mobile/ResourceCard'
+import { CatalogGridCard } from './catalog-grid-card'
 import {
   Select,
   SelectContent,
@@ -48,11 +48,22 @@ interface CatalogSearch {
   q?: string
   type?: ResourceType
   category?: 'academic' | 'fun' | 'rant'
+  /** 轨道切换（v1.15）：paper=论文（学术），essay=娱乐（fun/rant 同属娱乐）。
+   *  不写 = 全部。URL 持久化，刷新不丢。 */
+  track?: 'paper' | 'essay'
   discipline?: string
   year?: number
   page?: number
   view?: 'list' | 'grid'
 }
+
+// 轨道分段控件选项。值与后端下发的 content_track 词汇对齐（paper|essay）；
+// 娱乐（essay）在请求侧落到既有 ?category=fun 参数（后端只支持单值精确匹配）。
+const TRACK_OPTIONS: { value: 'paper' | 'essay' | undefined; label: string }[] = [
+  { value: undefined, label: '全部' },
+  { value: 'paper', label: '论文' },
+  { value: 'essay', label: '娱乐' },
+]
 
 const TYPE_OPTIONS: { value: ResourceType | 'all'; label: string }[] = [
   { value: 'all', label: '全部类型' },
@@ -70,10 +81,15 @@ function CatalogListPage() {
   const { isAdmin, isAuthenticated } = useAuth()
   const isMobile = useIsMobile()
 
+  // 轨道切换 → 后端单值 category 参数：论文=academic，娱乐=fun。
+  // 后端 ?category 只接受 academic|fun|rant 精确值，娱乐轨道在请求侧落到 fun。
+  const trackCategory =
+    search.track === 'paper' ? 'academic' : search.track === 'essay' ? 'fun' : undefined
+
   const params = {
     q: search.q || undefined,
     type: search.type,
-    category: search.category || undefined,
+    category: (trackCategory ?? search.category) || undefined,
     discipline: search.discipline || undefined,
     year: search.year,
     page: search.page || 1,
@@ -82,7 +98,8 @@ function CatalogListPage() {
 
   const { data, isLoading, isError, refetch } = useResources(params)
   const [selectedIds, setSelectedIds] = useState<number[]>([])
-  const viewMode: 'list' | 'grid' = search.view === 'grid' ? 'grid' : 'list'
+  // 默认视图 = 九宫格（v1.15）：封面浏览是目录页第一动作；?view=list 时才切列表。
+  const viewMode: 'list' | 'grid' = search.view === 'list' ? 'list' : 'grid'
 
   // 筛选条件写到 URL，replace 避免每次筛选都污染历史。
   // 顺带清空勾选：翻页/改筛选后旧 id 已经不在页面上，留着会让「导出」
@@ -141,30 +158,22 @@ function CatalogListPage() {
         }
       />
 
+      {/* 顶部工具栏：轨道分段（全部/论文/娱乐）+ 视图切换（九宫格/列表）。
+          全端可见——轨道分流是第一动作，不能藏进移动端折叠面板。 */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <TrackSwitcher
+          value={search.track}
+          onChange={(track) => updateSearch({ track, page: 1 })}
+        />
+        <ViewSwitcher
+          value={viewMode}
+          onChange={(view) => updateSearch({ view })}
+        />
+      </div>
+
       {/* 栏目（学科）快捷筛选：点击即切换，免去展开下拉的两步操作 */}
       {!isMobile && (
         <DisciplineChips search={search} updateSearch={updateSearch} />
-      )}
-
-      {/* 视图切换（v1.11）：列表=管理与速览，九宫格=封面浏览。 */}
-      {!isMobile && (
-        <div className="mb-3 flex justify-end">
-          <div className="inline-flex rounded-md border p-0.5 text-xs">
-            {(['list', 'grid'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => updateSearch({ view: v })}
-                className={
-                  (viewMode === v ? 'bg-primary text-primary-foreground ' : 'text-muted-foreground ') +
-                  'rounded px-3 py-1 transition-colors'
-                }
-              >
-                {v === 'list' ? '列表' : '九宫格'}
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* 桌面端：筛选常驻卡片（md 及以上） */}
@@ -213,32 +222,21 @@ function CatalogListPage() {
       ) : isError ? (
         <ErrorState message="加载资源失败" onRetry={() => refetch()} />
       ) : !data || data.data.length === 0 ? (
-        <EmptyState title="暂无资源" description="尝试调整筛选条件。" />
+        <EmptyState
+          title={search.track ? '该轨道暂无内容' : '暂无资源'}
+          description={
+            search.track === 'paper'
+              ? '还没有收录的论文，切换到「娱乐」看看随笔。'
+              : search.track === 'essay'
+                ? '还没有娱乐向内容，切换到「论文」看看学术收录。'
+                : '尝试调整筛选条件。'
+          }
+        />
       ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+        // 九宫格（默认）：移动 390px 下 2 列不横向溢出；桌面 1440 下 4 列。
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4">
           {data.data.map((r) => (
-            <Link
-              key={r.id}
-              to="/catalog/$resourceId"
-              params={{ resourceId: String(r.id) }}
-              className="group overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md"
-            >
-              <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" />
-              <div className="space-y-1.5 p-3">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {isScholarlyContent(r.content_category, r.content_track) && r.content_category ? (
-                    <Badge variant="outline" className="bg-primary/10 text-[10px] text-primary border-primary/25">
-                      {contentCategoryLabel(r.content_category)}
-                    </Badge>
-                  ) : null}
-                  <Badge variant="secondary" className="text-[10px]">
-                    {displayTypeLabel(r.type, r.content_category, r.content_track)}
-                  </Badge>
-                </div>
-                <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
-                <p className="line-clamp-1 text-xs text-muted-foreground">{formatAuthors(r.authors)}</p>
-              </div>
-            </Link>
+            <CatalogGridCard key={r.id} resource={r} />
           ))}
         </div>
       ) : isMobile ? (
@@ -347,6 +345,79 @@ function CatalogListPage() {
           onPageChange={(p) => updateSearch({ page: p })}
         />
       )}
+    </div>
+  )
+}
+
+// 轨道分段控件（v1.15）：全部 / 论文 / 娱乐。选中态 = 文字加粗 + 底色 + 边框，
+// 不靠颜色小点——色弱与暗模式下也能一眼分辨当前轨道。
+function TrackSwitcher({
+  value,
+  onChange,
+}: {
+  value: 'paper' | 'essay' | undefined
+  onChange: (track: 'paper' | 'essay' | undefined) => void
+}) {
+  return (
+    <div
+      className="inline-flex rounded-lg border bg-muted/60 p-1"
+      role="group"
+      aria-label="按轨道筛选"
+    >
+      {TRACK_OPTIONS.map((o) => {
+        const active = value === o.value
+        return (
+          <button
+            key={o.label}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            className={cn(
+              'rounded-md px-4 py-1.5 text-sm font-medium transition-all',
+              active
+                ? 'border bg-background text-foreground shadow-sm ring-1 ring-border'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// 视图切换：九宫格（封面浏览，默认）/ 列表（紧凑行）。状态写进 URL ?view=，
+// 刷新与分享链接都不丢；九宫格在前、列表在后，与默认视图顺序一致。
+function ViewSwitcher({
+  value,
+  onChange,
+}: {
+  value: 'list' | 'grid'
+  onChange: (view: 'list' | 'grid') => void
+}) {
+  return (
+    <div
+      className="inline-flex rounded-md border p-0.5 text-xs"
+      role="group"
+      aria-label="切换视图"
+    >
+      {(['grid', 'list'] as const).map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(v)}
+          className={cn(
+            'rounded px-3 py-1 transition-colors',
+            value === v
+              ? 'bg-primary font-medium text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {v === 'list' ? '列表' : '九宫格'}
+        </button>
+      ))}
     </div>
   )
 }

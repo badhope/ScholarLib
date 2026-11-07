@@ -1,9 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { FileDown } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { ArticleCover } from '@/components/common/article-cover'
-import { contentCategoryLabel, displayTypeLabel, isScholarlyContent } from '@/lib/resource-labels'
-import { formatAuthors } from '@/lib/utils'
+import { isScholarlyContent } from '@/lib/resource-labels'
+import { formatAuthors, cn } from '@/lib/utils'
 import type { ResourceResponse } from '@/lib/types'
 
 // 移动端目录卡片：横向紧凑布局。
@@ -12,11 +11,20 @@ import type { ResourceResponse } from '@/lib/types'
 // 的结果是一屏只能看到一张半，浏览目录变成翻相册。这里改成「左侧缩略图 +
 // 右侧两行标题」的信息流卡：封面只负责识别，标题和等级负责决策。
 // 封面高度锁定 84px，图片懒加载也不会引起滚动跳动。
+//
+// v1.15：加轨道文字徽标「论文 / 娱乐」（论文=冷深色底，娱乐=暖色底），
+// 与九宫格卡同一口径——列表视图也能一眼分轨道，不靠颜色小点。
 export function ResourceCard({ resource }: { resource: ResourceResponse }) {
   const authors = formatAuthors(resource.authors)
   const scholarly = isScholarlyContent(resource.content_category, resource.content_track)
-  // 娱乐稿不再打"娱乐向"副标——类型 chip 已写明"娱乐/吐槽"，避免重复。
-  const categoryTag = scholarly ? contentCategoryLabel(resource.content_category) : ''
+  // 论文卡：CLC + 学科一行；娱乐卡：娱乐向/吐槽向，不渲染空 CLC 占位。
+  const subLabel = scholarly
+    ? resource.clc_code
+      ? `CLC ${resource.clc_code}`
+      : resource.discipline
+    : resource.content_category === 'rant'
+      ? '吐槽向'
+      : '娱乐向'
 
   return (
     <Link
@@ -39,14 +47,18 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
             {authors || resource.discipline}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-              {displayTypeLabel(resource.type, resource.content_category, resource.content_track)}
-            </Badge>
-            {categoryTag ? (
-              <Badge variant="outline" className="bg-primary/10 px-1.5 py-0 text-[10px] text-primary border-primary/25">
-                {categoryTag}
-              </Badge>
-            ) : null}
+            {/* 轨道文字徽标：汉字 + 冷暖底色，不靠颜色小点 */}
+            <span
+              className={cn(
+                'inline-flex items-center rounded border px-1.5 py-0 font-semibold leading-none',
+                scholarly
+                  ? 'border-slate-700/40 bg-slate-900/85 text-white'
+                  : 'border-amber-600/40 bg-amber-500/90 text-white',
+              )}
+            >
+              {scholarly ? '论文' : '娱乐'}
+            </span>
+            <span className="text-muted-foreground">{subLabel}</span>
             {resource.has_file ? <FileDown className="h-3 w-3" /> : null}
             <span>{resource.year}</span>
           </div>
