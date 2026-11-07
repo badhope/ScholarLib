@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, BookOpen, Download, Lock, Quote, Sparkles, TrendingUp } from 'lucide-react'
+import { ArrowLeft, BookOpen, Download, Lock, Quote, TrendingUp } from 'lucide-react'
 import { useJournalMetrics } from '@/hooks/api/use-modules'
 import { PageHeader } from '@/components/common/page-header'
 import { RevealSection } from '@/components/common/reveal-section'
 import { ErrorState, LoadingSkeleton } from '@/components/common/state'
 import { Card, CardContent } from '@/components/ui/card'
 import { typeLabel } from '@/lib/resource-labels'
-import { AbsurdityDonut, DisciplineBar, EngagementRadar } from '@/components/charts/metrics-charts'
+import { DisciplineBar, EngagementRadar } from '@/components/charts/metrics-charts'
 
 export const Route = createFileRoute('/journal-metrics')({
   component: JournalMetricsPage,
@@ -77,13 +77,7 @@ function JournalMetricsPage() {
                       本刊旗舰指标，衡量全刊已发表内容的综合热度与编辑质量。口径与权重属编辑部内部标准。
                     </p>
                   </div>
-                  <div className="grid grid-cols-3 gap-6 text-center sm:text-right">
-                    <div>
-                      <p className="font-serif text-2xl font-semibold tabular-nums">
-                        {data.absurdity_index_median == null ? '—' : data.absurdity_index_median.toFixed(1)}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">荒诞指数中位数</p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-6 text-center sm:text-right">
                     <div>
                       <p className="font-serif text-2xl font-semibold tabular-nums">
                         {data.self_citation_rate.toFixed(1)}%
@@ -105,15 +99,9 @@ function JournalMetricsPage() {
           <RevealSection>
             <h2 className="text-lg font-medium">一眼看全刊</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              同样的数字，换一种看法。环形看荒诞气质，雷达看读者行为分布，条形看学科构成。
+              同样的数字，换一种看法。雷达看读者行为分布，条形看学科构成。
             </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-xs font-medium text-muted-foreground">荒诞气质</p>
-                  <AbsurdityDonut median={data.absurdity_index_median} />
-                </CardContent>
-              </Card>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardContent className="p-4">
                   <p className="text-xs font-medium text-muted-foreground">读者行为分布</p>
@@ -177,11 +165,6 @@ function JournalMetricsPage() {
                   icon: TrendingUp,
                   title: 'R 因子',
                   body: '本刊自设计的旗舰指标，综合读者注意力与编辑质量评定，取全刊均值。类似传统引文指标的门面数字，但口径由编辑部掌握，不对外公开。',
-                },
-                {
-                  icon: Sparkles,
-                  title: '荒诞指数',
-                  body: '编辑部对每篇内容离谱程度的评定（0–10）。本刊兼收正经与荒诞研究，指数只描述内容气质，与质量无关——正经论文可以很好，离谱论文也可以很好。',
                 },
                 {
                   icon: Quote,
@@ -267,7 +250,7 @@ function JournalMetricsPage() {
               reading_list_items / submissions 表；页面每次访问实时计算。
             </p>
             <p className="mt-2">
-              口径说明：R 因子、荒诞指数中位数、篇均下载/阅读等学术指标仅统计学术稿
+              口径说明：R 因子、篇均下载/阅读等学术指标仅统计学术稿
               （content_category=academic）；娱乐稿（fun/rant）的阅读、收藏、评论、点赞
               等内容侧数据不计入学术指标，但仍在各文章页展示。
             </p>
