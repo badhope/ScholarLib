@@ -343,7 +343,6 @@ class ModuleInfo(BaseModel):
 # --- Health ---
 class HealthResponse(BaseModel):
     status: Literal["ok"]
-    version: str
 
 
 class HealthReadyResponse(BaseModel):

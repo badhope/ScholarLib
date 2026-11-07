@@ -124,7 +124,7 @@ _RESERVED_SOFT_404 = frozenset({"docs", "openapi.json", "redoc", "docs/oauth2-re
 _SPA_ROUTE_PREFIXES = frozenset({
     "403", "about", "account", "admin", "archive", "auth", "authors", "browse",
     "catalog", "claim", "dashboard", "follows", "forgot-password", "forum", "ingest",
-    "journal-metrics", "levels", "library", "login", "me", "notifications", "policies",
+    "journal-metrics", "levels", "library", "login", "notifications", "policies",
     "profile", "reader", "recommendations", "register", "reset-password", "review",
     "settings", "submissions", "support", "verify-email",
 })
@@ -286,6 +286,13 @@ app.include_router(oidc_router, prefix="/api")
 for name, module_router in registry.all_routers():
     app.include_router(module_router, prefix="/api")
     logger.info("module_router_mounted", module=name, prefix=f"/api/{name}")
+
+# --- 审稿人/主编工作台（独立路由，与 review 模块主路由分开挂载，
+#     路径前缀 /review/workbench 与 /editor/workbench） ---
+from app.modules.review.workbench import router as workbench_router  # noqa: E402
+
+app.include_router(workbench_router, prefix="/api")
+logger.info("module_router_mounted", module="workbench", prefix="/api")
 
 
 # --- /reader/{int} 服务端 301 ------------------------------------------------

@@ -36,7 +36,7 @@ router = APIRouter(tags=["health"])
 @router.get("/healthz", response_model=HealthResponse)
 async def liveness_root() -> HealthResponse:
     """Liveness probe at root 鈥? always 200 if the process is alive."""
-    return HealthResponse(status="ok", version=__version__)
+    return HealthResponse(status="ok")
 
 
 @router.get("/readyz", response_model=HealthReadyResponse)
@@ -68,7 +68,7 @@ legacy_router = APIRouter(prefix="/health", tags=["health"])
 
 @legacy_router.get("", response_model=HealthResponse)
 async def liveness_legacy() -> HealthResponse:
-    return HealthResponse(status="ok", version=__version__)
+    return HealthResponse(status="ok")
 
 
 @legacy_router.get("/ready", response_model=HealthReadyResponse)

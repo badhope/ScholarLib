@@ -5,16 +5,17 @@ notifications. Read state is per-user and per-notification — there is no
 shared stream.
 
 Endpoints:
-  GET   /notifications                — list (paginated, newest first)
+  GET   /notifications                — list (paginated, newest first; ?type= / ?category=)
   GET   /notifications/unread-count    — unread count
   PATCH /notifications/read-all        — mark all unread as read
   PATCH /notifications/{id}/read       — mark one as read
   DELETE /notifications/{id}           — delete one
 
-Listing is scoped to ``user_id`` AND ``tenant_id`` so a misconfigured
-tenant context can never leak another tenant's notifications even if
-the user_id collided (defense in depth — RLS already enforces this in
-production PostgreSQL).
+Category mapping (``?category=``):
+  assigned   -> review.invited
+  reminder   -> review.reminder
+  decision   -> submission.decision
+  claim      -> claim.decision
 """
 
 from __future__ import annotations
@@ -43,6 +44,14 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
+# 工作台四类事件的聚合筛选（前端 tab：指派/催审/裁决/认领结果）。
+_CATEGORY_TYPES: dict[str, tuple[str, ...]] = {
+    "assigned": ("review.invited",),
+    "reminder": ("review.reminder",),
+    "decision": ("submission.decision",),
+    "claim": ("claim.decision",),
+}
+
 
 def _tenant_filter(user: User) -> tuple[UUID, int]:
     """Resolve (tenant_id, user_id) for scoping queries.
@@ -57,6 +66,12 @@ def _tenant_filter(user: User) -> tuple[UUID, int]:
 async def list_notifications(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    type: str | None = Query(default=None, description="精确 type 过滤"),
+    category: str | None = Query(
+        default=None,
+        pattern=r"^(assigned|reminder|decision|claim)$",
+        description="聚合分类：指派/催审/裁决/认领结果",
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationListResponse:
@@ -66,6 +81,10 @@ async def list_notifications(
         Notification.tenant_id == tenant_id,
         Notification.user_id == user_id,
     )
+    if type is not None:
+        base = base.where(Notification.type == type)
+    if category is not None:
+        base = base.where(Notification.type.in_(_CATEGORY_TYPES[category]))
     rows, meta = await paginate(
         db,
         base,
