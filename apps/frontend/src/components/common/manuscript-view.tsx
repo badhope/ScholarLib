@@ -107,6 +107,54 @@ const DECLS_RE =
 const DOI_RE = /^(DOI|doi)$/i
 const SCORE_RE = /^(评分|质量等级|RQS|荒诞指数)$/i
 
+// 所有需要剥掉的学术小节标题（用于行内标题规范化）
+const ALL_BLOCK_TITLES =
+  '摘[ \\t\\u3000]*要|Abstract|ABSTRACT|关键词|关键字|Keywords?|中图分类号|CLC|参考文献|References?|Bibliography|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \\t\\u3000]*使用声明?|致谢|Acknowledg(e)?ments?|DOI|doi|评分|质量等级|RQS|荒诞指数'
+
+/**
+ * 规范化：把行内/非行首的 `## 摘要` 这类标题强制断行，让后续按行切分能识别。
+ * 原稿常见形态：作者单位行尾紧接 `## 摘要`，Markdown 不把它当 heading。
+ */
+function normalizeInlineHeadings(md: string): string {
+  // 在 #+ 后跟块标题前补 \n\n；在块标题后补 \n\n
+  const re = new RegExp(`([^\\n])\\s*(#{1,6}\\s*(?:${ALL_BLOCK_TITLES})\\s*[:：]?)`, 'g')
+  let out = md.replace(re, '$1\n\n## $2')
+  // 标题后如果紧跟正文（无换行），补换行
+  const re2 = new RegExp(`(#{1,6}\\s*(?:${ALL_BLOCK_TITLES})\\s*[:：]?)([^\\n])`, 'g')
+  out = out.replace(re2, '$1\n\n$2')
+  return out
+}
+
+/**
+ * 剥掉文首学术刊头块：从开头到第一个正文小节之前，整块丢弃。
+ * 待剥范围：H1 标题（与页头标题重复）、期刊 Logo 图、Open Access/Received/Accepted 行、
+ * 作者单位/邮箱/通讯作者标记。只对 fun/rant 生效。
+ * 判据：剥完后 article 内不再出现第二个 H1 标题、Logo、刊头英文。
+ */
+function dropAcademicHeader(md: string): string {
+  const lines = md.split('\n')
+  // 找第一个正文 H2/H3（1 引言 / 2.1 方法 / Introduction 等）
+  let firstBodyIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(#{2,3})\s+(.*)$/.exec(lines[i])
+    if (m) {
+      const title = m[2].trim()
+      if (/^(\d+(\.\d+)*\s+|引言\b|Introduction\b|方法\b|Method|结果\b|Result|讨论\b|Discussion)/.test(title) &&
+          !headingMatches(title, [ABSTRACT_RE, KEYWORDS_RE, CLC_RE, REFS_RE, DECLS_RE, DOI_RE])) {
+        firstBodyIdx = i
+        break
+      }
+    }
+  }
+  if (firstBodyIdx <= 0) return md
+  const headerBlock = lines.slice(0, firstBodyIdx).join('\n')
+  // 刊头特征：Open Access / Received / Accepted / Logo 图 / 学院/大学/邮箱 / H1
+  if (/(Open Access|Received|Accepted|Copyright|©|!\[.*\]\(|@|School|University|Department|学院|大学|单位|通讯作者|Corresponding|Rubbish\s+Journal|ISSN)/i.test(headerBlock)) {
+    return lines.slice(firstBodyIdx).join('\n')
+  }
+  return md
+}
+
 /**
  * 按轨道裁剪 Markdown：删除指定的 ## / ### 小节。
  * fun/rant：删 摘要/关键词/CLC/参考文献/声明/DOI；保留正文与「参考资料」
@@ -114,22 +162,31 @@ const SCORE_RE = /^(评分|质量等级|RQS|荒诞指数)$/i
  */
 export function stripAcademicSections(md: string, kind: string): string {
   if (kind === 'paper' || kind === 'plain') return md
+
+  // 1) 先把行内标题规范化成行首
+  let work = normalizeInlineHeadings(md)
+
+  // 2) fun/rant 额外剥掉文首学术刊头
+  if (kind === 'fun' || kind === 'rant') {
+    work = dropAcademicHeader(work)
+  }
+
   const dropPatterns: RegExp[] = [ABSTRACT_RE, KEYWORDS_RE, CLC_RE, DOI_RE]
   if (kind === 'fun' || kind === 'rant') dropPatterns.push(REFS_RE, DECLS_RE)
   else if (kind === 'sci_pop') dropPatterns.push(SCORE_RE)
 
-  const lines = md.split('\n')
+  const lines = work.split('\n')
   const out: string[] = []
   let i = 0
   while (i < lines.length) {
     const line = lines[i]
-    const m = /^(#{2,3})\s+(.*)$/.exec(line)
+    const m = /^(#{1,6})\s+(.*)$/.exec(line)
     if (m) {
       const level = m[1].length
       if (headingMatches(m[2], dropPatterns)) {
         i++
         while (i < lines.length) {
-          const next = /^(#{1,3})\s+/.exec(lines[i])
+          const next = /^(#{1,6})\s+/.exec(lines[i])
           if (next && next[1].length <= level) break
           i++
         }
@@ -142,11 +199,20 @@ export function stripAcademicSections(md: string, kind: string): string {
   return out.join('\n')
 }
 
-// 邮箱脱敏：原稿 Markdown 里出现的邮箱一律替换为「未认领」。
-const EMAIL_SCRUB_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+// 邮箱脱敏：原稿里 `* zabwerk@yeah.net`、`邮箱：zabwerk@yeah.net` 这类
+// 整行/整段移除，不留孤零零的「未认领」。只对真邮箱做替换。
+const EMAIL_LINE_RE =
+  /^[ \t>*\-]*\s*(?:邮箱[：:]|Email[：:]|E-mail[：:])?\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*[ \t]*$/gim
+const EMAIL_INLINE_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 
 export function scrubManuscriptEmails(md: string): string {
-  return md.replace(EMAIL_SCRUB_RE, '未认领')
+  // 先删整行邮箱（整行只剩邮箱或「邮箱：xxx」的列表项）
+  let out = md.replace(EMAIL_LINE_RE, '')
+  // 再把行内残留邮箱替换为空字符串（不留「未认领」拼接）
+  out = out.replace(EMAIL_INLINE_RE, '')
+  // 清理多余空行
+  out = out.replace(/\n{3,}/g, '\n\n')
+  return out
 }
 
 function headingHash(text: string): string {
