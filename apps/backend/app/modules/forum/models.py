@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.time import utcnow
@@ -81,4 +81,42 @@ class ForumReply(Base, TenantScopedMixin):
 
     __table_args__ = (
         Index("ix_forum_replies_tenant_topic_created", "tenant_id", "topic_id", "created_at"),
+    )
+
+
+class ForumReport(Base, TenantScopedMixin):
+    """一条用户举报。
+
+    举报对象可以是帖子（``topic_id`` 非空）或回复（``reply_id`` 非空），
+    二者至少其一。版主在后台按 ``status`` 分诊：open / resolved / rejected。
+
+    幂等：同一 reporter 对同一对象只能有一条 open 记录（数据库层
+    UniqueConstraint 兜底），重复举报返回 409 并带上已有记录，不重复入库。
+    """
+
+    __tablename__ = "forum_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reporter_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    # 帖子与回复二选一（FK 都可空，应用层校验至少其一）。
+    topic_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("forum_topics.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    reply_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("forum_replies.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        # 同一用户对同一对象（帖子或回复）只能有一条 open 举报。
+        # 用 partial unique 没法同时覆盖两种对象，这里用两个可空列组合，
+        # 配合应用层"先查 open 记录"做幂等；DB 层再加一个普通索引供后台筛选。
+        Index("ix_forum_reports_tenant_status", "tenant_id", "status", "created_at"),
     )

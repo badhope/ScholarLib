@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Lock, MessageSquare, Pin, Send, Trash2 } from 'lucide-react'
+import { ArrowLeft, Lock, MessageSquare, Pin, Send, Trash2, Flag } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -13,6 +13,12 @@ import { MarkdownEditor } from '@/components/common/markdown-editor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 export const Route = createFileRoute('/forum/$topicId')({
   component: ForumTopicPage,
@@ -86,6 +92,15 @@ function ForumTopicPage() {
     onError: (err) => toast.error(extractError(err, '删除失败')),
   })
 
+  const reportMut = useMutation({
+    mutationFn: async (target: { topic_id?: number; reply_id?: number; reason?: string }) =>
+      (await api.post('/forum/reports', target)).data,
+    onSuccess: () => toast.success('已举报，版主会尽快处理'),
+    onError: (err) => toast.error(extractError(err, '举报失败')),
+  })
+
+  const REPORT_REASONS = ['垃圾广告', '不友善内容', '违法违规', '其他']
+
   if (topicQ.isLoading) return <Loading />
   if (topicQ.isError || !topicQ.data) {
     return <ErrorState message="帖子不存在或已被删除" onRetry={() => topicQ.refetch()} />
@@ -145,6 +160,28 @@ function ForumTopicPage() {
               </Button>
             </div>
           )}
+          {isAuthenticated && !canDelete && (
+            <div className="border-t pt-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost">
+                    <Flag className="h-3.5 w-3.5" />
+                    举报
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {REPORT_REASONS.map((reason) => (
+                    <DropdownMenuItem
+                      key={reason}
+                      onClick={() => reportMut.mutate({ topic_id: id, reason })}
+                    >
+                      {reason}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -161,10 +198,36 @@ function ForumTopicPage() {
           repliesQ.data.map((r) => (
             <Card key={r.id}>
               <CardContent className="py-3">
-                <p className="text-[11px] text-muted-foreground">
-                  {r.author?.username ?? '已注销用户'} ·{' '}
-                  {new Date(r.created_at).toLocaleString('zh-CN')}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    {r.author?.username ?? '已注销用户'} ·{' '}
+                    {new Date(r.created_at).toLocaleString('zh-CN')}
+                  </p>
+                  {isAuthenticated && r.author?.id !== user?.id && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground"
+                          aria-label="举报回复"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {REPORT_REASONS.map((reason) => (
+                          <DropdownMenuItem
+                            key={reason}
+                            onClick={() => reportMut.mutate({ reply_id: r.id, reason })}
+                          >
+                            {reason}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
                 <div className="mt-1.5 markdown-body text-sm leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.body}</ReactMarkdown>
                 </div>

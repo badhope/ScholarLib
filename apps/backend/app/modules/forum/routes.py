@@ -24,13 +24,14 @@ from app.api.deps import (
     ROLE_EDITOR,
     get_current_user,
     get_current_user_optional,
+    require_admin,
     require_tenant_id,
     user_has_role,
 )
 from app.core.db import get_db, paginate
 from app.core.time import utcnow
 from app.models import AuditLog, User
-from app.modules.forum.models import ForumReply, ForumTopic
+from app.modules.forum.models import ForumReply, ForumReport, ForumTopic
 
 router = APIRouter(prefix="/forum", tags=["forum"])
 
@@ -360,3 +361,148 @@ async def delete_topic(
         )
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# 举报（forum_reports）
+# ---------------------------------------------------------------------------
+
+class ReportCreate(BaseModel):
+    topic_id: int | None = None
+    reply_id: int | None = None
+    reason: str = Field(default="", max_length=200)
+
+
+class ReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    topic_id: int | None
+    reply_id: int | None
+    reason: str
+    status: str
+    created_at: datetime
+    reporter: AuthorBrief | None = None
+
+
+@router.post("/reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED)
+async def create_report(
+    payload: ReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportOut:
+    """举报帖子或回复。登录即可。
+
+    幂等：同一用户对同一对象（topic 或 reply）已有 open 举报时直接返回
+    已存在的记录（HTTP 200 语义上是"已存在"，但用 201 也无妨——
+    这里统一用 200 让前端区分"新提交"与"重复提交"）。
+    """
+    tenant_id = require_tenant_id()
+    if payload.topic_id is None and payload.reply_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="必须指定 topic_id 或 reply_id",
+        )
+    # 校验目标存在且未软删
+    if payload.topic_id is not None:
+        topic = (
+            await db.execute(
+                select(ForumTopic).where(
+                    ForumTopic.id == payload.topic_id,
+                    ForumTopic.tenant_id == tenant_id,
+                    ForumTopic.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if topic is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
+    if payload.reply_id is not None:
+        reply = (
+            await db.execute(
+                select(ForumReply).where(
+                    ForumReply.id == payload.reply_id,
+                    ForumReply.tenant_id == tenant_id,
+                    ForumReply.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if reply is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reply not found")
+
+    # 幂等：查同一用户对同一对象是否已有 open 记录
+    target_clause = (
+        ForumReport.reply_id == payload.reply_id
+        if payload.reply_id is not None
+        else ForumReport.topic_id == payload.topic_id
+    )
+    existing = (
+        await db.execute(
+            select(ForumReport).where(
+                ForumReport.tenant_id == tenant_id,
+                ForumReport.reporter_id == current_user.id,
+                ForumReport.status == "open",
+                target_clause,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        # 重复举报：返回 200 + 已有记录，前端 toast 提示"已举报过"
+        authors = await _author_map(db, {current_user.id})
+        return ReportOut(
+            id=existing.id,
+            topic_id=existing.topic_id,
+            reply_id=existing.reply_id,
+            reason=existing.reason,
+            status=existing.status,
+            created_at=existing.created_at,
+            reporter=authors.get(current_user.id),
+        )
+
+    report = ForumReport(
+        tenant_id=tenant_id,
+        reporter_id=current_user.id,
+        topic_id=payload.topic_id,
+        reply_id=payload.reply_id,
+        reason=payload.reason.strip()[:200],
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    authors = await _author_map(db, {current_user.id})
+    return ReportOut(
+        id=report.id,
+        topic_id=report.topic_id,
+        reply_id=report.reply_id,
+        reason=report.reason,
+        status=report.status,
+        created_at=report.created_at,
+        reporter=authors.get(current_user.id),
+    )
+
+
+@router.get("/reports", response_model=list[ReportOut])
+async def list_reports(
+    status_filter: str | None = Query(default="open", pattern=r"^(open|resolved|rejected)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> list[ReportOut]:
+    """管理端：查看举报队列。仅管理员。"""
+    tenant_id = require_tenant_id()
+    stmt = select(ForumReport).where(ForumReport.tenant_id == tenant_id)
+    if status_filter:
+        stmt = stmt.where(ForumReport.status == status_filter)
+    stmt = stmt.order_by(ForumReport.created_at.desc()).limit(200)
+    rows = (await db.execute(stmt)).scalars().all()
+    authors = await _author_map(db, {r.reporter_id for r in rows})
+    return [
+        ReportOut(
+            id=r.id,
+            topic_id=r.topic_id,
+            reply_id=r.reply_id,
+            reason=r.reason,
+            status=r.status,
+            created_at=r.created_at,
+            author=authors.get(r.reporter_id),
+        )
+        for r in rows
+    ]

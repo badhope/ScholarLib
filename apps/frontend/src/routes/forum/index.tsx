@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Megaphone, MessageSquare, Pin, Plus, Lock } from 'lucide-react'
+import { Megaphone, MessageSquare, Pin, Plus, Lock, Flag } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { extractError } from '@/lib/utils'
@@ -20,6 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -115,6 +121,13 @@ function ForumListPage() {
       void navigate({ to: '/forum/$topicId', params: { topicId: String(data.id) } })
     },
     onError: (err) => toast.error(extractError(err, '发布失败')),
+  })
+
+  const reportMut = useMutation({
+    mutationFn: async (target: { topic_id: number; reason?: string }) =>
+      (await api.post('/forum/reports', target)).data,
+    onSuccess: () => toast.success('已举报，版主会尽快处理'),
+    onError: (err) => toast.error(extractError(err, '举报失败')),
   })
 
   const updateSearch = (patch: Record<string, unknown>) => {
@@ -228,6 +241,30 @@ function ForumListPage() {
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span className="tabular-nums">{t.reply_count}</span>
                 </div>
+                {isAuthenticated && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground"
+                        aria-label="举报"
+                      >
+                        <Flag className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {['垃圾广告', '不友善内容', '违法违规', '其他'].map((reason) => (
+                        <DropdownMenuItem
+                          key={reason}
+                          onClick={() => reportMut.mutate({ topic_id: t.id, reason })}
+                        >
+                          {reason}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </CardContent>
             </Card>
           ))}
