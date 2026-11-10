@@ -316,7 +316,7 @@ class ResourceResponse(ResourceBase):
     # 是否有在线阅读用 Markdown 稿件（列表与详情都返回）
     has_markdown: bool = False
     # 内容赛道（唯一权威）：paper|essay。响应层按 track 校正 content_category。
-    content_track: str | None = None
+    content_track: str | None = None  # type: ignore[assignment]
     # 特别篇：篇幅超过轨道上限、经显式特许的稿件。阅读端显示标签。
     is_special_issue: bool = False
     special_issue_reason: str | None = None
@@ -333,7 +333,7 @@ class ResourceResponse(ResourceBase):
 
     @field_validator("content_genre", mode="before")
     @classmethod
-    def _empty_genre_to_none(cls, v):
+    def _empty_genre_to_none(cls, v: Any) -> Any:
         # 历史库里有 content_genre=''（空串），Literal 校验会在
         # model_validator 之前就 500；空串与 None 等价，统一折成 None。
         if isinstance(v, str):
@@ -369,7 +369,7 @@ class ResourceResponse(ResourceBase):
             self.site_id = f"R-{code}-{self.created_at:%Y%m%d}-{self.id:04d}"
 
         self.content_track = resolve_content_track(self.content_track, self.content_category)
-        self.content_category = resolve_category(self.content_track, self.content_category)
+        self.content_category = resolve_category(self.content_track, self.content_category)  # type: ignore[assignment]
         self.clc_status = clc_status_of(self.clc_code)
         if self.content_track == "paper":
             # 论文轨没有“文体”这个概念，历史脏值一律不下发。
@@ -377,7 +377,7 @@ class ResourceResponse(ResourceBase):
         elif not self.content_genre:
             from app.modules.catalog.genre import classify_essay_genre
 
-            self.content_genre = classify_essay_genre(self.title, category=self.content_category)
+            self.content_genre = classify_essay_genre(self.title, category=self.content_category)  # type: ignore[assignment]
         if self.content_track == "essay":
             self.quality_score = None
             self.quality_grade = None

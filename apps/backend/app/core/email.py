@@ -72,6 +72,7 @@ class ConsoleEmailSender:
 
 
 class SMTPEmailSender:
+    _bypass_outbound_guard: bool = False
     """SMTP relay sender with timeout, retry and thread offloading."""
 
     def __init__(
@@ -261,6 +262,7 @@ def configured_accounts() -> list[SmtpAccount]:
 
 
 class SmtpPoolEmailSender:
+    _bypass_outbound_guard: bool = False
     """Round-robin SMTP sender with per-account circuit breaking.
 
     Why a pool: a single free mailbox (QQ/126) throttles aggressively and

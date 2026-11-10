@@ -161,7 +161,9 @@ async def _materialize_resource_from_submission(
     return resource
 
 
-def _to_response(entry: Submission, review_stats: dict | None = None) -> SubmissionResponse:
+def _to_response(
+    entry: Submission, review_stats: dict[Any, Any] | None = None
+) -> SubmissionResponse:
     stats = review_stats or {}
     return SubmissionResponse(
         id=entry.id,
@@ -209,7 +211,7 @@ def _to_response(entry: Submission, review_stats: dict | None = None) -> Submiss
 
 async def _review_stats_for_submissions(
     db: AsyncSession, ids: list[int], tenant_id: str
-) -> dict[int, dict]:
+) -> dict[int, dict[str, Any]]:
     """批量算当前轮审稿进度，避免列表把“已有 1 份意见”显示成 0。"""
     if not ids:
         return {}
@@ -231,10 +233,10 @@ async def _review_stats_for_submissions(
             )
         )
     ).all()
-    by_sub: dict[int, list] = {}
+    by_sub: dict[int, list[Any]] = {}
     for r in rows:
         by_sub.setdefault(r[0], []).append(r)
-    out: dict[int, dict] = {}
+    out: dict[int, dict[str, Any]] = {}
     for sid, rs in by_sub.items():
         current_round = max((x[2] or 1) for x in rs)
         cur = [x for x in rs if (x[2] or 1) == current_round and x[4] is not None]

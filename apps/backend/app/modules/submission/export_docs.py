@@ -25,6 +25,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+from typing import Any
 
 # --- Markdown 预处理（修复转换遗留，阅读版同样受益） -------------------------
 
@@ -56,7 +57,7 @@ def preprocess_md(md: str) -> str:
     # 图片行前后补空行：markdown-it 会把"图片行+紧随的图注行"合成一个段落，
     # 导致图注无法独立成段（阅读版与导出 PDF 都受影响）
     lines = md.splitlines()
-    spaced = []
+    spaced: list[str] = []
     for i, ln in enumerate(lines):
         if _LINE_IMAGE.match(ln.strip()):
             if spaced and spaced[-1].strip():
@@ -77,7 +78,7 @@ def md_to_html(md: str) -> str:
     from markdown_it import MarkdownIt
 
     parser = MarkdownIt("commonmark", {"typographer": False}).enable("table")
-    return parser.render(md)
+    return str(parser.render(md))
 
 
 # --- HTML → PDF（pymupdf Story） ---------------------------------------------
@@ -142,10 +143,10 @@ _IMG_TAG = re.compile(r'<img([^>]*src="(data:image/[a-z+]+;base64,)([^"]+)"[^>]*
 def _classify_images(html: str) -> str:
     """给 data-URI 图片按高宽比加分级宽度 class。"""
 
-    def _repl(m: re.Match) -> str:
+    def _repl(m: re.Match[str]) -> str:
         attrs, _, b64 = m.group(1), m.group(2), m.group(3)
         try:
-            dims = _image_dims(base64.b64decode(b64[:65536] + b"==", validate=False))
+            dims = _image_dims(base64.b64decode(b64[:65536].encode() + b"==", validate=False))
         except Exception:
             dims = None
         cls = "img-land"
@@ -156,7 +157,7 @@ def _classify_images(html: str) -> str:
             elif ratio >= 0.8:
                 cls = "img-sq"
         if "class=" in attrs:
-            return m.group(0)
+            return str(m.group(0))
         return f'<img class="{cls}"{attrs}>'
 
     return _IMG_TAG.sub(_repl, html)
@@ -201,14 +202,14 @@ def _shrink_data_uri_images(html: str, max_width: int = 900) -> str:
         try:
             pix = pymupdf.Pixmap(raw)
             if pix.width <= max_width:
-                return m.group(0)
+                return str(m.group(0))
             # PyMuPDF 1.24+ 的 shrink() 原地修改、返回 None；
             # 写成 pix = pix.shrink(f) 会拿到 None，压缩会静默失效。
             pix.shrink(2)
             out = pix.tobytes("png")
         except Exception:
             # 解不开就原样保留——导出宁可大一点，也不能因为一张图挂掉
-            return m.group(0)
+            return str(m.group(0))
         return "data:image/png;base64," + base64.b64encode(out).decode("ascii")
 
     return _DATA_URI_IMG.sub(_repl, html)
@@ -252,7 +253,7 @@ def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
 _MD_IMAGE = re.compile(r"!\[([^\]]*)\]\((data:image/[a-z]+;base64,|[^\s)]+)\)", re.I)
 
 
-def _add_runs(paragraph, text: str) -> None:
+def _add_runs(paragraph: Any, text: str) -> None:
     """把 **bold** / *italic* 内联标记转成 docx run。"""
     token_re = re.compile(r"(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)")
     for part in token_re.split(text):
@@ -269,7 +270,7 @@ def _add_runs(paragraph, text: str) -> None:
             paragraph.add_run(part)
 
 
-def _docx_img_width(data: bytes):
+def _docx_img_width(data: bytes) -> Any:
     """按高宽比选图片显示宽度（python-docx 只给宽度保持纵横比）。"""
     from docx.shared import Inches
 
@@ -334,7 +335,7 @@ def issue_front_matter_pdf(
     theme: str,
     note: str,
     range_label: str,
-    entries: list[dict],
+    entries: list[dict[str, Any]],
     editor: str = "Rubbish 编辑部",
 ) -> bytes:
     """把一期做成可下载的“版面”：封面、编后记、完整目录、版权页。"""
@@ -350,7 +351,7 @@ def issue_front_matter_pdf(
     def esc(x: object) -> str:
         return _html.escape(str(x or ""))
 
-    def toc(group: list[dict], label: str) -> str:
+    def toc(group: list[dict[str, Any]], label: str) -> str:
         if not group:
             return ""
         rows = "".join(

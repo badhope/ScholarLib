@@ -207,7 +207,7 @@ def _pdf_raw_text(contents: bytes) -> str:
     try:
         if doc.is_encrypted:
             return ""
-        parts = [page.get_text("text") for page in doc]
+        parts = [page.get_text("text") for page in doc]  # type: ignore[attr-defined]
         return "\n".join(parts)
     finally:
         doc.close()
@@ -393,12 +393,12 @@ def _convert_manuscript_inner(contents: bytes, filename: str) -> ManuscriptResul
                 return _needs_docx(
                     actual, mismatch, "加密 PDF，无法抽取文本，请另存为 .docx 后重新上传"
                 )
-            raw_text = "\n".join(page.get_text("text") for page in probe)
+            raw_text = "\n".join(page.get_text("text") for page in probe)  # type: ignore[attr-defined]
         finally:
             probe.close()
         ok, reason = _pdf_quality_gate(raw_text)
         if not ok:
-            return _needs_docx(actual, mismatch, reason)
+            return _needs_docx(actual, mismatch, reason or "")
         # 2) 闸门通过才做版面重排（pymupdf4llm）。
         md = _pdf_to_markdown(contents)
         if not md:

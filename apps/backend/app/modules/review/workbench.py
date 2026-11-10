@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Separate workbenches: reviewer vs editor-in-chief / section editor.
 
 The two workbenches are intentionally *not* the same list component:

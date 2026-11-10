@@ -245,7 +245,7 @@ async def authenticate_2fa(
     # 登出全部设备 / 改密 / 关闭 2FA 等 token_version 自增事件，旧 pending
     # token 必须作废——否则一个已失效的 pending token 仍可在 5 分钟窗口内
     # 完成第二因子验证。
-    if claims.get("token_version") is None:
+    if (claims or {}).get("token_version") is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired 2FA token",
@@ -271,7 +271,7 @@ async def authenticate_2fa(
         )
     # token_version 校验放在 user 加载之后：需要与用户当前版本比对。
     # 与 /auth/login/2fa（auth.py）的既有口径一致。
-    if int(claims.get("token_version", -1)) != int(user.token_version):
+    if int((claims or {}).get("token_version", -1)) != int(user.token_version):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired 2FA token",

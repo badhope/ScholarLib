@@ -10,6 +10,7 @@ These compose into endpoint signatures:
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -242,7 +243,7 @@ async def effective_permission_role(db: AsyncSession, user: User) -> str:
     return best
 
 
-def require_role(min_role: str):
+def require_role(min_role: str) -> Any:
     """权限校验统一依赖：要求当前用户权限档位 >= min_role。
 
     用法::

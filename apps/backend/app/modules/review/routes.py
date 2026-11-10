@@ -14,7 +14,9 @@ cohesion (both modules share the Submission row). See ``submission.routes``.
 from __future__ import annotations
 
 import mimetypes
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -594,7 +596,7 @@ def _completed_reports_count(assignments: list[ReviewAssignment]) -> int:
     return sum(1 for a in assignments if a.status == "completed")
 
 
-def _distinct_reviewers_completed(assignments: list[ReviewAssignment]) -> int:
+def _distinct_reviewers_completed(assignments: Sequence[ReviewAssignment]) -> int:
     return len({a.reviewer_id for a in assignments if a.status == "completed"})
 
 
@@ -604,7 +606,7 @@ async def assign_reviewers(
     body: AssignReviewersBody,
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """批量指派审稿人（slot 1/2/3）。禁止指派给稿件作者/共同作者。"""
     tenant_id = require_tenant_id()
     sub = (
@@ -708,7 +710,7 @@ async def assign_reviewers(
                 type_="review.invited",
                 title=f"您被邀请审稿：{sub.title}",
                 body=(
-                    f"稿件 #{sub.id} 已分配给您，截止 {a.due_date.date().isoformat()}，"
+                    f"稿件 #{sub.id} 已分配给您，截止 {(a.due_date.date().isoformat() if a.due_date else '—')}，"
                     "请前往审稿工作台回应。" + ("（外审专家邀请）" if a.is_external else "")
                 ),
                 related_type="review_assignment",
@@ -723,7 +725,7 @@ async def review_matrix(
     submission_id: int,
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """审稿矩阵：每位审稿人状态/推荐/截止/超期/冲突。"""
     tenant_id = require_tenant_id()
     assignments = (
@@ -811,7 +813,7 @@ async def assign_adjudicator(
     body: AdjudicateBody,
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """复议：主编/编辑指定第三方裁决人，对冲突意见做独立裁决。
 
     只在已有至少 2 份 completed 报告时才允许发起；裁决人不能是作者，
@@ -942,7 +944,7 @@ async def editor_decision(
     body: EditorDecisionBody,
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """已废弃：最终裁决统一走 PATCH /submissions/{id}/decision。
 
     旧端点只写 AuditLog、不改业务状态，和投稿模块的真裁决端点形成两套

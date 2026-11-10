@@ -137,7 +137,7 @@ async def award_points(
     """
     rule = POINT_RULES.get(reason, {})
     ident = identity or str(rule.get("identity") or "author")
-    d = int(rule.get("delta", 0) if delta is None else delta)
+    d = int(str(rule.get("delta", 0) if delta is None else delta))
 
     exists = (
         await db.execute(

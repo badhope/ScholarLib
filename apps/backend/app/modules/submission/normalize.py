@@ -631,7 +631,7 @@ def audit_style(md: str | None) -> dict[str, object]:
     if re.search(r"^(#{1,6}\s*)?(参考文献|References)", md, re.M) is None:
         issues.append({"key": "no_references", "label": "缺参考文献", "detail": "文末需有文献表"})
 
-    dup_headings = {}
+    dup_headings: dict[str, int] = {}
     for h in re.findall(r"^#{2,4}\s+(.+)$", md, re.M):
         key = re.sub(r"\s", "", h)
         dup_headings[key] = dup_headings.get(key, 0) + 1

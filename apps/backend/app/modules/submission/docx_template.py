@@ -27,13 +27,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import base64
 import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT

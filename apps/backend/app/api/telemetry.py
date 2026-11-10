@@ -7,6 +7,7 @@ the browser already sends. The table is tenant-scoped and RLS-protected.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -34,7 +35,7 @@ async def record_page_view(
     if tenant_id is None:
         raise HTTPException(status_code=400, detail="Tenant context not resolved")
     # 只接受站内路径，避免被当作任意 URL 存储/回显。
-    path = payload.path.split("?", 1)[0].split("#", 1)[0][:300]
+    path: str = payload.path.split("?", 1)[0].split("#", 1)[0][:300]
     if not path.startswith("/"):
         return None
     db.add(
@@ -52,7 +53,7 @@ async def record_page_view(
 async def analytics_summary(
     days: int = Query(default=7, ge=1, le=90),
     db: AsyncSession = Depends(get_db),
-    _admin=Depends(require_admin),
+    _admin: Any = Depends(require_admin),
 ) -> dict[str, object]:
     since = datetime.now(UTC) - timedelta(days=days)
     total = (

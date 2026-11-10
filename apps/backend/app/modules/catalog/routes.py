@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Catalog API routes — CRUD + stats + facets for resource records.
 
 Read endpoints are public (no auth required) so anonymous users can

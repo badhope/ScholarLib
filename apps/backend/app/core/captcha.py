@@ -33,7 +33,9 @@ from app.core.config import settings
 class CaptchaVerifier(Protocol):
     """The contract operators must satisfy when wiring up a provider."""
 
-    async def verify(self, token: str, *, remote_ip: str | None) -> bool: ...
+    async def verify(
+        self, token: str, *, remote_ip: str | None, answer: str | None = None
+    ) -> bool: ...
 
 
 class _AlwaysPassVerifier:
@@ -41,7 +43,7 @@ class _AlwaysPassVerifier:
 
     _warned: bool = False
 
-    async def verify(self, token: str, *, remote_ip: str | None) -> bool:
+    async def verify(self, token: str, *, remote_ip: str | None, answer: str | None = None) -> bool:
         if not _AlwaysPassVerifier._warned:
             _AlwaysPassVerifier._warned = True
             # Lazy import — logging module is heavy and we want this
@@ -68,7 +70,7 @@ class _FunctionVerifier:
     def __init__(self, fn: Callable[..., Awaitable[bool]]) -> None:
         self._fn = fn
 
-    async def verify(self, token: str, *, remote_ip: str | None) -> bool:
+    async def verify(self, token: str, *, remote_ip: str | None, answer: str | None = None) -> bool:
         return bool(await self._fn(token, remote_ip=remote_ip))
 
 

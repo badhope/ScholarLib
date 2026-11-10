@@ -71,7 +71,7 @@ async def _serialize_admin(db: AsyncSession, rows: list[Comment]) -> list[AdminC
             user_id=r.user_id,
             author_name=names.get(r.user_id, "已注销用户"),
             body=r.body,
-            status=r.status,  # type: ignore[arg-type]
+            status=r.status,
             moderation_note=r.moderation_note,
             moderated_by=r.moderated_by,
             moderated_by_name=(names.get(r.moderated_by) if r.moderated_by is not None else None),

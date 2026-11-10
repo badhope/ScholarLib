@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from xml.sax.saxutils import (
     escape,  # nosec B406 -- escape() only encodes text; this module parses no XML
 )
@@ -47,7 +48,7 @@ SCHEMA_LOCATION = (
 _VALID_VERBS = {"Identify", "ListMetadataFormats", "ListRecords", "GetRecord"}
 
 
-def _scholarly_conditions() -> list:
+def _scholarly_conditions() -> list[Any]:
     """OAI 只收割学术轨的学术论文。
 
     荒诞论文是站内讽刺内容，不是可被 DOAJ/CNKI 收录的研究记录；副刊同样

@@ -13,6 +13,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from fastapi import Depends, File, HTTPException, Query, Request, Response, UploadFile, status
@@ -208,7 +209,7 @@ async def _uploaded_file_to_pdf(file: UploadFile) -> bytes:
 async def preview_uploaded_source_pages(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-) -> dict:
+) -> dict[str, object]:
     """提交前原件预览：先落一份 PDF，返回分页 PNG 的 token 与页数。
 
     和发表版文章页的「PDF 版式预览」走同一条分页 PNG 渲染链路，不再让
@@ -468,7 +469,7 @@ async def upload_submission_file(
     if result.markdown:
         from app.modules.submission.markdown_clean import analyze_structure
 
-        resp.format_report = analyze_structure(result.markdown)
+        resp.format_report = analyze_structure(result.markdown)  # type: ignore[assignment]
     if warnings:
         resp.upload_warnings = warnings
     return resp
@@ -594,7 +595,9 @@ def _strip_leading_title(md: str, title: str) -> str:
     return "\n".join(lines)
 
 
-def _redact_identity_text(text: str, entry, *, names=None, affiliations=None) -> str:
+def _redact_identity_text(
+    text: str, entry: Any, *, names: list[Any] | None = None, affiliations: list[Any] | None = None
+) -> str:
     """Remove author names/affiliations from metadata fields and prose.
 
     The body anonymizer only drops author blocks; on 322 the author's pen name
@@ -625,11 +628,11 @@ def _redact_identity_text(text: str, entry, *, names=None, affiliations=None) ->
 
 
 async def _generated_download(
-    entry,
+    entry: Any,
     output_format: str,
     *,
     anonymized: bool,
-    resource=None,
+    resource: Any = None,
 ) -> Response:
     """Build a submission download from its Markdown.
 
@@ -883,7 +886,13 @@ async def download_submission_file(
             resource=canonical_resource,
         )
 
-    url = storage.presigned_url(entry.file_path)
+    file_path = entry.file_path
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored file is missing",
+        )
+    url = storage.presigned_url(file_path)
     if url:
         # S3 预签名 URL 直接重定向到对象存储；对象存储自身会依据客户端的
         # Range 头返回 206，无需在此追加（追加未签名的 range 参数会让
@@ -891,14 +900,14 @@ async def download_submission_file(
         return RedirectResponse(url, status_code=status.HTTP_302_FOUND)
 
     try:
-        data = await storage.load(entry.file_path)
+        data = await storage.load(file_path)
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Stored file is missing",
         ) from exc
 
-    filename = entry.file_path.rsplit("/", 1)[-1]
+    filename = file_path.rsplit("/", 1)[-1]
     media_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
     # F9: HTTP Range 支持（本地后端）。解析 Range: bytes=start-end，

@@ -1,6 +1,8 @@
 """Nature 式栏目定义（展示分组，不参与 paper/essay 判定）。"""
 
-SECTIONS = [
+from typing import Any
+
+SECTIONS: list[dict[str, Any]] = [
     {
         "slug": "this-week",
         "label": "This Week",
