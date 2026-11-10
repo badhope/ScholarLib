@@ -1,27 +1,22 @@
-"""赛道（track）——历史遗留字段，已下线，仅保留荒诞指数。
+"""赛道口径：paper 轨内部再分「学术论文 / 荒诞论文」。
 
-历史背景：本刊曾有 serious / absurd 双赛道（正经研究 / 荒诞研究），但每篇
-论文同时带有编辑部评定的荒诞指数（absurdity_index 0–10），后者已完整覆盖
-"这篇有多荒诞"的信息维度，赛道成了冗余口径，现已下线。
+历史背景：本刊曾有 serious / absurd 双赛道，后来一度被荒诞指数取代而
+下线；2026-11 起重新启用为 paper 轨的子类型：serious=学术论文（正经
+研究），absurd=荒诞论文（严格论文格式、一本正经地论证一个荒诞命题）。
+它只描述「论文的写法与命题」，不改变 content_track=paper 的评审/计分
+口径，也不影响副刊（content_track=essay）。
 
-兼容策略（不做 DB 破坏性迁移）：
-
-- ``serious`` / ``absurd`` 两列（resources.track / submissions.track）原样
-  保留，历史数据不清洗；
-- 本模块把合法取值收敛为 ``"serious"``：``normalize_track`` 把任何非
-  serious 输入（含旧客户端传的 ``"absurd"``）归一为 serious，保证旧客户端
-  不会被 422 拒掉；
-- 展示层不再呈现赛道，读者以荒诞指数（absurdityLevel）区分文章气质。
-
-放在 core 而不是任一模块里：submission 与 catalog 都要用，且二者默认
-不互相 import（见 docs/ARCHITECTURE.md「模块之间默认不互相 import」）。
+兼容策略：
+- resources.track / submissions.track 原样保留；
+- 新写入允许 serious / absurd；历史脏值仍归一为 serious；
+- 副刊不展示该字段，读者只看学术论文 / 荒诞论文 / 副刊三区。
 """
 
 from __future__ import annotations
 
 from typing import Final, Literal
 
-Track = Literal["serious"]
+Track = Literal["serious", "absurd"]
 
 # 内容赛道（P0，2026-11 收口为唯一权威口径）：
 #   content_track（paper|essay）是唯一权威轨道字段；
@@ -96,32 +91,32 @@ def is_paper_track(content_category: str | None, db_value: str | None = None) ->
     return resolve_content_track(db_value, content_category) == "paper"
 
 DEFAULT_TRACK: Final[Track] = "serious"
-ALL_TRACKS: Final[tuple[Track, ...]] = ("serious",)
+ALL_TRACKS: Final[tuple[Track, ...]] = ("serious", "absurd")
 
-# 展示口径：数据库存 slug。赛道下线后仅剩 serious 一项，保留映射是为了
-# 导出/邮件等历史消费方不至于 KeyError。
+# 展示口径：数据库存 slug。只用于 paper 轨的子类型标签。
 TRACK_LABELS: Final[dict[str, str]] = {
-    "serious": "正经研究",
+    "serious": "学术论文",
+    "absurd": "荒诞论文",
 }
 
 TRACK_SHORT_LABELS: Final[dict[str, str]] = {
-    "serious": "正经",
+    "serious": "学术",
+    "absurd": "荒诞",
 }
 
 TRACK_DESCRIPTIONS: Final[dict[str, str]] = {
-    "serious": "统一评审标准：格式、引用与论证要求对全部稿件一致，"
-    "文章气质由每篇论文的荒诞指数（0–10）标注。",
+    "serious": "正经研究：真实问题、可核查材料、按学术规范论证。",
+    "absurd": "荒诞论文：严格论文格式，用可核查的材料一本正经地论证一个荒诞命题。",
 }
 
 
 def normalize_track(value: str | None) -> Track:
-    """Coerce an arbitrary string to a valid track, defaulting conservatively.
+    """Coerce an arbitrary string to a valid paper subtype.
 
-    赛道已下线：任何非 ``serious`` 的输入（含历史 ``absurd``、None、
-    任意脏数据）一律归一为 ``serious``。归一而非拒绝，保证旧客户端
-    传 ``absurd`` 不会被 422 拒掉，历史数据也无需清洗。
+    只接受 ``serious`` / ``absurd``；None、空串与历史脏值保守归为 serious。
+    旧客户端传 ``absurd`` 会正常保留，不再被静默改成正经研究。
     """
-    return DEFAULT_TRACK
+    return "absurd" if (value or "").strip().lower() == "absurd" else DEFAULT_TRACK
 
 
 def track_label(value: str | None, *, short: bool = False) -> str:

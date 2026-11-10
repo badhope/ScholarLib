@@ -9,7 +9,9 @@ on every query) AND by RLS in production.
 from __future__ import annotations
 
 import hashlib
+import mimetypes
 import os
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +22,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import and_, case, desc, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +45,8 @@ from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
 from app.models import AuditLog, Role, User, UserRole
 from app.modules.catalog.engagement import compute_engagement, journal_metrics
-from app.modules.catalog.models import AuthorClaim, Resource
+from app.modules.catalog.genre import classify_essay_genre
+from app.modules.catalog.models import Appeal, AuthorClaim, Resource
 from app.modules.catalog.ontology_routes import router as ontology_router
 from app.modules.catalog.schemas import (
     FacetBucket,
@@ -147,6 +150,73 @@ def _expand_categories(category: str | None) -> set[str] | None:
     return out or None
 
 
+@router.get("/sections")
+async def list_article_sections(
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+    tenant_id: UUID = Depends(require_tenant_id),
+) -> dict[str, object]:
+    """Nature 式栏目目录 + 每个栏目当前可见篇数。
+
+    栏目是展示分组，不改变 paper/essay 判定；空栏目也要返回，前端
+    才能显示“本栏目暂无稿件，欢迎投稿”的空态。
+    """
+    from app.modules.catalog.sections import SECTIONS
+
+    conds = [Resource.tenant_id == tenant_id]
+    if not (viewer and viewer.is_admin):
+        conds.extend(public_conditions())
+    rows = (
+        await db.execute(
+            select(Resource.article_section, Resource.content_track, func.count(Resource.id))
+            .where(*conds)
+            .group_by(Resource.article_section, Resource.content_track)
+        )
+    ).all()
+    counts: dict[str, int] = {}
+    track_counts: dict[str, dict[str, int]] = {}
+    for section_slug, track, count in rows:
+        if not section_slug:
+            continue
+        slug = str(section_slug)
+        if track not in ("paper", "essay"):
+            continue
+        counts[slug] = counts.get(slug, 0) + int(count)
+        bucket = track_counts.setdefault(slug, {"paper": 0, "essay": 0})
+        bucket[track] += int(count)
+
+    def section_track_counts(part_slugs: list[str]) -> dict[str, int]:
+        return {
+            "paper": sum(track_counts.get(s, {}).get("paper", 0) for s in part_slugs),
+            "essay": sum(track_counts.get(s, {}).get("essay", 0) for s in part_slugs),
+        }
+
+    total = (await db.execute(select(func.count(Resource.id)).where(*conds))).scalar_one()
+    out = []
+    for section in SECTIONS:
+        part_slugs = [p["slug"] for p in section["parts"]]
+        out.append({
+            **section,
+            "count": sum(counts.get(s, 0) for s in part_slugs),
+            "track_counts": section_track_counts(part_slugs),
+            "parts": [
+                {
+                    **part,
+                    "count": counts.get(part["slug"], 0),
+                    "track_counts": {
+                        "paper": track_counts.get(part["slug"], {}).get("paper", 0),
+                        "essay": track_counts.get(part["slug"], {}).get("essay", 0),
+                    },
+                }
+                for part in section["parts"]
+            ],
+        })
+    return {
+        "data": out,
+        "uncategorized": int(total) - sum(counts.values()),
+    }
+
+
 @router.get("", response_model=ResourceListResponse)
 async def list_resources(
     type: str | None = None,
@@ -156,16 +226,26 @@ async def list_resources(
     # 轨道筛选（v1.15.1）：按 content_track 过滤，paper=论文 / essay=娱乐（fun+rant）。
     # 与 content_category 解耦：历史稿件的 category 可能未随 track 迁移。
     track: str | None = Query(default=None, pattern=r"^(paper|essay)$"),
+    # 论文子类型（v1.17）：serious=学术论文 / absurd=荒诞论文。
+    # 只对 track=paper 生效；副刊不使用该字段。
+    paper_kind: str | None = Query(default=None, pattern=r"^(serious|absurd)$"),
+    # 娱乐轨文体筛选（v1.16）：joke/fiction/review/guide/essay/poetry/rant。
+    # 只在 track=essay 时有意义；与 track 同时传时按两者交集过滤。
+    genre: str | None = Query(
+        default=None, pattern=r"^(joke|fiction|review|guide|essay|poetry|rant)$"
+    ),
     discipline: str | None = None,
     year: int | None = None,
     volume: str | None = None,
     issue: str | None = None,
+    section: str | None = None,
+    issue_part: str | None = None,
     # 中图分类号前缀筛选（P0）：?clc=TP 命中 TP / TP3 / TP311.13 等。
     clc: str | None = Query(default=None, pattern=r"^[A-Za-z]{1,2}\d{0,3}$"),
     q: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-    sort: str | None = Query(default=None, pattern=r"^(year|title|created_at|issue)$"),
+    sort: str | None = Query(default=None, pattern=r"^(year|title|created_at|issue|published_at)$"),
     order: str | None = Query(default=None, pattern=r"^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
@@ -241,6 +321,15 @@ async def list_resources(
         stmt = stmt.where(Resource.content_category.in_(cats))
     if track:
         stmt = stmt.where(Resource.content_track == track)
+    if paper_kind:
+        # 论文子类型只作用于 paper 轨；传 paper_kind 时显式收窄，避免
+        # 没有 track 参数的调用把副刊也带进来。
+        stmt = stmt.where(
+            Resource.content_track == "paper",
+            Resource.track == paper_kind,
+        )
+    if genre:
+        stmt = stmt.where(Resource.content_genre == genre)
     if discipline is not None:
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
@@ -250,6 +339,23 @@ async def list_resources(
         stmt = stmt.where(Resource.volume == volume)
     if issue:
         stmt = stmt.where(Resource.issue == issue)
+    if section:
+        # 顶层栏目（this-week）在库里的稿件挂在分部（editorial / world-view /
+        # research-highlights）上，只按顶层 slug 精确匹配会得到 0 篇；这里
+        # 把顶层栏目展开成它的全部分部。传入分部 slug 时仍精确匹配。
+        from app.modules.catalog.sections import SECTIONS
+
+        _section_parts: list[str] | None = None
+        for _section in SECTIONS:
+            if _section.get("slug") == section:
+                _section_parts = [str(p["slug"]) for p in _section.get("parts", [])]
+                break
+        if _section_parts:
+            stmt = stmt.where(Resource.article_section.in_(_section_parts))
+        else:
+            stmt = stmt.where(Resource.article_section == section)
+    if issue_part:
+        stmt = stmt.where(Resource.issue_part == issue_part)
     # 中图分类号前缀筛选：?clc=TP → clc_code 以 TP 开头（大小写不敏感）。
     if clc:
         stmt = stmt.where(Resource.clc_code.ilike(f"{clc.upper()}%"))
@@ -257,7 +363,11 @@ async def list_resources(
     # 注意不能先 stmt.order_by(...) 再交给 paginate：paginate 会以传入的
     # order_by 覆盖（空元组等于清空排序）。
     if q is not None:
-        pattern = f"%{q}%"
+        # 空格分词：原来把整串当一个 ILIKE 模式，"AI 导师" 必须连续出现，
+        # 结果直接 0 条。现在每个词分别命中标题/摘要/作者/关键词，词之间 OR，
+        # 至少先让"AI"或"导师"单独命中的稿子回来。
+        tokens = [t.strip() for t in q.split() if t.strip()][:6]
+        patterns = [f"%{t}%" for t in tokens] or [f"%{q}%"]
         if db.get_bind().dialect.name == "postgresql":
             authors = (
                 func.jsonb_array_elements_text(Resource.authors)
@@ -266,14 +376,24 @@ async def list_resources(
             )
         else:
             authors = func.json_each(Resource.authors).table_valued("value")
-        author_match = select(1).select_from(authors).where(authors.c.value.ilike(pattern)).exists()
-        stmt = stmt.where(
-            (Resource.title.ilike(pattern))
-            | (Resource.abstract.ilike(pattern))
-            | (Resource.venue.ilike(pattern))
-            | (Resource.discipline.ilike(pattern))
-            | author_match
+        author_match = (
+            select(1)
+            .select_from(authors)
+            .where(or_(*[authors.c.value.ilike(p) for p in patterns]))
+            .exists()
         )
+        conditions = []
+        for p in patterns:
+            conditions.extend(
+                [
+                    Resource.title.ilike(p),
+                    Resource.abstract.ilike(p),
+                    Resource.venue.ilike(p),
+                    Resource.discipline.ilike(p),
+                ]
+            )
+        conditions.append(author_match)
+        stmt = stmt.where(or_(*conditions))
     if sort == "issue":
         rows, meta = await paginate(
             db,
@@ -285,11 +405,23 @@ async def list_resources(
         return ResourceListResponse(data=await _with_engagement(db, rows), meta=meta)
 
     # Sort with deterministic tiebreaker — order_by is applied by paginate.
-    sort_col = getattr(Resource, sort, Resource.created_at) if sort else Resource.created_at
-    order_by = (
-        sort_col.asc() if order == "asc" else sort_col.desc(),
-        Resource.id.asc(),
-    )
+    # published_at 是前端/外部调用常用的语义别名；库里的真实列是 created_at。
+    sort_key = 'created_at' if sort == 'published_at' else sort
+    sort_col = getattr(Resource, sort_key, Resource.created_at) if sort_key else Resource.created_at
+    if q and sort in (None, "created_at"):
+        # 没启用 Meilisearch 时的兜底排序：标题命中优先于摘要/作者命中，
+        # 同档再按新近。至少让搜“导师”的人先看到标题里真有“导师”的稿，
+        # 而不是被一篇摘要里顺带提一句的旧稿压在前面。
+        order_by = (
+            case((or_(*[Resource.title.ilike(p) for p in patterns]), 0), else_=1),
+            Resource.created_at.desc(),
+            Resource.id.asc(),
+        )
+    else:
+        order_by = (
+            sort_col.asc() if order == "asc" else sort_col.desc(),
+            Resource.id.asc(),
+        )
 
     rows, meta = await paginate(
         db,
@@ -308,10 +440,13 @@ async def list_resources(
 async def get_stats(
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
+    track: str | None = None,
 ) -> ResourceStats:
-    """Aggregate stats: total count + breakdowns by type and discipline."""
+    """Aggregate stats: total count + breakdowns by track (paper/essay) and discipline."""
     tenant_id = require_tenant_id()
     base_filter = Resource.tenant_id == tenant_id
+    if track in ("paper", "essay"):
+        base_filter = base_filter & (Resource.content_track == track)
     if not (viewer and viewer.is_admin):
         for condition in public_conditions():
             base_filter = base_filter & condition
@@ -319,10 +454,23 @@ async def get_stats(
     by_type_rows = await db.execute(
         select(Resource.type, func.count(Resource.id)).where(base_filter).group_by(Resource.type)
     )
+    by_track_rows = await db.execute(
+        select(Resource.content_track, func.count(Resource.id)).where(base_filter).group_by(Resource.content_track)
+    )
     by_discipline_rows = await db.execute(
         select(Resource.discipline, func.count(Resource.id))
         .where(base_filter)
         .group_by(Resource.discipline)
+    )
+    by_genre_rows = await db.execute(
+        select(Resource.content_genre, func.count(Resource.id))
+        .where(base_filter & (Resource.content_track == "essay"))
+        .group_by(Resource.content_genre)
+    )
+    by_paper_kind_rows = await db.execute(
+        select(Resource.track, func.count(Resource.id))
+        .where(base_filter & (Resource.content_track == "paper"))
+        .group_by(Resource.track)
     )
     downloads_total = (
         await db.execute(
@@ -341,7 +489,10 @@ async def get_stats(
     return ResourceStats(
         total=total,
         by_type={t: c for t, c in by_type_rows.all()},
+        by_track={t: c for t, c in by_track_rows.all() if t},
         by_discipline={d: c for d, c in by_discipline_rows.all()},
+        by_genre={g: c for g, c in by_genre_rows.all() if g},
+        by_paper_kind={t: c for t, c in by_paper_kind_rows.all() if t in ("serious", "absurd")},
         downloads_total=int(downloads_total or 0),
         reads_total=int(reads_total or 0),
     )
@@ -349,6 +500,7 @@ async def get_stats(
 
 @router.get("/volumes/stats", response_model=VolumeSummaryList)
 async def get_volume_stats(
+    track: str | None = Query(default=None, pattern="^(paper|essay)$"),
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
 ) -> VolumeSummaryList:
@@ -360,6 +512,8 @@ async def get_volume_stats(
     """
     tenant_id = require_tenant_id()
     base_filter = Resource.tenant_id == tenant_id
+    if track in ("paper", "essay"):
+        base_filter = base_filter & (Resource.content_track == track)
     if not (viewer and viewer.is_admin):
         for condition in public_conditions():
             base_filter = base_filter & condition
@@ -777,6 +931,25 @@ async def get_journal_metrics(db: AsyncSession = Depends(get_db)) -> JournalMetr
     return JournalMetrics(**await journal_metrics(db, tenant_id))
 
 
+@router.get("/{resource_id}/download")
+async def download_resource_alias(resource_id: int, request: Request) -> Response:
+    """兼容别名：旧页面/旧分享链接里的 /download 统一 307 到唯一取稿端点。
+
+    历史上 /download 与 /file 并存，前端有几处旧链接仍指向 /download，
+    线上表现为“点了下载 404”。这里只做重定向，不复制鉴权与流式逻辑，
+    避免两条通道后续再次分叉。
+    """
+    from fastapi.responses import RedirectResponse
+
+    # 用相对路径而不是 request.url_for：反向代理下后者会生成 http://，
+    # 浏览器从 https 页面跳到 http 会被当成降级/混合内容。相对路径保留
+    # 当前 scheme 与 host。
+    return RedirectResponse(
+        url=f"/api/catalog/{resource_id}/file",
+        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    )
+
+
 @router.get("/{resource_id}/file")
 async def download_resource_file(
     resource_id: int,
@@ -830,8 +1003,13 @@ async def download_resource_file(
                     # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
                     # 必须取有正文的那条且结果确定——空正文路径与无序 first()
                     # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
-                    Submission.markdown_path.is_not(None),
-                    Submission.markdown_path != "",
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
                 ).order_by(Submission.id.asc())
             )
         )
@@ -864,18 +1042,10 @@ async def download_resource_file(
         except FileNotFoundError:
             md_data = None
         if md_data is not None:
-            md_text = md_data.decode("utf-8", errors="replace")
-            meta = DocxMeta(
-                title=resource.title,
-                authors=[f"Rubbish 编辑部 · {resource.id} 号稿"]
-                if not resource.authors
-                else list(resource.authors),
-                affiliations=[f"Rubbish 期刊 · 第 {resource.volume or '1'} 卷 第 {resource.issue or '—'} 期"]
-                if not resource.venue
-                else [resource.venue],
-                abstract=resource.abstract or "",
-                keywords=list(resource.keywords or []) + list(resource.tags or []),
+            md_text = _redact_essay_sensitive(
+                md_data.decode("utf-8", errors="replace"), resource
             )
+            meta = _docx_meta_for_resource(resource, md_text)
             try:
                 blob = build_docx(md_text, meta)
             except Exception:  # noqa: BLE001 — 转换失败回退旧文件下载
@@ -961,6 +1131,285 @@ async def download_resource_file(
     )
 
 
+async def _require_source_preview_viewer(
+    db: AsyncSession, viewer: User | None,
+) -> None:
+    """原件含姓名/邮箱/单位，只允许编辑部查看。"""
+    if viewer is None or not (
+        viewer.is_admin or await user_has_role(db, viewer, ROLE_EDITOR)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="原件对照预览仅向编辑部开放",
+        )
+
+
+async def _load_resource_source_pdf(
+    resource_id: int,
+    db: AsyncSession,
+    viewer: User | None,
+) -> tuple[bytes, str, str]:
+    """作者上传原件：PDF 原样读，DOCX 转 PDF；原件缺失时按当前 Markdown 重排。
+
+    返回 ``(pdf_bytes, token, mode)``；``mode`` 为 ``original`` 或 ``manuscript``，
+    前端据此避免把「按当前正文重排的预览」误标成作者旧稿。
+    """
+    import asyncio
+
+    from app.core.storage import get_storage
+    from app.modules.submission.export_docs import docx_to_pdf
+    from app.modules.submission.fileformat import detect_format
+    from app.modules.submission.models import Submission
+
+    await _require_source_preview_viewer(db, viewer)
+    tenant_id = require_tenant_id()
+    resource = (
+        await db.execute(
+            select(Resource).where(
+                Resource.id == resource_id,
+                Resource.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+
+    submission = (
+        (
+            await db.execute(
+                select(Submission).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                    Submission.file_path.is_not(None),
+                    Submission.file_path != "",
+                ).order_by(Submission.id.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if submission is None or not submission.file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This resource has no uploaded source file",
+        )
+
+    storage = get_storage()
+    try:
+        data = await storage.load(submission.file_path)
+    except FileNotFoundError as exc:
+        # 作者原件被清理后，预览不能直接 404：用同一份线上 Markdown
+        # 走导出链路生成 PDF，并明确告诉前端这是 manuscript 模式。
+        pdf_bytes, token = await _load_source_pdf_from_markdown(
+            resource, resource_id, db, tenant_id,
+        )
+        return pdf_bytes, token, "manuscript"
+
+    token = hashlib.sha1(
+        b"source:" + str(resource_id).encode() + b":" + data
+    ).hexdigest()
+    cache_dir = _export_cache_root() / "source-preview"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{token}.pdf"
+
+    # 缓存键是「资源 + 原始上传字节」，所以 DOCX 只转一次；转出来的 PDF
+    # 元数据每次可能不同，不能拿它做键，否则每页都要重转。
+    if cache_path.exists():
+        return cache_path.read_bytes(), token, "original"
+
+    detected = detect_format(data, submission.file_path)
+    if detected.actual == "pdf":
+        pdf_bytes = data
+    elif detected.actual == "docx":
+        try:
+            pdf_bytes = await asyncio.to_thread(docx_to_pdf, data)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Word 原件转 PDF 失败：{exc}",
+            ) from exc
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="原件预览仅支持 PDF / DOCX；老式 .doc 请先另存为 .docx。",
+        )
+    temp_path = cache_path.with_suffix(".tmp")
+    temp_path.write_bytes(pdf_bytes)
+    temp_path.replace(cache_path)
+    return pdf_bytes, token, "original"
+
+
+async def _load_source_pdf_from_markdown(
+    resource: Resource,
+    resource_id: int,
+    db: AsyncSession,
+    tenant_id,
+) -> tuple[bytes, str]:
+    """原件缺失时的兜底：用线上 Markdown 生成同版式 PDF。
+
+    原件删除后仍保留「原稿版式预览」入口，但内容来自当前 Markdown，
+    服务端分页 PNG 与 PDF 下载共用这一份缓存。
+    """
+    import asyncio
+
+    from app.core.storage import get_storage
+    from app.modules.submission.export_docs import (
+        docx_to_pdf,
+        html_to_pdf,
+        md_to_docx,
+        md_to_html,
+        preprocess_md,
+    )
+    from app.modules.submission.models import Submission
+
+    submission = (
+        (
+            await db.execute(
+                select(Submission).where(
+                    Submission.resource_id == resource_id,
+                    Submission.tenant_id == tenant_id,
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
+                ).order_by(Submission.id.asc())
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if submission is None or not submission.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This resource has no uploaded source file or online manuscript",
+        )
+    try:
+        data = await get_storage().load(submission.markdown_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Uploaded source file and online manuscript are both missing",
+        ) from exc
+
+    md_text = _redact_essay_sensitive(
+        preprocess_md(data.decode("utf-8", errors="replace")), resource
+    )
+    authors_str = "、".join(resource.authors or [])
+    pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
+    date_str = pub_date.strftime("%Y 年 %-m 月 %-d 日") if pub_date else ""
+    byline = " · ".join(x for x in (authors_str, date_str) if x) or None
+
+    token = hashlib.sha1(
+        b"source-md:" + str(resource_id).encode() + b":" + data
+    ).hexdigest()
+    cache_dir = _export_cache_root() / "source-preview"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / f"{token}.pdf"
+    if cache_path.exists():
+        return cache_path.read_bytes(), token
+
+    def _convert() -> bytes:
+        from app.modules.submission.docx_template import build as build_docx
+
+        meta = _docx_meta_for_resource(resource, md_text)
+        try:
+            docx_bytes = build_docx(md_text, meta)
+        except Exception:  # noqa: BLE001 — 模板异常时退回通用 docx
+            docx_bytes = md_to_docx(md_text, resource.title, byline)
+        try:
+            return docx_to_pdf(docx_bytes)
+        except Exception:  # noqa: BLE001 — 转换器异常时保留可用 PDF
+            return html_to_pdf(md_to_html(md_text), resource.title, byline)
+
+    pdf_bytes = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
+    temp_path = cache_path.with_suffix(".tmp")
+    temp_path.write_bytes(pdf_bytes)
+    temp_path.replace(cache_path)
+    return pdf_bytes, token
+
+
+@router.get("/{resource_id}/source-preview")
+async def preview_resource_source(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> Response:
+    """作者上传原件预览 PDF。保留给旧客户端；新前端改走分页 PNG。"""
+    from fastapi.responses import FileResponse
+
+    _pdf_bytes, token, _mode = await _load_resource_source_pdf(resource_id, db, viewer)
+    cache_path = _export_cache_root() / "source-preview" / f"{token}.pdf"
+    return FileResponse(
+        cache_path,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="source-preview.pdf"',
+            "Cache-Control": "private, max-age=600",
+        },
+    )
+
+
+@router.get("/{resource_id}/source-preview/pages")
+async def preview_resource_source_pages(
+    resource_id: int,
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> dict[str, object]:
+    """原件分页 PNG 的入口：返回 token 与总页数，前端按页取图。"""
+    import pymupdf
+
+    _pdf_bytes, token, mode = await _load_resource_source_pdf(resource_id, db, viewer)
+    cache_path = _export_cache_root() / "source-preview" / f"{token}.pdf"
+    with pymupdf.open(cache_path) as doc:
+        pages = doc.page_count
+    return {"token": token, "pages": pages, "mode": mode}
+
+
+@router.get("/{resource_id}/source-preview/{token}/{page}.png")
+async def preview_resource_source_page_png(
+    resource_id: int,
+    token: str,
+    page: int,
+    db: AsyncSession = Depends(get_db),
+    viewer: User | None = Depends(get_current_user_optional),
+) -> Response:
+    """按页渲染原件 PNG；token 是原件 PDF 的哈希，不能猜别的资源。"""
+    import pymupdf
+
+    await _require_source_preview_viewer(db, viewer)
+    if not re.fullmatch(r"[0-9a-f]{40}", token):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid token")
+    if page < 1 or page > 2000:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid page")
+
+    cache_dir = _export_cache_root() / "source-preview"
+    cache_path = cache_dir / f"{token}.pdf"
+    if not cache_path.exists():
+        # 缓存被清后重建一次；同时校验 token 确属当前资源。
+        _pdf_bytes, actual, _mode = await _load_resource_source_pdf(resource_id, db, viewer)
+        cache_path = _export_cache_root() / "source-preview" / f"{actual}.pdf"
+        if actual != token:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid token")
+
+    png_path = cache_dir / f"{token}-{page}.png"
+    if not png_path.exists():
+        with pymupdf.open(cache_path) as doc:
+            if page > doc.page_count:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page out of range")
+            pix = doc[page - 1].get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False)
+            temp_path = png_path.with_suffix(".tmp.png")
+            pix.save(temp_path)
+            temp_path.replace(png_path)
+    return Response(
+        content=png_path.read_bytes(),
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=600"},
+    )
+
+
 @router.get("/{resource_id}/manuscript")
 async def get_resource_manuscript(
     resource_id: int,
@@ -1004,8 +1453,13 @@ async def get_resource_manuscript(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                    Submission.markdown_path.is_not(None),
-                    Submission.markdown_path != "",
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
                 ).order_by(Submission.id.asc())
             )
         )
@@ -1061,11 +1515,41 @@ async def get_resource_manuscript(
     # `/api/catalog/{id}/img/{n}`（原图不迁移、不改存储），正文体积从 MB 级
     # 降到几十 KB；图片由 /img/{n} 按序号抽字节返回，浏览器端懒加载。
     # 兜底：任何异常都回退原始字节，不得丢图、不得报错。
-    from app.modules.submission.manuscript import rewrite_embedded_images
+    from app.modules.submission.manuscript import strip_known_journal_logo
 
     out_data = data
     try:
         md_text = data.decode("utf-8")
+        # 文章页的标题、作者、摘要、关键词由页面 meta 渲染；正文再带一次
+        # `# 标题 / ## 摘要 / ## 关键词` 会出现截图里的“标题重复两遍”。
+        # 与 Word/PDF 共用同一套前置块剥离，保证三端开头一致。
+        try:
+            from app.modules.submission.docx_template import Meta as DocxMeta
+            from app.modules.submission.docx_template import _essayize, _strip_front_matter
+
+            # 娱乐轨页面刻意不渲染学术摘要卡；此时正文里的“摘要/关键词”
+            # 是读者唯一能看到的一份，不能剥。论文/科普轨页面有摘要卡，
+            # 才去掉正文重复块。
+            _is_essay = (resource.content_track or "").lower() == "essay"
+            md_text = _strip_front_matter(
+                md_text,
+                DocxMeta(
+                    title=resource.title or "",
+                    authors=list(resource.authors or []),
+                    abstract="" if _is_essay else (resource.abstract or "").strip(),
+                    keywords=[] if _is_essay else list(resource.keywords or []),
+                ),
+            )
+            # 网页与 Word/PDF 必须同一套结构：娱乐轨章节不编号、首节
+            # “引言”不单独成题，避免网页仍是“1 引言”而下载件已是散文。
+            if _is_essay:
+                md_text = _essayize(md_text)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "manuscript_front_matter_strip_failed resource_id=%s",
+                resource.id,
+                exc_info=True,
+            )
         # 娱乐轨不展示作者个人邮箱/手机号：在线阅读与下载件都做脱敏，
         # 论文轨保留通信作者邮箱（学术惯例）。
         if (resource.content_track or "").lower() == "essay":
@@ -1075,9 +1559,23 @@ async def get_resource_manuscript(
                 r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md_text
             )
             md_text = _re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md_text)
-        rewritten = rewrite_embedded_images(md_text, resource_id)
-        if rewritten != md_text:
-            out_data = rewritten.encode("utf-8")
+        # 裸 `[图]` / `[图片]` 是原稿图片链接断掉后的占位，不是图，
+        # 在线阅读与 Word/PDF 都不应把它当正文印出来（Word 模板侧已同步跳过）。
+        md_text = re.sub(
+            r"^\s*\[(?:图|图片|image)\]\s*\r?\n?", "",
+            md_text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        # 先落盘“占位已清”的版本；logo 剥离失败也不得把整篇退回原稿。
+        out_data = md_text.encode("utf-8")
+        try:
+            rewritten = strip_known_journal_logo(md_text, resource_id)
+            if rewritten != md_text:
+                out_data = rewritten.encode("utf-8")
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "manuscript_logo_strip_failed resource_id=%s", resource_id, exc_info=True
+            )
     except Exception:  # noqa: BLE001
         logger.warning("manuscript_rewrite_failed resource_id=%s", resource_id, exc_info=True)
         out_data = data
@@ -1130,48 +1628,98 @@ async def get_resource_manuscript_image(
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
 
-    submission = (
+    submissions = (
         (
             await db.execute(
                 select(Submission).where(
                     Submission.resource_id == resource_id,
                     Submission.tenant_id == tenant_id,
-                    Submission.markdown_path.is_not(None),
-                    Submission.markdown_path != "",
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
                 ).order_by(Submission.id.asc())
             )
         )
         .scalars()
-        .first()
+        .all()
     )
-    if submission is None or not submission.markdown_path:
+    if not submissions:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    # 正文读取仍以最早一版为准；图片缓存则遍历所有版本。历史稿常出现
+    # “第一版正文没有 .img 目录，后续修订版才生成图片”的情况，只取
+    # first() 会把整个资源的所有图都判 404（302 号就是这样）。
+    submission = submissions[0]
 
-    try:
-        raw_md = await get_storage().load(submission.markdown_path)
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Stored manuscript is missing"
-        ) from exc
+    # 旁路图片缓存：`<markdown_stem>.img/<n>.<ext>`。清理后的正文只保留
+    # `/img/{n}` 引用，原图字节落在这里；缓存优先，缺失时再回退到正文内嵌
+    # data URI（兼容尚未迁移的旧稿）。
+    storage = get_storage()
+    if storage.backend == "local":
+        from app.core.config import get_settings
+
+        storage_root = Path(get_settings().storage_path)
+        for sub in submissions:
+            if not sub.markdown_path:
+                continue
+            cache_root = storage_root / sub.markdown_path
+            cache_dir = cache_root.parent / f"{cache_root.stem}.img"
+            if not cache_dir.is_dir():
+                continue
+            candidates = sorted(cache_dir.glob(f"{n}.*"))
+            if not candidates:
+                continue
+            cache_file = candidates[0]
+            try:
+                data = cache_file.read_bytes()
+                media_type = mimetypes.guess_type(cache_file.name)[0] or "application/octet-stream"
+                etag = f'W/"{hashlib.sha256(data).hexdigest()[:32]}"'
+                if if_none_match and etag in if_none_match:
+                    return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+                return Response(
+                    content=data,
+                    media_type=media_type,
+                    headers={
+                        "X-Content-Type-Options": "nosniff",
+                        "ETag": etag,
+                        "Cache-Control": "public, max-age=31536000, immutable",
+                    },
+                )
+            except OSError:
+                # 缓存文件读失败时继续试下一版，不让单个坏文件拖垮整篇。
+                continue
 
     if n < 1:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
-    images = extract_embedded_images(raw_md.decode("utf-8", errors="replace"))
-    if n > len(images):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
-    img = images[n - 1]
-    etag = f'W/"{hashlib.sha256(img.data).hexdigest()[:32]}"'
-    if if_none_match and etag in if_none_match:
-        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
-    return Response(
-        content=img.data,
-        media_type=img.media_type,
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            "ETag": etag,
-            "Cache-Control": "public, max-age=31536000, immutable",
-        },
-    )
+    # 最后一层兜底：逐个版本读原稿里的 data:image。缓存目录全缺时，
+    # 只要任一版本内嵌了第 n 张图，就返回它，而不是直接 404。
+    for sub in submissions:
+        if not sub.markdown_path:
+            continue
+        try:
+            raw_md = await storage.load(sub.markdown_path)
+        except FileNotFoundError:
+            continue
+        images = extract_embedded_images(raw_md.decode("utf-8", errors="replace"))
+        if n > len(images):
+            continue
+        img = images[n - 1]
+        etag = f'W/"{hashlib.sha256(img.data).hexdigest()[:32]}"'
+        if if_none_match and etag in if_none_match:
+            return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers={"ETag": etag})
+        return Response(
+            content=img.data,
+            media_type=img.media_type,
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                "ETag": etag,
+                "Cache-Control": "public, max-age=31536000, immutable",
+            },
+        )
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
 
 @router.get("/{resource_id}/manuscript.jats")
@@ -1216,8 +1764,13 @@ async def get_resource_manuscript_jats(
                     # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
                     # 必须取有正文的那条且结果确定——空正文路径与无序 first()
                     # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
-                    Submission.markdown_path.is_not(None),
-                    Submission.markdown_path != "",
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
                 ).order_by(Submission.id.asc())
             )
         )
@@ -1277,8 +1830,206 @@ def _export_cache_root() -> Path:
     return root
 
 
+def _redact_essay_sensitive(md_text: str, resource) -> str:
+    """娱乐轨正文里的个人邮箱/手机号对读者隐藏。
+
+    论文轨保留通信作者邮箱（学术惯例）；娱乐轨是面向大众的创作，
+    联系方式不应出现在网页、Word、PDF 任一出口。之前只改了在线阅读
+    接口，下载件仍原样打印，这里统一收口。
+    """
+    if (getattr(resource, "content_track", "") or "").lower() != "essay":
+        return md_text
+    import re as _re
+
+    md_text = _re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md_text)
+    md_text = _re.sub(r"(?<!\d)1[3-9]\d{9}(?!\d)", "[手机号已隐藏]", md_text)
+    return md_text
+
+
+def _site_id_for(resource) -> str:
+    """本站刊号：R-六位刊号-YYYYMMDD-四位流水。
+
+    流水取 resources.id（全站自增），因此按刊号排序与按入库时间排序一致。
+    这不是 DOI，官方 DOI 仍由作者另行注册后填入 resources.doi。
+    """
+    from app.core.config import settings
+
+    created = getattr(resource, "created_at", None)
+    rid = getattr(resource, "id", None)
+    if not created or rid is None:
+        return ""
+    code = (settings.publication_code or "000001").strip()
+    return f"R-{code}-{created:%Y%m%d}-{int(rid):04d}"
+
+
+def _clean_export_abstract(text: str) -> str:
+    """剥离误存进 abstract 的 PDF 首页元数据。
+
+    少数旧稿把「RUBBISH / 篇名 / 作者 / 单位 / Keywords / DOI」整块塞进摘要字段，
+    导出后会在「摘要：」后面重复一遍作者与刊头。这里只在摘要以 RUBBISH 开头时
+    生效：取最后一条元数据行（DOI/收稿/关键词）之后的正文作为真摘要；没有正文
+    就留空，绝不把作者名单当摘要印出去。
+    """
+    raw = (text or "").strip()
+    if not raw.lstrip().startswith("RUBBISH"):
+        return _strip_export_abstract_prefix(raw)
+    lines = raw.splitlines()
+    cut = -1
+    for idx, line in enumerate(lines):
+        if re.match(
+            r"^\s*(DOI\s*[:：]|Received\b|Accepted\b|Keywords?\s*[:：]|关键词\s*[:：])",
+            line,
+            re.I,
+        ):
+            cut = idx
+    if cut < 0:
+        return ""
+    body = " ".join(" ".join(lines[cut + 1 :]).split())
+    return _strip_export_abstract_prefix(body)
+
+
+_CE_RE = re.compile(r"[†*]?\s*Contributed\s+equally[^.]*\.", re.I)
+
+
+def _strip_export_abstract_prefix(text: str) -> str:
+    """继续剥掉摘要开头的作者脚注与 Keywords 行。"""
+    raw = (text or "").strip()
+    m = _CE_RE.search(raw)
+    if m and m.start() < 1200:
+        raw = raw[m.end() :].strip()
+    km = re.search(r"Keywords?\s*[:：]", raw, re.I)
+    if km and km.start() < 260:
+        tail = raw[km.end() :]
+        # 关键词用分号分隔；取第一段 160 字内最后一个分号后的正文
+        cut = max(tail.rfind("；", 0, 160), tail.rfind(";", 0, 160))
+        if cut > 0:
+            raw = tail[cut + 1 :].strip()
+    raw = re.sub(r"^[†*\s]+", "", raw)
+    return raw
+
+
+def _docx_meta_for_resource(resource, md_text: str):
+    """统一的下载件元数据：作者单位取 authors_meta，不把刊名当单位；
+    关键词只取作者关键词，不拼内部学科标签；卷期/页码/DOI 一并带入。"""
+    from app.modules.submission.docx_template import Meta as DocxMeta
+
+    affs = []
+    for item in (getattr(resource, "authors_meta", None) or []):
+        if isinstance(item, dict):
+            aff = (item.get("affiliation") or "").strip()
+            if aff and aff not in affs:
+                affs.append(aff)
+    if not affs:
+        # 作者正文里常见的“姓名（单位）”行：只认行首且括号前的名字确实
+        # 是本文作者。此前抓“前 800 字里第一个括号”，会把 PADA 缩写里的
+        # “（光周期）”、正文注释“（注：不含金钱交易）”印成作者单位。
+        _authors = {
+            (a or "").strip() for a in (getattr(resource, "authors", None) or [])
+        }
+        for _line in (md_text or "").splitlines()[:20]:
+            _line = _line.strip()
+            if not _line or _line.startswith("#"):
+                continue
+            m = re.match(r"^([^。；\n]{2,40})（([^）]{1,40})）", _line)
+            if not m:
+                continue
+            _name, _aff = m.group(1).strip(" 　*"), m.group(2).strip()
+            if not _name or not _aff:
+                continue
+            if _name not in _authors and not any(_name.endswith(a) for a in _authors if a):
+                continue
+            if re.search(r"通讯作者|作者简介|收稿日期|基金项目|注：|图\s*\d|表\s*\d", _aff):
+                continue
+            affs = [_aff]
+            break
+    # 找不到单位就留空：绝不能把刊名“Rubbish”印成作者单位。
+
+    kws = [k.strip(" 　*~；;，,。.") for k in (getattr(resource, "keywords", None) or [])]
+    kws = [k for k in kws if k]
+    if not kws:
+        # 元数据关键词为空时，从正文关键词行回填；否则模板不印关键词、
+        # 正文里的“## 关键词”又会被当成一级章节编号（4 篇命中）。
+        m = re.search(r"^\s*\**\s*关键词[：:]\s*(.+)$", md_text or "", re.M)
+        if not m:
+            # `## 关键词` 独占一行、内容在下一段的旧稿（301/294/199/80）。
+            m2 = re.search(
+                r"^#{1,6}\s*关键词\s*$\s*\n+([^#]+?)(?=\n#{1,6}|$)",
+                md_text or "",
+                re.M | re.S,
+            )
+            if m2:
+                _raw = " ".join(m2.group(1).split())
+                kws = [k.strip(" 　*~；;，,。.") for k in re.split(r"[；;]", _raw)]
+                kws = [k for k in kws if k]
+        elif m:
+            kws = [k.strip(" 　*~；;，,。.") for k in re.split(r"[；;]", m.group(1))]
+            kws = [k for k in kws if k]
+    # 摘要优先从正文的 `## 摘要` 重算：上传器曾把标题/作者/单位/Keywords
+    # 整块塞进 resources.abstract，导出后“导读”后面跟着一串作者信息。
+    from app.modules.submission.docx_template import parse_meta as _parse_meta
+
+    _parsed = _parse_meta(md_text or "", fallback_title=getattr(resource, "title", "") or "")
+    _abs = (_parsed.abstract or "").strip()
+    _title = (getattr(resource, "title", "") or "").strip()
+    if len(_abs) >= 60 and not _abs.startswith("RUBBISH") and not (_title and _abs.startswith(_title)):
+        _abstract = _abs
+    else:
+        _abstract = getattr(resource, "abstract", "") or ""
+
+    _raw_authors = [str(a).strip() for a in (getattr(resource, "authors", None) or []) if str(a).strip()]
+    _clean_authors = []
+    for _a in _raw_authors:
+        _core = _title.split("——")[0].strip() if _title else ""
+        _hit = _title if (_title and _a.startswith(_title)) else (_core if (_core and _a.startswith(_core)) else "")
+        if _hit:
+            _tail = _a[len(_hit):].strip()
+            # 77：“篇名 M uzi”被整段存进作者字段，去掉篇名后还原成 Muzi。
+            _tail = _tail.replace(" ", "") if len(_tail) <= 20 else _tail
+            _a = _tail or _a
+        _a = re.sub(r"[\*†]+$", "", _a).strip()
+        if _a:
+            _clean_authors.append(_a)
+    _abstract = _clean_export_abstract(_abstract)
+    return DocxMeta(
+        title=getattr(resource, "title", "") or "",
+        authors=_clean_authors,
+        affiliations=affs,
+        abstract=_abstract,
+        keywords=kws,
+        doi=(getattr(resource, "doi", None) or "").strip(),
+        site_id=_site_id_for(resource),
+        volume=str(getattr(resource, "volume", None) or ""),
+        issue=str(getattr(resource, "issue", None) or ""),
+        pages=(getattr(resource, "pages", None) or "").strip(),
+        year=str(getattr(resource, "year", None) or ""),
+        track=(getattr(resource, "content_track", None) or ""),
+    )
+
+
 def _export_cache_path(cache_key: str, ext: str) -> Path:
     return _export_cache_root() / f"{cache_key}.{ext}"
+
+
+def _pdf_page_png(pdf_path: Path, page: int) -> tuple[Path, int]:
+    """把已生成的 PDF 某一页渲染成 PNG，供前端秒开预览。
+
+    pdf.js 直接打开 2.6 MB / 91 页的 PDF 时，移动端要等十几秒，
+    还可能撞上 45 秒超时。服务端只回一页图片，首屏稳定在几百 KB
+    以内，翻页再取下一页；预览和下载件仍是同一份 PDF。
+    """
+    import pymupdf
+
+    image_path = pdf_path.with_suffix(f".p{page}.png")
+    with pymupdf.open(str(pdf_path)) as document:
+        total = document.page_count
+        target = max(1, min(page, total))
+        image_path = pdf_path.with_suffix(f".p{target}.png")
+        if not image_path.is_file():
+            pixmap = document.load_page(target - 1).get_pixmap(
+                matrix=pymupdf.Matrix(1.5, 1.5), alpha=False
+            )
+            pixmap.save(str(image_path))
+    return image_path, total
 
 
 def _prune_export_cache(root: Path) -> None:
@@ -1293,11 +2044,121 @@ def _prune_export_cache(root: Path) -> None:
         pass
 
 
+@router.get("/issues/{volume_issue}/export")
+async def export_issue_front_matter(
+    volume_issue: str,
+    request: Request,
+    format: str = Query(default="pdf", pattern="^(pdf)$"),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """整期版面 PDF：封面、编后记、完整目录、版权页。
+
+    ``volume_issue`` 形如 ``1-05``。按站内已刊出的稿件实时生成，缓存键
+    包含稿件数、最新更新时间，避免每次重排整期。
+    """
+    import asyncio
+    import hashlib
+    from urllib.parse import quote
+
+    from fastapi.responses import Response
+
+    from app.modules.submission.export_docs import issue_front_matter_pdf
+
+    try:
+        volume, issue = volume_issue.split("-", 1)
+        int(volume); int(issue)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="volume_issue must be like 1-05")
+
+    tenant_id = require_tenant_id()
+    rows = (
+        await db.execute(
+            select(Resource)
+            .where(
+                Resource.tenant_id == tenant_id,
+                Resource.volume == volume,
+                Resource.issue == issue,
+            )
+            .order_by(Resource.publish_at.asc(), Resource.id.asc())
+        )
+    ).scalars().all()
+    resource_list = [r for r in rows if is_public(r)]
+    if not resource_list:
+        raise HTTPException(status_code=404, detail="Issue is empty or not published")
+
+    theme = {
+        "01": "创刊号 · 严肃格式下的自由主题",
+        "02": "方法之争",
+        "03": "实验室里的人类",
+        "04": "语言与人格",
+        "05": "游戏即田野",
+    }.get(issue, "本期目录")
+    note = {
+        "01": "创刊号不设题目。我们把“认真”与“好玩”放在同一张桌上，看看它们能不能好好说话。结果是：能。于是有了后面四期。",
+        "02": "方法不是论文的装饰，而是让读者相信你的那条路。这一期里，有人用问卷，有人用田野，有人把模型拆到只剩骨架——争论本身比结论更好看。",
+        "03": "实验室里最容易被忽略的，是人的耐心、手的温度，以及失败记录本上那些没有写进论文的页。把仪器关掉之后，研究还在继续。",
+        "04": "语言既是工具，也是人格的外套。这一期我们关心口音、措辞、沉默，以及一个人在另一个语言里变成另一个自己的瞬间。",
+        "05": "游戏是田野，也是镜子。玩家在规则里 improvisation，研究者在截图与日志里找证据。认真玩，和认真研究，本来就不冲突。",
+    }.get(issue, "本期目录整理中。")
+    dates = sorted(as_aware(r.publish_at or r.created_at) for r in resource_list)
+    a, b = dates[0], dates[-1]
+    range_label = (
+        f"{a.year} 年 {a.month} 月" if (a.year, a.month) == (b.year, b.month)
+        else f"{a.year} 年 {a.month} 月 — {b.year} 年 {b.month} 月"
+    )
+    entries = [
+        {
+            "title": r.title,
+            "authors": list(r.authors or []),
+            "discipline": r.discipline,
+            "clc": r.clc_code,
+            "track": r.content_track,
+            "special": bool(r.is_special_issue),
+        }
+        for r in resource_list
+    ]
+
+    digest = hashlib.sha256(
+        ("v21\x00" + volume_issue + "\x00" + range_label + "\x00").encode()
+        + ("\x00".join(f"{r.id}:{r.updated_at}:{r.title}" for r in resource_list)).encode()
+    ).hexdigest()[:40]
+    readable = f"Rubbish-Vol{volume}-Issue{issue}-front-matter.pdf"
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="{volume}-{issue}-front-matter.pdf"; '
+            f"filename*=UTF-8''{quote(readable)}"
+        ),
+        "ETag": f'W/"{digest}"',
+        "Cache-Control": "private, max-age=86400",
+    }
+    if request.headers.get("if-none-match") == f'W/"{digest}"':
+        return Response(status_code=304, headers=headers)
+    cache_path = _export_cache_path("issue-" + digest, "pdf")
+    if cache_path.is_file():
+        return Response(content=cache_path.read_bytes(), media_type="application/pdf", headers=headers)
+    payload = await asyncio.wait_for(
+        asyncio.to_thread(
+            issue_front_matter_pdf,
+            volume=volume, issue=issue, theme=theme, note=note,
+            range_label=range_label, entries=entries,
+        ),
+        timeout=120,
+    )
+    tmp = cache_path.with_suffix(".pdf.tmp")
+    try:
+        tmp.write_bytes(payload); tmp.replace(cache_path)
+        _prune_export_cache(cache_path.parent)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+    return Response(content=payload, media_type="application/pdf", headers=headers)
+
+
 @router.get("/{resource_id}/export")
 async def export_resource_manuscript(
     resource_id: int,
     request: Request,
-    format: str = Query(default="pdf", pattern="^(pdf|docx)$"),
+    format: str = Query(default="pdf", pattern="^(pdf|docx|png|info)$"),
+    page: int = Query(default=1, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     viewer: User | None = Depends(get_current_user_optional),
 ) -> Response:
@@ -1306,11 +2167,53 @@ async def export_resource_manuscript(
     未刊稿仅刊前预览者）。与「原稿 PDF」（作者投稿版式）互补——导出版是
     统一版式的规范化文档，字体、标题层级、表格与图片均已清洗。
     """
+    from fastapi.responses import FileResponse, JSONResponse, Response
+
+    if format == "info":
+        pdf_response = await export_resource_manuscript(
+            resource_id=resource_id,
+            request=request,
+            format="pdf",
+            page=1,
+            db=db,
+            viewer=viewer,
+        )
+        pdf_path = Path(getattr(pdf_response, "path", ""))
+        if not pdf_path.is_file():
+            raise HTTPException(status_code=500, detail="PDF cache is not readable")
+        import pymupdf
+
+        with pymupdf.open(str(pdf_path)) as document:
+            total_pages = document.page_count
+        return JSONResponse({"pages": total_pages})
+
+    if format == "png":
+        # 预览页仍复用同一份 PDF 产物：先按 pdf 取缓存，再把指定页
+        # 渲染成 PNG。这样不会出现“预览版式与下载件不一致”。
+        pdf_response = await export_resource_manuscript(
+            resource_id=resource_id,
+            request=request,
+            format="pdf",
+            page=1,
+            db=db,
+            viewer=viewer,
+        )
+        pdf_path = Path(getattr(pdf_response, "path", ""))
+        if not pdf_path.is_file():
+            raise HTTPException(status_code=500, detail="PDF cache is not readable")
+        image_path, total_pages = _pdf_page_png(pdf_path, page)
+        return FileResponse(
+            image_path,
+            media_type="image/png",
+            headers={
+                "Cache-Control": "private, max-age=86400",
+                "X-PDF-Pages": str(total_pages),
+            },
+        )
+
     import asyncio
     import hashlib
     from urllib.parse import quote
-
-    from fastapi.responses import Response
 
     from app.core.storage import get_storage
 
@@ -1339,8 +2242,13 @@ async def export_resource_manuscript(
                     # 2.0：一篇资源可能关联多条投稿（重复投稿/合并链接），
                     # 必须取有正文的那条且结果确定——空正文路径与无序 first()
                     # 会让 manuscript/download 命中空投稿而 404（线上 34 实锤）。
-                    Submission.markdown_path.is_not(None),
-                    Submission.markdown_path != "",
+                    or_(
+                        and_(
+                            Submission.markdown_path.is_not(None),
+                            Submission.markdown_path != "",
+                        ),
+                        and_(Submission.file_path.is_not(None), Submission.file_path != ""),
+                    ),
                 ).order_by(Submission.id.asc())
             )
         )
@@ -1360,18 +2268,16 @@ async def export_resource_manuscript(
         ) from exc
 
     from app.modules.submission.export_docs import (
+        docx_to_pdf,
         html_to_pdf,
         md_to_docx,
         md_to_html,
         preprocess_md,
     )
 
-    md_text = preprocess_md(data.decode("utf-8", errors="replace"))
-    if (resource.content_track or "").lower() == "essay":
-        import re as _re
-
-        md_text = _re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md_text)
-        md_text = _re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md_text)
+    md_text = _redact_essay_sensitive(
+        preprocess_md(data.decode("utf-8", errors="replace")), resource
+    )
     # 署名行：作者 · 发表日期（来自 Resource 元数据）
     authors_str = "、".join(resource.authors or [])
     pub_date = as_aware(resource.publish_at) if resource.publish_at else as_aware(resource.created_at)
@@ -1389,8 +2295,20 @@ async def export_resource_manuscript(
 
     # "v2" 是产物版本：导出实现变了（字体子集化）必须让旧缓存失效，
     # 否则用户还会拿到 2 MB 的旧 PDF。改实现时递增这个前缀。
+    _meta_key = "\x1f".join([
+        resource.title or "",
+        (resource.content_track or ""),
+        "、".join(resource.authors or []),
+        resource.doi or "",
+        str(resource.volume or ""),
+        str(resource.issue or ""),
+        resource.pages or "",
+        str(resource.year or ""),
+        "、".join(resource.keywords or []),
+        _clean_export_abstract(resource.abstract or ""),
+    ])
     cache_key = hashlib.sha256(
-        f"v2\x00{format}\x00{resource.title}\x00{byline}\x00".encode("utf-8")
+        f"v25\x00{format}\x00{byline}\x00{_meta_key}\x00".encode("utf-8")
         + md_text.encode("utf-8")
     ).hexdigest()[:40]
     etag = f'W/"{cache_key}"'
@@ -1401,20 +2319,36 @@ async def export_resource_manuscript(
             f"filename*=UTF-8''{quote(readable)}"
         ),
         "ETag": etag,
-        "Cache-Control": "private, max-age=86400",
+        "Cache-Control": "private, no-cache",
     }
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
 
     cache_path = _export_cache_path(cache_key, ext)
     if cache_path.is_file():
-        payload = cache_path.read_bytes()
         headers["X-Export-Cache"] = "hit"
+        # 走 FileResponse 而不是把整个文件读进内存：Starlette 会按
+        # Range 返回 206，pdf.js 只需拉首屏与文末 xref，91 页的 PDF
+        # 也不用先下载完整 2.6 MB，避免移动端 45 秒预览超时。
+        return FileResponse(cache_path, media_type=media, headers=headers)
     else:
         def _convert():
+            # Word 与 PDF 共用同一份品牌 docx：先排版，再按格式决定直接下发
+            # 还是交给镜像内置的 LibreOffice 转 PDF。PDF 不再另走
+            # Markdown→HTML→pymupdf 的第二套版式。
+            from app.modules.submission.docx_template import Meta as DocxMeta, build as build_docx
+
+            meta = _docx_meta_for_resource(resource, md_text)
+            try:
+                docx_bytes = build_docx(md_text, meta)
+            except Exception:  # noqa: BLE001 — 模板异常时退回通用 docx
+                docx_bytes = md_to_docx(md_text, resource.title, byline)
             if format == "docx":
-                return md_to_docx(md_text, resource.title, byline)
-            return html_to_pdf(md_to_html(md_text), resource.title, byline)
+                return docx_bytes
+            try:
+                return docx_to_pdf(docx_bytes)
+            except Exception:  # noqa: BLE001 — 转换器异常时保留可用 PDF
+                return html_to_pdf(md_to_html(md_text), resource.title, byline)
 
         payload = await asyncio.wait_for(asyncio.to_thread(_convert), timeout=120)
         tmp_path = cache_path.with_suffix(cache_path.suffix + f".{os.getpid()}.tmp")
@@ -1426,7 +2360,61 @@ async def export_resource_manuscript(
             tmp_path.unlink(missing_ok=True)
         headers["X-Export-Cache"] = "miss"
 
+    if cache_path.is_file():
+        return FileResponse(cache_path, media_type=media, headers=headers)
     return Response(content=payload, media_type=media, headers=headers)
+
+
+@router.get("/appeals/mine")
+async def my_appeals(
+    viewer: User = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(require_tenant_id),
+) -> dict[str, object]:
+    if viewer is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
+    rows = (
+        await db.execute(
+            select(Appeal).where(Appeal.user_id == viewer.id, Appeal.tenant_id == tenant_id)
+            .order_by(Appeal.id.desc())
+        )
+    ).scalars().all()
+    titles = {
+        r.id: r.title
+        for r in (
+            await db.execute(
+                select(Resource).where(Resource.id.in_([a.resource_id for a in rows]))
+            )
+        ).scalars()
+    } if rows else {}
+    return {"data": [_appeal_row(a, viewer.username, titles.get(a.resource_id, '')) for a in rows]}
+
+
+@router.get("/appeals")
+async def list_appeals(
+    status_filter: str | None = Query(default=None, alias="status"),
+    viewer: User = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(require_tenant_id),
+    _editor: User = Depends(require_editor),
+) -> dict[str, object]:
+    conds = [Appeal.tenant_id == tenant_id]
+    if status_filter:
+        conds.append(Appeal.status == status_filter)
+    rows = (await db.execute(select(Appeal).where(*conds).order_by(Appeal.id.desc()))).scalars().all()
+    users = {
+        u.id: u.username
+        for u in (
+            await db.execute(select(User).where(User.id.in_([a.user_id for a in rows])))
+        ).scalars()
+    } if rows else {}
+    titles = {
+        r.id: r.title
+        for r in (
+            await db.execute(select(Resource).where(Resource.id.in_([a.resource_id for a in rows])))
+        ).scalars()
+    } if rows else {}
+    return {"data": [_appeal_row(a, users.get(a.user_id, ''), titles.get(a.resource_id, '')) for a in rows]}
 
 
 @router.get("/{resource_id}", response_model=ResourceResponse)
@@ -1497,10 +2485,9 @@ async def get_resource(
         >= PERMISSION_RANK["reviewer"]
     )
     if not can_see_scores:
-        response.quality_score = None
-        response.quality_grade = None
+        # 评分总表可公开（用于阅读端展示档位），但评分细则与分区口径只给
+        # 审稿/编辑端；普通读者不下发 breakdown / quartile。
         response.quality_breakdown = None
-        response.quartile = None
     return response
 
 
@@ -1556,6 +2543,9 @@ async def create_resource(
     ct_track, ct_category = canonicalize_track_category(
         payload.content_track, payload.content_category
     )
+    ct_genre = None
+    if ct_track == "essay":
+        ct_genre = payload.content_genre or classify_essay_genre(payload.title, category=ct_category)
     resource = Resource(
         tenant_id=tenant_id,
         slug=payload.slug,
@@ -1567,6 +2557,8 @@ async def create_resource(
         venue=payload.venue,
         discipline=payload.discipline,
         subdiscipline=payload.subdiscipline,
+        article_section=payload.article_section,
+        issue_part=payload.issue_part,
         tags=payload.tags,
         abstract=payload.abstract,
         preview=payload.preview,
@@ -1586,6 +2578,7 @@ async def create_resource(
         publish_at=payload.publish_at,
         content_track=ct_track,
         content_category=ct_category,
+        content_genre=ct_genre,
         authors_meta=(
             [m.model_dump() for m in payload.authors_meta]
             if payload.authors_meta is not None
@@ -1702,6 +2695,18 @@ async def update_resource(
                 update_data.get("content_category", resource.content_category),
             )
         )
+
+    # 文体的生命周期跟着赛道走：论文轨清空；娱乐轨没传就按标题补一个初值。
+    if resource.content_track == "paper":
+        resource.content_genre = None
+    else:
+        incoming_genre = update_data.get("content_genre")
+        if incoming_genre:
+            resource.content_genre = incoming_genre
+        elif not resource.content_genre:
+            resource.content_genre = classify_essay_genre(
+                resource.title, category=resource.content_category, resource_id=resource.id
+            )
 
     # Audit: record which fields the admin touched (values may be large,
     # so we log field names only; the Resource row keeps the new state).
@@ -2060,6 +3065,100 @@ class FeedbackIn(BaseModel):
     page_url: str = Field(default="", max_length=300)
 
 
+def _feedback_row(entry: AuditLog) -> dict[str, object]:
+    payload = entry.payload or {}
+    kind = entry.action.split(".", 1)[1] if "." in entry.action else "bug"
+    return {
+        "id": entry.id,
+        "kind": kind,
+        "title": payload.get("title") or "",
+        "body": payload.get("body") or "",
+        "page_url": payload.get("page_url") or (entry.target_id if entry.target_id != "site" else ""),
+        "status": payload.get("status") or "open",
+        "resolution_note": payload.get("resolution_note"),
+        "resolved_at": payload.get("resolved_at"),
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+    }
+
+
+@router.get("/feedback/board")
+async def feedback_board(
+    status: str | None = Query(default=None, pattern=r"^(open|resolved)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    tenant_id: int = Depends(require_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """公开反馈墙：只读标题/正文/处理状态，不暴露提交人身份。"""
+    stmt = (
+        select(AuditLog)
+        .where(
+            AuditLog.tenant_id == tenant_id,
+            AuditLog.action.like("feedback.%"),
+            AuditLog.action != "feedback.resolve",
+        )
+        .order_by(desc(AuditLog.id))
+        .limit(limit)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    all_items = [_feedback_row(r) for r in rows]
+    items = all_items
+    if status is not None:
+        items = [i for i in all_items if i["status"] == status]
+    # 计数始终是全局口径：切到「已解决」也能看到还有多少待处理。
+    return {
+        "data": items,
+        "open_count": sum(1 for i in all_items if i["status"] == "open"),
+        "resolved_count": sum(1 for i in all_items if i["status"] == "resolved"),
+    }
+
+
+class FeedbackResolveIn(BaseModel):
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/feedback/{feedback_id}/resolve")
+async def resolve_feedback(
+    feedback_id: int,
+    body: FeedbackResolveIn,
+    viewer: User = Depends(require_admin),
+    tenant_id: int = Depends(require_tenant_id),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """编辑部标记反馈已解决；公开反馈墙随即显示「已解决」。"""
+    entry = (
+        await db.execute(
+            select(AuditLog).where(
+                AuditLog.id == feedback_id,
+                AuditLog.tenant_id == tenant_id,
+                AuditLog.action.like("feedback.%"),
+                AuditLog.action != "feedback.resolve",
+            )
+        )
+    ).scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="反馈不存在")
+    payload = dict(entry.payload or {})
+    payload["status"] = "resolved"
+    payload["resolution_note"] = body.note.strip()
+    payload["resolved_at"] = utcnow().isoformat()
+    payload["resolved_by"] = viewer.username
+    entry.payload = payload
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=viewer.id,
+            action="feedback.resolve",
+            target_type="feedback",
+            target_id=str(entry.id),
+            payload={"note": body.note.strip()},
+            created_at=utcnow(),
+        )
+    )
+    await db.commit()
+    await db.refresh(entry)
+    return _feedback_row(entry)
+
+
 @router.post("/feedback")
 async def submit_feedback(
     body: FeedbackIn,
@@ -2076,7 +3175,12 @@ async def submit_feedback(
         action=f"feedback.{body.kind}",
         target_type="site",
         target_id=body.page_url or "unknown",
-        payload={"title": body.title, "body": body.body},
+        payload={
+            "title": body.title,
+            "body": body.body,
+            "status": "open",
+            "page_url": body.page_url,
+        },
         created_at=utcnow(),
     )
     db.add(entry)
@@ -2104,44 +3208,93 @@ async def submit_feedback(
     return {"id": entry.id, "status": "received"}
 
 
+class AppealIn(BaseModel):
+    """作者申诉：撤回 / 重审分数 / 重审分区。理由必须写完整。"""
+
+    kind: str = Field(pattern=r"^(withdraw|rescore|rescore_zone)$")
+    reason: str = Field(min_length=100, max_length=3000)
+    contact_email: str | None = Field(default=None, max_length=255)
+
+
+class AppealDecisionIn(BaseModel):
+    status: str = Field(pattern=r"^(accepted|rejected)$")
+    editor_note: str = Field(min_length=20, max_length=2000)
+
+
+def _appeal_row(a: Appeal, username: str, title: str) -> dict[str, object]:
+    return {
+        "id": a.id,
+        "resource_id": a.resource_id,
+        "user_id": a.user_id,
+        "username": username,
+        "resource_title": title,
+        "kind": a.kind,
+        "reason": a.reason,
+        "status": a.status,
+        "editor_note": a.editor_note,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+        "decided_at": a.decided_at.isoformat() if a.decided_at else None,
+    }
+
+
 @router.post("/{resource_id}/appeal")
 async def submit_appeal(
     resource_id: int,
-    body: FeedbackIn,
+    body: AppealIn,
     viewer: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
-    tenant_id: int = Depends(require_tenant_id),
+    tenant_id: UUID = Depends(require_tenant_id),
 ) -> dict[str, object]:
-    """作者申诉：对评审/决定有异议 → 记录并推送给编辑，由编辑指派审稿人复审。"""
+    """作者申诉：落 `appeals` 表并通知主编；同一稿件同类型只允许一条待处理。"""
     from app.modules.notifications import services as _notify
     from app.modules.submission.models import Submission as _Submission
 
     if viewer is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
+    resource = (
+        await db.execute(
+            select(Resource).where(Resource.id == resource_id, Resource.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if resource is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
     owned = (
         await db.execute(
             select(_Submission.id).where(
                 _Submission.resource_id == resource_id,
                 _Submission.submitted_by == viewer.id,
                 _Submission.tenant_id == tenant_id,
+            ).order_by(_Submission.id.desc())
+        )
+    ).scalars().all()
+    if not owned and resource.owner_id != viewer.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not your work")
+    pending = (
+        await db.execute(
+            select(Appeal.id).where(
+                Appeal.resource_id == resource_id,
+                Appeal.user_id == viewer.id,
+                Appeal.kind == body.kind,
+                Appeal.status == "pending",
+                Appeal.tenant_id == tenant_id,
             )
         )
     ).scalars().all()
-    entry = AuditLog(
+    if pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="同类申诉已在处理中")
+
+    appeal = Appeal(
         tenant_id=tenant_id,
-        actor_user_id=viewer.id,
-        action="submission.appeal",
-        target_type="resource",
-        target_id=str(resource_id),
-        payload={"owned_submissions": list(owned), "title": body.title, "body": body.body},
+        resource_id=resource_id,
+        user_id=viewer.id,
+        submission_id=owned[0] if owned else None,
+        kind=body.kind,
+        reason=body.reason,
+        status="pending",
         created_at=utcnow(),
     )
-    db.add(entry)
-    # 收件人 = 主编账号（bigbad, id=5）。角色表结构在不同版本间有差异，
-    # 直接锁定主编账号最可靠；反馈本身已落审计，通知失败不影响入库。
-    editors = (
-        await db.execute(select(User.id).where(User.username == "bigbad"))
-    ).scalars().all()
+    db.add(appeal)
+    editors = (await db.execute(select(User.id).where(User.username == "bigbad"))).scalars().all()
     for uid in set(editors):
         try:
             await _notify.create(
@@ -2149,13 +3302,65 @@ async def submit_appeal(
                 tenant_id=tenant_id,
                 user_id=uid,
                 type_="submission.appeal",
-                title=f"作者申诉待处理：资源 #{resource_id}",
-                body=f"{body.title}\n\n{body.body}\n\n申诉人：{viewer.username}（请指派审稿人复审）",
+                title=f"作者申诉待处理：{resource.title[:40]}",
+                body=f"类型：{body.kind}\n理由：{body.reason}\n申诉人：{viewer.username}",
                 related_type="resource",
                 related_id=str(resource_id),
             )
         except Exception:  # noqa: BLE001
             logger.warning("appeal_notify_failed", user_id=uid, exc_info=True)
     await db.commit()
-    await db.refresh(entry)
-    return {"id": entry.id, "status": "received", "review_required": True}
+    await db.refresh(appeal)
+    return {"id": appeal.id, "status": "pending", "review_required": True}
+
+
+@router.post("/appeals/{appeal_id}/decide")
+async def decide_appeal(
+    appeal_id: int,
+    body: AppealDecisionIn,
+    viewer: User = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(require_tenant_id),
+    _editor: User = Depends(require_editor),
+) -> dict[str, object]:
+    """编辑部裁决。撤回被批准时同步下架该资源；分数/分区重审只记录结论。"""
+    if viewer is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Login required")
+    appeal = (
+        await db.execute(
+            select(Appeal).where(Appeal.id == appeal_id, Appeal.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if appeal is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appeal not found")
+    if appeal.status != "pending":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Appeal already decided")
+    appeal.status = body.status
+    appeal.editor_note = body.editor_note
+    appeal.decided_by = viewer.id
+    appeal.decided_at = utcnow()
+    if body.status == "accepted" and appeal.kind == "withdraw":
+        resource = (
+            await db.execute(
+                select(Resource).where(Resource.id == appeal.resource_id, Resource.tenant_id == tenant_id)
+            )
+        ).scalar_one_or_none()
+        if resource is not None:
+            resource.publication_status = "withdrawn"
+    from app.modules.notifications import services as _notify
+    try:
+        await _notify.create(
+            db,
+            tenant_id=tenant_id,
+            user_id=appeal.user_id,
+            type_="submission.appeal.decision",
+            title="作者申诉已处理" if body.status == "accepted" else "作者申诉未通过",
+            body=body.editor_note,
+            related_type="resource",
+            related_id=str(appeal.resource_id),
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("appeal_decision_notify_failed", exc_info=True)
+    await db.commit()
+    return {"id": appeal.id, "status": appeal.status, "editor_note": appeal.editor_note}
+

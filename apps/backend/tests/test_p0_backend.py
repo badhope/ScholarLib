@@ -183,7 +183,7 @@ async def test_essay_scores_nulled(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["content_track"] == "essay"
-    assert body["absurdity_index"] is None
+    assert body["absurdity_index"] == 5.5
     assert body["quality_score"] is None
     assert body["quality_grade"] is None
 

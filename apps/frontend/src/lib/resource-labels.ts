@@ -74,7 +74,7 @@ export function recommendationReason(reason: string | null | undefined): string 
 }
 
 // ---------------------------------------------------------------------------
-// 质量评分（RQS v4.0）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
+// 质量评分（评审质量分）：等级徽章的展示映射。数值口径见 /api/quality/rubric。
 // v4.0 是 16 档 ABCDEF 全字母制：A+（97–100）对标顶刊、刻意稀缺；
 // F（40–49）= 及格可发表；<40 = 不合格（打回）。等级仅作为评审信息
 // 呈现，不构成内容的公开分层。
@@ -87,7 +87,7 @@ export interface QualityGrade {
 }
 
 const QUALITY_GRADES: Record<string, QualityGrade> = {
-  // RQS v4.0 十六档口径（与 /api/quality/rubric 一致）。等级属于评审
+  // 评审质量分 十六档口径（与 /api/quality/rubric 一致）。等级属于评审
   // 信息元数据，不属于内容分层：界面只在评审区呈现，不进列表排序。
   'A+': { label: 'A+ 典范', description: '97–100，领域范本，编辑部极少量授予', className: 'bg-amber-300 text-amber-950 border-amber-400/70' },
   'A': { label: 'A 顶尖', description: '93–96，可直接发表', className: 'bg-amber-200/80 text-amber-950 border-amber-300/60' },
@@ -126,7 +126,7 @@ export function qualityGrade(grade: string | null | undefined): QualityGrade | n
 // ---------------------------------------------------------------------------
 const CATEGORY_LABELS: Record<string, string> = {
   academic: '学术研究',
-  fun: '娱乐',
+  fun: '副刊',
   rant: '吐槽',
 }
 
@@ -156,10 +156,15 @@ export function displayTypeLabel(
   type: string | null | undefined,
   contentCategory?: string | null,
   contentTrack?: string | null,
+  paperKind?: string | null,
 ): string {
-  if (contentTrack === 'essay') return contentCategory === 'rant' ? '吐槽' : '娱乐'
-  if (contentTrack === 'paper') return TYPE_LABELS[type ?? ''] ?? '论文'
-  if (contentCategory === 'fun') return '娱乐'
+  if (contentTrack === 'essay') return contentCategory === 'rant' ? '吐槽' : '副刊'
+  if (contentTrack === 'paper') {
+    if (paperKind === 'absurd') return '荒诞论文'
+    if (paperKind === 'serious') return '学术论文'
+    return TYPE_LABELS[type ?? ''] ?? '论文'
+  }
+  if (contentCategory === 'fun') return '副刊'
   if (contentCategory === 'rant') return '吐槽'
   return typeLabel(type)
 }

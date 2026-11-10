@@ -123,6 +123,47 @@ async def test_disable_own_account_blocks_token(client: AsyncClient, test_user: 
 
 
 @pytest.mark.asyncio
+async def test_update_extended_profile_fields(client: AsyncClient, test_user: dict) -> None:
+    payload = {
+        "display_name": "牛马程序员",
+        "real_name": "测试用户",
+        "affiliation": "清华大学",
+        "department": "计算机系",
+        "academic_title": "本科生",
+        "location": "北京",
+        "research_interests": "多智能体系统、学术出版",
+        "website": "https://example.com",
+        "google_scholar": "https://scholar.google.com/citations?user=test",
+        "bio": "一句话简介",
+    }
+    r = await client.patch("/api/users/me", json=payload, headers=auth_headers(test_user))
+    assert r.status_code == 200
+    body = r.json()
+    for key, value in payload.items():
+        assert body[key] == value
+
+    # 只提交一个字段时，其余字段保持不变（缺键 = no-op）。
+    r2 = await client.patch(
+        "/api/users/me", json={"location": "深圳"}, headers=auth_headers(test_user)
+    )
+    assert r2.status_code == 200
+    assert r2.json()["location"] == "深圳"
+    assert r2.json()["affiliation"] == "清华大学"
+
+
+@pytest.mark.asyncio
+async def test_extended_profile_rejects_non_http_url(
+    client: AsyncClient, test_user: dict
+) -> None:
+    r = await client.patch(
+        "/api/users/me",
+        json={"website": "javascript:alert(1)"},
+        headers=auth_headers(test_user),
+    )
+    assert r.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_change_password_wrong_old_password(client: AsyncClient, test_user: dict) -> None:
     r = await client.post(
         "/api/users/me/password",

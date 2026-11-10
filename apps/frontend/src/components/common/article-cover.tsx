@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { ResourceResponse } from '@/lib/types'
 
@@ -29,7 +30,8 @@ export function ArticleCover({
   overlay = false,
   aspect = '',
 }: ArticleCoverProps) {
-  const hasImage = Boolean(resource.cover_image)
+  const [broken, setBroken] = useState(false)
+  const hasImage = Boolean(resource.cover_image) && !broken
   return (
     <div
       className={cn(
@@ -43,10 +45,10 @@ export function ArticleCover({
       {hasImage ? (
         <img
           src={resource.cover_image ?? ''}
-          alt=""
-          aria-hidden="true"
+          alt={resource.title ? `${resource.title} 封面` : '专题封面'}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
+          onError={() => setBroken(true)}
           // 宽高比由父容器锁定，图片填满；object-cover 防拉伸。
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
         />

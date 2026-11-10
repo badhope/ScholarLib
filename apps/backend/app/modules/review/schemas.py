@@ -44,6 +44,14 @@ class AssignmentResponse(BaseModel):
     # 催办状态（编辑可见「已催 N 次」；审稿人可见最近提醒时间）
     last_reminded_at: datetime | None = None
     reminder_count: int = 0
+    # 已完成任务：关联报告 id 与附件，供审稿人自查/补传批注件
+    report_id: int | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    round: int = 1
+    slot: int = 1
+    is_adjudicator: bool = False
+    is_external: bool = False
+    external_affiliation: str | None = None
 
 
 class AssignmentListResponse(BaseModel):
@@ -60,6 +68,10 @@ class ReviewSubmit(BaseModel):
     scores: dict[str, Any] = Field(default_factory=dict)
     comments_to_editor: str | None = Field(default=None, max_length=20000)
     comments_to_author: str | None = Field(default=None, max_length=20000)
+    # 审稿端「特别篇」特许标记：普通稿件不得超篇幅上限；勾选即视为
+    # 审稿人建议/确认特许，落库到资源并显示显式标签。理由单独留痕。
+    special_issue: bool = False
+    special_issue_reason: str | None = Field(default=None, max_length=500)
 
 
 class ReviewReportResponse(BaseModel):
@@ -72,6 +84,8 @@ class ReviewReportResponse(BaseModel):
     comments_to_editor: str | None = None
     # 单盲模式：作者只看作者评论 + 推荐，看不到审稿人身份 + editor-only 评论
     comments_to_author: str | None = None
+    # 审稿附件元数据：filename / path / content_type / size。
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
     submitted_at: datetime
 
 

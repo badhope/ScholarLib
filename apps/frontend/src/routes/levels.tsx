@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
   ArrowRight,
   BadgeCheck,
@@ -21,6 +21,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/levels')({
+  beforeLoad: () => {
+    throw redirect({ to: '/guide', search: { tab: 'levels' } })
+  },
   component: LevelsPage,
 })
 
@@ -163,7 +166,7 @@ interface PointRule {
 const POINT_RULES: PointRule[] = [
   { identity: 'author', label: '正式论文被录用', delta: 60, counts: true },
   { identity: 'author', label: '作者认领审核通过', delta: 20, counts: true },
-  { identity: 'author', label: '娱乐 / 吐槽类稿件录用', delta: 0, counts: false },
+  { identity: 'author', label: '副刊 / 吐槽类稿件录用', delta: 0, counts: false },
   { identity: 'reviewer', label: '按时完成审稿报告并提交', delta: 1, counts: true },
   { identity: 'editor', label: '对稿件作出编辑裁决', delta: 8, counts: true },
 ]
@@ -180,7 +183,7 @@ const IDENTITY_NAME: Record<string, string> = {
   editor: '编辑轨',
 }
 
-function LevelsPage() {
+export function LevelsPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6">
       <PageHeader
@@ -350,7 +353,7 @@ function LevelsPage() {
         <p className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
-            娱乐 / 吐槽类稿件（随笔、吐槽、非正式论文）录用后只记一条活跃度流水，
+            副刊 / 吐槽类稿件（随笔、吐槽、非正式论文）录用后只记一条活跃度流水，
             <strong>不推进任何等级</strong>，也不折算成作者轨积分。想在作者轨升级，靠的是正式论文与认领。
           </span>
         </p>

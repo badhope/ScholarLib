@@ -29,7 +29,7 @@ from app.api.deps import (
     require_tenant_id,
     user_role_names,
 )
-from app.core.captcha import verify_captcha_token
+from app.core.captcha import issue_captcha, verify_captcha_token
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.email import get_email_sender
@@ -139,6 +139,12 @@ def _extract_refresh_token(request: Request, body_token: str | None) -> str | No
     return request.cookies.get(_REFRESH_COOKIE_KEY) or body_token
 
 
+@router.get("/captcha")
+async def captcha_challenge() -> dict[str, str]:
+    """签发一道自建算术验证码；注册时回传 token + answer。"""
+    return issue_captcha()
+
+
 @router.post(
     "/register",
     response_model=MessageResponse,
@@ -159,7 +165,7 @@ async def register(
     the duplicate attempt (best effort when SMTP is configured).
     """
     # CAPTCHA check if the policy is enabled.
-    await verify_captcha_token(request, payload.captcha_token)
+    await verify_captcha_token(request, payload.captcha_token, payload.captcha_answer)
 
     tenant_id = get_current_tenant_id()
     if tenant_id is None:

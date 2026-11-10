@@ -264,7 +264,7 @@ def _add_runs(paragraph, text: str) -> None:
             paragraph.add_run(part[1:-1]).italic = True
         elif part.startswith("`") and part.endswith("`"):
             run = paragraph.add_run(part[1:-1])
-            run.font.name = "Consolas"
+            run.font.name = "DejaVu Sans Mono"
         else:
             paragraph.add_run(part)
 
@@ -302,3 +302,158 @@ def md_to_docx(md: str, title: str, byline: str | None = None) -> bytes:
         if authors:
             meta.authors = [a.strip() for a in re.split(r"[、,，]", authors) if a.strip()]
     return build(md, meta)
+
+
+# --- 整期版面（封面 + 编后记 + 目录 + 版权页） -----------------------------
+
+_ISSUE_CSS = """
+body { font-family: china-s; font-size: 10.5pt; line-height: 1.65; color: #1f2a24; }
+.kicker { font-size: 8pt; letter-spacing: 2pt; color: #6b7a70; text-transform: uppercase; }
+.masthead img { width: 300pt; margin: 2pt 0 6pt 0; }
+.issue-no { font-size: 72pt; line-height: 0.95; margin: 18pt 0 4pt 0; }
+.issue-theme { font-size: 15pt; font-weight: bold; margin: 6pt 0 2pt 0; color: #2f5d46; }
+.meta { font-size: 9pt; color: #5f6b63; }
+.rule { border-top: 1.2pt solid #2f5d46; margin: 10pt 0; }
+h2 { font-size: 14pt; margin: 14pt 0 6pt 0; }
+h3 { font-size: 11pt; margin: 10pt 0 3pt 0; }
+p { margin: 4pt 0; text-align: justify; }
+.toc-row { margin: 3pt 0; }
+.toc-no { color: #7a857d; }
+.toc-title { font-weight: bold; }
+.toc-meta { font-size: 8.5pt; color: #6b7a70; }
+.note { background: #f4efe4; padding: 9pt 11pt; margin: 8pt 0 12pt 0; }
+.pagebreak { page-break-after: always; }
+.footer { font-size: 8.5pt; color: #6b7a70; margin-top: 12pt; border-top: 0.6pt solid #c9d1c8; padding-top: 6pt; }
+"""
+
+
+def issue_front_matter_pdf(
+    *, volume: str, issue: str, theme: str, note: str, range_label: str,
+    entries: list[dict], editor: str = "Rubbish 编辑部",
+) -> bytes:
+    """把一期做成可下载的“版面”：封面、编后记、完整目录、版权页。"""
+    import base64
+    import html as _html
+    from pathlib import Path
+
+    import pymupdf
+
+    papers = [e for e in entries if e.get("track") == "paper"]
+    essays = [e for e in entries if e.get("track") != "paper"]
+
+    def esc(x: object) -> str:
+        return _html.escape(str(x or ""))
+
+    def toc(group: list[dict], label: str) -> str:
+        if not group:
+            return ""
+        rows = "".join(
+            f'<div class="toc-row"><span class="toc-no">{i + 1:02d}.</span> '
+            f'<span class="toc-title">{esc(e["title"])}</span>'
+            f'{" <span class=\'toc-meta\'>[特别篇]</span>" if e.get("special") else ""}'
+            f'<div class="toc-meta">{esc("、".join(e.get("authors") or []))} · '
+            f'{esc(e.get("discipline"))}{(" · CLC " + esc(e.get("clc"))) if e.get("clc") else ""}</div></div>'
+            for i, e in enumerate(group)
+        )
+        return f'<h3>{esc(label)} · {len(group)} 篇</h3>{rows}'
+
+    logo_path = Path(__file__).resolve().parent / "assets" / "brand-lockup.png"
+    logo_b64 = base64.b64encode(logo_path.read_bytes()).decode() if logo_path.is_file() else ""
+
+    html = f"""<html><body>
+<div class="pagebreak">
+  <div class="kicker">Rubbish · Vol. {esc(volume)} · {esc(issue)}</div>
+  <div class="masthead"><img src="data:image/png;base64,{logo_b64}" alt="Rubbish" /></div>
+  <div class="kicker">A Journal of Serious Format &amp; Free Subjects</div>
+  <div class="rule"></div>
+  <div class="issue-no">{int(issue):02d}</div>
+  <div class="issue-theme">{esc(theme)}</div>
+  <div class="meta">第 {esc(volume)} 卷 第 {int(issue)} 期 · {esc(range_label)}</div>
+  <div class="meta">共 {len(entries)} 篇 · {len(papers)} 篇论文 · {len(essays)} 篇副刊</div>
+  <div style="margin-top:120pt" class="meta">{esc(editor)} · rubbish.argjiemi.cn</div>
+</div>
+<h2>本期编后记</h2>
+<div class="note"><p>{esc(note)}</p><p style="text-align:right">— {esc(editor)}</p></div>
+<h2>本期目录</h2>
+{toc(papers, "论文")}
+{toc(essays, "副刊与随笔")}
+<h2>版权页</h2>
+<p>出版：Rubbish 编辑部 · 纯数字出版 · 滚动刊出</p>
+<p>主编：陆止于海　副主编：沈知非、顾荒唐</p>
+<p>编委：白鹿原上、林一苇、R. 编辑部</p>
+<p>本版：第 {esc(volume)} 卷 第 {int(issue)} 期 · {esc(range_label)}</p>
+<div class="footer">Rubbish · rubbish.argjiemi.cn · 本版面由站内排版器自动生成</div>
+</body></html>"""
+
+    story = pymupdf.Story(html=html, user_css=_ISSUE_CSS, em=11)
+    buf = io.BytesIO()
+    writer = pymupdf.DocumentWriter(buf)
+    mediabox = pymupdf.paper_rect("a4")
+    where = mediabox + (56, 60, -56, -60)
+    more = 1
+    while more:
+        dev = writer.begin_page(mediabox)
+        more, _ = story.place(where)
+        story.draw(dev)
+        writer.end_page()
+    writer.close()
+    doc = pymupdf.open(stream=buf.getvalue(), filetype="pdf")
+    try:
+        doc.subset_fonts()
+    except Exception:
+        pass
+    out = io.BytesIO()
+    doc.save(out, deflate=True, garbage=4, deflate_images=True, deflate_fonts=True)
+    return out.getvalue()
+
+
+def docx_to_pdf(docx_bytes: bytes, *, timeout: int = 90) -> bytes:
+    """用镜像内置的 LibreOffice headless 把品牌 Word 转成 PDF。
+
+    这是「PDF 由 Word 转出」的唯一实现：先由 docx_template 生成与下载件
+    完全相同的 .docx，再转换，保证 Word 与 PDF 的标题、表格、图注、页眉
+    是同一份版式，而不是两条各自排版的流水线。
+
+    LibreOffice 首次启动要初始化用户配置，因此每次转换给独立的
+    UserInstallation 目录，避免并发请求互相锁住；失败抛异常，由路由回退。
+    """
+    import os
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory(prefix="rubbish-docx2pdf-") as td:
+        root = Path(td)
+        src = root / "manuscript.docx"
+        src.write_bytes(docx_bytes)
+        profile = root / "lo-profile"
+        env = {
+            **os.environ,
+            "HOME": str(root),
+            "TMPDIR": str(root),
+        }
+        cmd = [
+            "soffice",
+            "--headless",
+            "--norestore",
+            "--nologo",
+            f"-env:UserInstallation=file://{profile}",
+            "--convert-to",
+            "pdf",
+            "--outdir",
+            str(root),
+            str(src),
+        ]
+        proc = subprocess.run(
+            cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+        out = root / "manuscript.pdf"
+        if proc.returncode != 0 or not out.is_file() or out.stat().st_size < 1024:
+            detail = (proc.stderr or proc.stdout or b"").decode("utf-8", "ignore")[-300:]
+            raise RuntimeError(f"LibreOffice docx→pdf failed: {detail}")
+        return out.read_bytes()

@@ -6,20 +6,20 @@ import {
   Gavel,
   Heart,
   Home,
+  Coffee,
+  Layers,
+  Scale,
   Building2,
   Lightbulb,
   PenLine,
-  Scroll,
   ScrollText,
   Settings,
   ShieldCheck,
   Upload,
   Users,
   CalendarDays,
-  Compass,
   Megaphone,
   MessagesSquare,
-  TrendingUp,
   Library,
   type LucideIcon,
   User,
@@ -47,12 +47,13 @@ export interface MobileMoreItem {
 // 折叠菜单分组顺序
 export const MOBILE_MORE_GROUP_ORDER = ['我的', '工作台', '期刊', '消息', '设置', '站点管理'] as const
 
-// 底部固定 4 Tab：首页 / 目录 / 论坛 / 我的。
+// 底部固定 5 Tab：首页 / 论文 / 副刊 / 讨论 / 我的。
 // 「我的」指向 /me（身份等级同事已落地；/profile 会重定向到 /me）。
 export const MOBILE_TABS: MobileTab[] = [
   { to: '/', label: '首页', icon: Home },
-  { to: '/catalog', label: '目录', icon: BookOpen },
-  { to: '/forum', label: '论坛', icon: MessagesSquare },
+  { to: '/papers', label: '论文', icon: BookOpen },
+  { to: '/fun', label: '副刊', icon: Coffee },
+  { to: '/forum', label: '讨论', icon: MessagesSquare },
   { to: '/me', label: '我的', icon: User },
 ]
 
@@ -61,25 +62,24 @@ export const MOBILE_TABS: MobileTab[] = [
 export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/dashboard', label: '概览', icon: Home, auth: true, group: '我的' },
   { to: '/submissions', label: '我的提交', icon: ScrollText, auth: true, group: '我的' },
+  { to: '/appeals', label: '作者申诉', icon: Scale, auth: true, group: '我的' },
   { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '我的' },
   { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '我的' },
   { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '我的' },
   { to: '/review/assignments', label: '审稿工作台', icon: ClipboardCheck, auth: true, roles: ['reviewer'], group: '工作台' },
   {
-    to: '/submissions/pending',
-    label: '编辑工作台',
+    to: '/editor/workbench',
+    label: '主编工作台',
     icon: Gavel,
     auth: true,
-    roles: ['editor', 'section_editor'],
+    roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'],
     group: '工作台',
   },
   { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor'], group: '工作台' },
-  { to: '/journal-metrics', label: '期刊指标', icon: TrendingUp, group: '期刊' },
+  { to: '/sections', label: '栏目', icon: Layers, group: '期刊' },
   { to: '/archive', label: '卷期归档', icon: CalendarDays, group: '期刊' },
-  { to: '/levels', label: '等级与规范', icon: Compass, group: '期刊' },
-  { to: '/authors', label: '作者指南', icon: PenLine, group: '期刊' },
-  { to: '/policies', label: '政策规范', icon: Scroll, group: '期刊' },
-  { to: '/about', label: '关于本刊', icon: Building2, group: '期刊' },
+  { to: '/about', label: '关于与指标', icon: Building2, group: '期刊' },
+  { to: '/guide', label: '投稿与操作指南', icon: PenLine, group: '期刊' },
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '消息' },
   { to: '/settings', label: '账号设置', icon: Settings, auth: true, group: '设置' },
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },

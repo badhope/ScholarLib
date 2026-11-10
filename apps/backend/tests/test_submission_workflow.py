@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from conftest import auth_headers, complete_one_review, register_user
+from conftest import auth_headers, complete_two_reviews, register_user
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -384,7 +384,7 @@ async def test_editor_decision_accept_materializes_resource(
 ) -> None:
     sub = await _create_submission(client, test_user)
     # 录用要求至少一份已完成的审稿意见（见 no_completed_reviews）。
-    await complete_one_review(client, admin_user, sub["id"])
+    await complete_two_reviews(client, admin_user, sub["id"])
 
     response = await client.patch(
         f"/api/submissions/{sub['id']}/decision",

@@ -19,12 +19,12 @@ async def _default_tenant(db: AsyncSession) -> Tenant:
 
 
 @pytest.mark.asyncio
-async def test_version_is_1130(client: AsyncClient) -> None:
-    """版本号 1.13.0，/api/health 返回。"""
-    assert __version__ == "1.13.0"
+async def test_version_is_current(client: AsyncClient) -> None:
+    """版本号与 app 包一致，/api/health 返回。"""
+    assert __version__ == "1.15.0"
     resp = await client.get("/api/health")
     assert resp.status_code == 200
-    assert resp.json()["version"] == "1.13.0"
+    assert resp.json()["version"] == "1.15.0"
 
 
 @pytest.mark.asyncio

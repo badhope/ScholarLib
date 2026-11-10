@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
 import { parseListField } from '@/lib/utils'
 import { DISCIPLINES } from '@/lib/disciplines'
+import { ARTICLE_SECTION_OPTIONS } from '@/lib/article-sections'
 import { useCreateResource } from '@/hooks/api/use-modules'
 import type { PublicationStatus, ResourceCreate, ResourceType } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
@@ -47,6 +48,8 @@ interface FormState {
   authors: string
   year: string
   discipline: string
+  article_section: string
+  issue_part: string
   abstract: string
   preview: string
   venue: string
@@ -75,6 +78,8 @@ function NewResourcePage() {
     authors: '',
     year: String(new Date().getFullYear()),
     discipline: '',
+    article_section: '',
+    issue_part: '',
     abstract: '',
     preview: '',
     venue: '',
@@ -105,6 +110,8 @@ function NewResourcePage() {
       authors: parseListField(form.authors),
       year: Number(form.year),
       discipline: form.discipline,
+      article_section: form.article_section || undefined,
+      issue_part: form.issue_part || undefined,
       abstract: form.abstract,
       preview: form.preview,
       tags: parseListField(form.tags),
@@ -215,6 +222,31 @@ function NewResourcePage() {
                     </option>
                   ))}
                 </datalist>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="article_section">栏目 / 分部</Label>
+                <select
+                  id="article_section"
+                  value={form.article_section}
+                  onChange={(e) => set('article_section', e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">不指定（由目录按学科归组）</option>
+                  {ARTICLE_SECTION_OPTIONS.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="issue_part">期次分部</Label>
+                <Input
+                  id="issue_part"
+                  value={form.issue_part}
+                  onChange={(e) => set('issue_part', e.target.value)}
+                  placeholder="例如：06 期 · 游戏、语言与身体"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="abstract">摘要</Label>

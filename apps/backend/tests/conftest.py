@@ -26,6 +26,8 @@ os.environ.setdefault("RUBBISH_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 # tests/test_email_pool.py 显式设置阈值来覆盖。
 os.environ.setdefault("RUBBISH_EMAIL_PER_ADDRESS_COOLDOWN", "0")
 os.environ.setdefault("RUBBISH_EMAIL_PER_ADDRESS_LIMIT", "100")
+# 注册验证码在测试里关闭：真实环境默认开启，测试不依赖交互式答题。
+os.environ.setdefault("RUBBISH_CAPTCHA_REQUIRED_FOR_REGISTRATION", "false")
 # Uploads must go to a writable location in ANY environment (CI runners
 # have no permission to create /data). tmpdir is per-OS writable.
 os.environ.setdefault(
@@ -173,29 +175,35 @@ async def complete_one_review(
     审稿人按 ``reviewer_name`` 区分，避免同一测试里多次调用撞
     (submission_id, reviewer_id) 唯一约束。
     """
-    reviewer = await register_reviewer(
-        client, admin, f"{reviewer_name}_{submission_id}", f"{reviewer_name}{submission_id}@example.com"
-    )
-    assign = await client.post(
-        f"/api/submissions/{submission_id}/assignments",
-        json={"reviewer_id": reviewer["user_id"]},
-        headers={"Authorization": f"Bearer {admin['token']}"},
-    )
-    assign.raise_for_status()
-    assignment_id = assign.json()["id"]
-    hdr = {"Authorization": f"Bearer {reviewer['token']}"}
-    accept = await client.post(f"/api/review/assignments/{assignment_id}/accept", headers=hdr)
-    accept.raise_for_status()
-    report = await client.post(
-        f"/api/review/assignments/{assignment_id}/submit",
-        json={
-            "recommendation": "accept",
-            "scores": {"originality": 4, "clarity": 4},
-            "comments_to_author": "Sound work, ready for publication.",
-        },
-        headers=hdr,
-    )
-    report.raise_for_status()
+    # 发表闸门要求至少 2 名不同审稿人给出 accept；helper 名字保留历史，
+    # 但实际跑满两份独立意见，避免测试继续依赖“单人录用”的旧漏洞。
+    for i in range(2):
+        reviewer = await register_reviewer(
+            client,
+            admin,
+            f"{reviewer_name}_{submission_id}_{i}",
+            f"{reviewer_name}{submission_id}_{i}@example.com",
+        )
+        assign = await client.post(
+            f"/api/submissions/{submission_id}/assignments",
+            json={"reviewer_id": reviewer["user_id"]},
+            headers={"Authorization": f"Bearer {admin['token']}"},
+        )
+        assign.raise_for_status()
+        assignment_id = assign.json()["id"]
+        hdr = {"Authorization": f"Bearer {reviewer['token']}"}
+        accept = await client.post(f"/api/review/assignments/{assignment_id}/accept", headers=hdr)
+        accept.raise_for_status()
+        report = await client.post(
+            f"/api/review/assignments/{assignment_id}/submit",
+            json={
+                "recommendation": "accept",
+                "scores": {"originality": 4, "clarity": 4},
+                "comments_to_author": "Sound work, ready for publication.",
+            },
+            headers=hdr,
+        )
+        report.raise_for_status()
 
 
 async def register_user(
@@ -344,3 +352,15 @@ async def fake_email_sender() -> AsyncGenerator[FakeEmailSender, None]:
     email_module._sender = fake
     yield fake
     email_module.reset_email_sender()
+
+
+async def complete_two_reviews(
+    client: AsyncClient, admin: dict, submission_id: int
+) -> None:
+    """两位不同审稿人都给出录用意见：发表闸门的正常路径。"""
+    await complete_one_review(
+        client, admin, submission_id, reviewer_name="reviewer_a"
+    )
+    await complete_one_review(
+        client, admin, submission_id, reviewer_name="reviewer_b"
+    )

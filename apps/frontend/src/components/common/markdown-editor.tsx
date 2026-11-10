@@ -1,16 +1,25 @@
 import { useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { ChevronDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
 /**
- * 在线 Word 级 Markdown 编辑器（2.0）。
+ * 在线 Word 级 Markdown 编辑器。
  *
- * 投稿表单的正文编辑不再是裸 textarea：工具栏覆盖《投稿规范》要求的全
- * 部排版语义（标题一/二、加粗、斜体、删除线、行内码、书名号、中文引号、
- * 高亮、下划线、上下标、列表、表格、引用、代码块），所见即所存——编辑
- * 器产出的 Markdown 在阅读页与 Word/JATS 导出中有同样的语义。
+ * 工具栏不再把 20+ 个按钮平铺（移动端会折成 4 行、正文被挤到很下面）。
+ * 现在只保留高频的「标题 / 加粗 / 斜体 / 段落 / 插入」五个入口，
+ * 其余语义收进两个分组菜单；编辑/预览和字数固定在右侧。
  */
 
 export interface MarkdownEditorProps {
@@ -30,36 +39,36 @@ interface ToolAction {
   block?: string
 }
 
-const TOOLS: ToolAction[] = [
-  { label: 'H1', title: '标题一', linePrefix: '# ' },
-  { label: 'H2', title: '标题二', linePrefix: '## ' },
-  { label: 'H3', title: '标题三', linePrefix: '### ' },
-  { label: 'B', title: '加粗（Ctrl+B）', wrap: ['**', '**'] },
-  { label: 'I', title: '斜体（Ctrl+I）', wrap: ['*', '*'] },
-  { label: 'S', title: '删除线', wrap: ['~~', '~~'] },
-  { label: '</>', title: '行内代码', wrap: ['`', '`'] },
-  { label: '《》', title: '书名号', wrap: ['《', '》'] },
-  { label: '「」', title: '中文引号', wrap: ['「', '」'] },
-  { label: '“”', title: '中文双引号', wrap: ['“', '”'] },
-  { label: '高亮', title: '高亮（导出为黄色标记）', wrap: ['<mark>', '</mark>'] },
-  { label: 'U', title: '下划线', wrap: ['<u>', '</u>'] },
-  { label: 'x²', title: '上标', wrap: ['<sup>', '</sup>'] },
-  { label: 'x₂', title: '下标', wrap: ['<sub>', '</sub>'] },
-  { label: '• 列表', title: '无序列表', linePrefix: '- ' },
-  { label: '1. 列表', title: '有序列表', linePrefix: '1. ' },
-  { label: '❝ 引用', title: '引用块', linePrefix: '> ' },
-  {
-    label: '表格',
-    title: '三线表骨架',
-    block: '\n| 项目 | 数值 |\n| --- | --- |\n| 甲 | 1 |\n| 乙 | 2 |\n',
-  },
-  {
-    label: '代码块',
-    title: '代码块',
-    block: '\n```python\nprint("hello")\n```\n',
-  },
-  { label: '分割线', title: '分割线', block: '\n---\n' },
-]
+const H1: ToolAction = { label: 'H1', title: '标题一', linePrefix: '# ' }
+const H2: ToolAction = { label: 'H2', title: '标题二', linePrefix: '## ' }
+const H3: ToolAction = { label: 'H3', title: '标题三', linePrefix: '### ' }
+const BOLD: ToolAction = { label: 'B', title: '加粗（Ctrl+B）', wrap: ['**', '**'] }
+const ITALIC: ToolAction = { label: 'I', title: '斜体（Ctrl+I）', wrap: ['*', '*'] }
+const UNDERLINE: ToolAction = { label: 'U', title: '下划线', wrap: ['<u>', '</u>'] }
+const HIGHLIGHT: ToolAction = { label: '高亮', title: '高亮', wrap: ['<mark>', '</mark>'] }
+const SUPER: ToolAction = { label: 'x²', title: '上标', wrap: ['<sup>', '</sup>'] }
+const SUB: ToolAction = { label: 'x₂', title: '下标', wrap: ['<sub>', '</sub>'] }
+const BOOK: ToolAction = { label: '《》', title: '书名号', wrap: ['《', '》'] }
+const QUOTE_CN: ToolAction = { label: '「」', title: '中文引号', wrap: ['「', '」'] }
+const QUOTE_DOUBLE: ToolAction = { label: '“”', title: '中文双引号', wrap: ['“', '”'] }
+const LIST: ToolAction = { label: '• 列表', title: '无序列表', linePrefix: '- ' }
+const ORDERED: ToolAction = { label: '1. 列表', title: '有序列表', linePrefix: '1. ' }
+const QUOTE: ToolAction = { label: '❝ 引用', title: '引用块', linePrefix: '> ' }
+const TABLE: ToolAction = {
+  label: '表格',
+  title: '三线表骨架',
+  block: '\n| 项目 | 数值 |\n| --- | --- |\n| 甲 | 1 |\n| 乙 | 2 |\n',
+}
+const CODE: ToolAction = {
+  label: '代码块',
+  title: '代码块',
+  block: '\n```python\nprint("hello")\n```\n',
+}
+const DIVIDER: ToolAction = { label: '分割线', title: '分割线', block: '\n---\n' }
+
+const HEADING_TOOLS = [H1, H2, H3]
+const PARAGRAPH_TOOLS = [LIST, ORDERED, QUOTE, DIVIDER]
+const INSERT_TOOLS = [TABLE, CODE, HIGHLIGHT, UNDERLINE, SUPER, SUB, BOOK, QUOTE_CN, QUOTE_DOUBLE]
 
 export function MarkdownEditor({
   value,
@@ -116,10 +125,10 @@ export function MarkdownEditor({
       const key = e.key.toLowerCase()
       if (key === 'b') {
         e.preventDefault()
-        applyTool(TOOLS.find((t) => t.label === 'B') as ToolAction)
+        applyTool(BOLD)
       } else if (key === 'i') {
         e.preventDefault()
-        applyTool(TOOLS.find((t) => t.label === 'I') as ToolAction)
+        applyTool(ITALIC)
       }
     }
   }
@@ -127,24 +136,14 @@ export function MarkdownEditor({
   return (
     <div className="rounded-lg border bg-background" data-testid={testId ?? 'markdown-editor'}>
       <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1.5">
-        {TOOLS.map((tool) => (
-          <button
-            key={tool.label}
-            type="button"
-            title={tool.title}
-            disabled={disabled}
-            onClick={() => applyTool(tool)}
-            className={cn(
-              'rounded px-1.5 py-1 text-xs font-medium text-muted-foreground transition-colors',
-              'hover:bg-muted hover:text-foreground disabled:opacity-40',
-            )}
-            data-testid={`md-tool-${tool.title}`}
-          >
-            {tool.label}
-          </button>
-        ))}
+        <ToolMenu label="标题" tools={HEADING_TOOLS} disabled={disabled} onPick={applyTool} />
+        <ToolButton tool={BOLD} disabled={disabled} onPick={applyTool} />
+        <ToolButton tool={ITALIC} disabled={disabled} onPick={applyTool} />
+        <ToolMenu label="段落" tools={PARAGRAPH_TOOLS} disabled={disabled} onPick={applyTool} />
+        <ToolMenu label="插入" tools={INSERT_TOOLS} disabled={disabled} onPick={applyTool} />
+
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-muted-foreground" data-testid="md-char-count">
+          <span className="text-xs tabular-nums text-muted-foreground" data-testid="md-char-count">
             {charCount} 字
           </span>
           <Tabs value={tab} onValueChange={(v) => setTab(v as 'edit' | 'preview')}>
@@ -187,6 +186,75 @@ export function MarkdownEditor({
         </div>
       )}
     </div>
+  )
+}
+
+function ToolButton({
+  tool,
+  disabled,
+  onPick,
+}: {
+  tool: ToolAction
+  disabled?: boolean
+  onPick: (tool: ToolAction) => void
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      title={tool.title}
+      disabled={disabled}
+      onClick={() => onPick(tool)}
+      className="h-7 min-w-7 px-1.5 text-xs font-semibold"
+      data-testid={`md-tool-${tool.title}`}
+    >
+      {tool.label}
+    </Button>
+  )
+}
+
+function ToolMenu({
+  label,
+  tools,
+  disabled,
+  onPick,
+}: {
+  label: string
+  tools: ToolAction[]
+  disabled?: boolean
+  onPick: (tool: ToolAction) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="h-7 gap-0.5 px-1.5 text-xs font-medium text-muted-foreground"
+        >
+          {label}
+          <ChevronDown className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {tools.map((tool, index) => (
+          <DropdownMenuItem
+            key={tool.title}
+            onSelect={() => onPick(tool)}
+            data-testid={`md-tool-${tool.title}`}
+            className={cn('gap-2 text-xs', index === 0 ? 'mt-0.5' : '')}
+          >
+            <span className="min-w-10 font-mono text-muted-foreground">{tool.label}</span>
+            <span>{tool.title}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

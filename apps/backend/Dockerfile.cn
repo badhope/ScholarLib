@@ -8,6 +8,14 @@ WORKDIR /app
 # uv 从清华源安装（避免 pypi.org 超时）
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple uv
 
+# Word→PDF 内置转换器：LibreOffice headless + 中文字体。
+# 单独成层，只有这行变化时才重建，日常代码改动仍命中后面的缓存。
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       libreoffice-writer fonts-wqy-zenhei fonts-wqy-microhei \
+    && rm -rf /var/lib/apt/lists/*
+
 # 先拷依赖清单，利用 Docker 层缓存
 COPY apps/backend/pyproject.toml apps/backend/uv.lock ./
 ENV UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple

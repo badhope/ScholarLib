@@ -59,7 +59,8 @@ def test_brand_logo_and_green_header() -> None:
 
 def test_title_and_labels_use_brand_dark() -> None:
     doc = _render()
-    title_runs = [r for r in doc.paragraphs[0].runs if r.font.color and r.font.color.rgb]
+    title_para = next(p for p in doc.paragraphs if p.text == "绿色主题测试稿")
+    title_runs = [r for r in title_para.runs if r.font.color and r.font.color.rgb]
     assert title_runs
     assert str(title_runs[0].font.color.rgb) == "2E5E4A"
     labels = [r for r in _runs(doc) if r.text in {"摘要：", "关键词："}]
@@ -85,7 +86,7 @@ def test_inline_semantics_all_rendered() -> None:
     assert any(r.font.highlight_color is not None and r.text == "高亮" for r in runs)
     assert any(r.font.superscript and r.text == "2" for r in runs)
     assert any(r.font.subscript and r.text == "2" for r in runs)
-    assert any(r.font.name == "Consolas" and r.text == "行内码" for r in runs)
+    assert any(r.font.name == "DejaVu Sans Mono" and r.text == "行内码" for r in runs)
     assert "<u>" not in "".join(texts) and "<mark>" not in "".join(texts), "裸 HTML 标签泄漏到 Word"
 
 
@@ -97,7 +98,7 @@ def test_chinese_publication_marks_use_kaiti() -> None:
         fonts = rpr.rFonts if rpr is not None else None
         return None if fonts is None else fonts.get(qn("w:eastAsia"))
 
-    kaiti = [r.text for r in runs if east_asia(r) == "楷体"]
+    kaiti = [r.text for r in runs if east_asia(r) == "LXGW WenKai"]
     assert "《回收学报》" in kaiti
     assert "「绿色排版」" in kaiti
     assert "“中文引号”" in kaiti
@@ -116,3 +117,33 @@ def test_fonts_are_domestic_system_fonts() -> None:
             names.add(fonts.get(qn("w:ascii")))
     assert BODY_FONT in names
     assert not any(n and "google" in n.lower() for n in names)
+
+
+def test_essayize_removes_paper_labels_and_multilevel_numbering() -> None:
+    from app.modules.submission.docx_template import _essayize
+
+    source = """## 摘要
+这是导读正文。
+
+## 关键词
+测试；排版
+
+## 1 引言
+开场。
+
+## 3.1 方法
+做法。
+
+### 10.1.4.2 结果
+发现。
+"""
+    out = _essayize(source)
+    assert "## 导读" in out
+    assert "摘要" not in out
+    assert "关键词" not in out
+    assert "测试；排版" not in out
+    assert "3.1" not in out
+    assert "10.1.4.2" not in out
+    assert "## 怎么玩的" in out
+    assert "## 所以呢" in out
+    assert "## 引言" not in out

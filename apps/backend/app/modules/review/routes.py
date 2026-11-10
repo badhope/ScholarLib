@@ -13,16 +13,31 @@ cohesion (both modules share the Submission row). See ``submission.routes``.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from fastapi.responses import Response
+from urllib.parse import quote
+import mimetypes
+from pathlib import Path
+from uuid import uuid4
 
-from app.api.deps import require_editor, require_reviewer, require_tenant_id
+from app.api.deps import (
+    ROLE_REVIEWER,
+    ROLE_SENIOR_REVIEWER,
+    get_current_user,
+    require_editor,
+    require_reviewer,
+    require_tenant_id,
+    user_has_role,
+)
 from app.core.db import get_db, paginate
+from app.core.storage import get_storage
 from app.core.time import utcnow
 from app.models import User
+from app.modules.catalog.models import Resource
 from app.modules.notifications import services as notifications
 from app.modules.review.blinding import get_review_mode, reviewer_facing_payload
 from app.modules.review.models import ReviewAssignment, ReviewReport
@@ -60,6 +75,13 @@ def _to_assignment_response(
         ),
         last_reminded_at=a.last_reminded_at,
         reminder_count=a.reminder_count,
+        report_id=a.report[0].id if a.report else None,
+        attachments=(a.report[0].attachments or []) if a.report else [],
+        round=a.round,
+        slot=a.slot,
+        is_adjudicator=a.is_adjudicator,
+        is_external=a.is_external,
+        external_affiliation=a.external_affiliation,
     )
 
 
@@ -75,6 +97,7 @@ async def _get_assignment_or_404(db: AsyncSession, assignment_id: int) -> Review
             .options(
                 selectinload(ReviewAssignment.reviewer),
                 selectinload(ReviewAssignment.submission),
+                selectinload(ReviewAssignment.report),
             )
         )
     ).scalar_one_or_none()
@@ -118,7 +141,10 @@ async def list_my_assignments(
             ReviewAssignment.reviewer_id == current_user.id,
             ReviewAssignment.tenant_id == current_user.tenant_id,
         )
-        .options(selectinload(ReviewAssignment.submission))
+        .options(
+            selectinload(ReviewAssignment.submission),
+            selectinload(ReviewAssignment.report),
+        )
     )
     if status_filter is not None:
         query = query.where(ReviewAssignment.status == status_filter)
@@ -303,6 +329,23 @@ async def decline_assignment(
     return _to_assignment_response(a)
 
 
+_REVIEW_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
+_REVIEW_ATTACHMENT_EXTS = {".pdf", ".docx", ".doc", ".md", ".txt", ".zip", ".png", ".jpg", ".jpeg", ".xlsx", ".csv"}
+
+
+def _report_response(report: ReviewReport) -> ReviewReportResponse:
+    return ReviewReportResponse(
+        id=report.id,
+        assignment_id=report.assignment_id,
+        recommendation=report.recommendation,
+        scores=report.scores,
+        comments_to_editor=report.comments_to_editor,
+        comments_to_author=report.comments_to_author,
+        attachments=report.attachments or [],
+        submitted_at=report.submitted_at,
+    )
+
+
 @router.post(
     "/assignments/{assignment_id}/submit",
     response_model=ReviewReportResponse,
@@ -341,6 +384,24 @@ async def submit_review_report(
         comments_to_author=body.comments_to_author,
     )
     db.add(report)
+    # 特别篇许可：审稿人在提交报告时可显式打标。只授予 true；撤标由编辑部
+    # 走资源管理入口，避免一份普通审稿把既有特许误清掉。
+    if body.special_issue and a.submission.resource_id:
+        resource = (
+            await db.execute(
+                select(Resource).where(
+                    Resource.id == a.submission.resource_id,
+                    Resource.tenant_id == current_user.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if resource is not None:
+            resource.is_special_issue = True
+            resource.special_issue_reason = (
+                body.special_issue_reason or "审稿人确认篇幅特许"
+            )
+            resource.special_issue_by = current_user.id
+            resource.special_issue_at = utcnow()
     a.status = "completed"
     a.completed_at = utcnow()
     try:
@@ -385,14 +446,112 @@ async def submit_review_report(
         )
         await db.commit()
 
-    return ReviewReportResponse(
-        id=report.id,
-        assignment_id=report.assignment_id,
-        recommendation=report.recommendation,
-        scores=report.scores,
-        comments_to_editor=report.comments_to_editor,
-        comments_to_author=report.comments_to_author,
-        submitted_at=report.submitted_at,
+    return _report_response(report)
+
+
+@router.post(
+    "/reports/{report_id}/attachments",
+    response_model=ReviewReportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_review_attachment(
+    report_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_reviewer),
+    db: AsyncSession = Depends(get_db),
+) -> ReviewReportResponse:
+    """审稿人上传批注件/补充材料。报告提交后仍可补传。"""
+    report = (
+        await db.execute(
+            select(ReviewReport)
+            .join(ReviewAssignment, ReviewAssignment.id == ReviewReport.assignment_id)
+            .where(
+                ReviewReport.id == report_id,
+                ReviewReport.tenant_id == current_user.tenant_id,
+                ReviewAssignment.reviewer_id == current_user.id,
+            )
+            .options(selectinload(ReviewReport.assignment))
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise HTTPException(status_code=404, detail="Review report not found")
+
+    original_name = file.filename or "attachment"
+    suffix = Path(original_name).suffix.lower()
+    if suffix not in _REVIEW_ATTACHMENT_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail="附件仅支持 PDF / Word / Markdown / 图片 / ZIP / Excel / CSV",
+        )
+    contents = await file.read()
+    if len(contents) > _REVIEW_ATTACHMENT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="附件不能超过 50 MB")
+    if not contents:
+        raise HTTPException(status_code=400, detail="附件为空")
+
+    key = f"{current_user.tenant_id}/review/{report.id}/{uuid4().hex}{suffix}"
+    stored_type = (
+        file.content_type
+        or mimetypes.guess_type(original_name)[0]
+        or "application/octet-stream"
+    )
+    await get_storage().save(key, contents, content_type=stored_type)
+    items = list(report.attachments or [])
+    if len(items) >= 5:
+        raise HTTPException(status_code=400, detail="每份审稿报告最多上传 5 个附件")
+    items.append(
+        {
+            "filename": original_name,
+            "path": key,
+            "content_type": stored_type,
+            "size": len(contents),
+        }
+    )
+    report.attachments = items
+    await db.commit()
+    await db.refresh(report)
+    return _report_response(report)
+
+
+@router.get("/reports/{report_id}/attachments/{attachment_index}")
+async def download_review_attachment(
+    report_id: int,
+    attachment_index: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """审稿人本人、编辑、管理员可下载批注附件；作者不可下载。"""
+    report = (
+        await db.execute(
+            select(ReviewReport)
+            .where(
+                ReviewReport.id == report_id,
+                ReviewReport.tenant_id == current_user.tenant_id,
+            )
+            .options(selectinload(ReviewReport.assignment))
+        )
+    ).scalar_one_or_none()
+    if report is None or report.assignment is None:
+        raise HTTPException(status_code=404, detail="Review report not found")
+    allowed = report.assignment.reviewer_id == current_user.id
+    if not allowed:
+        allowed = bool(getattr(current_user, "is_admin", False)) or await user_has_role(
+            db, current_user, "editor"
+        )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="没有权限下载该审稿附件")
+    items = list(report.attachments or [])
+    if attachment_index < 0 or attachment_index >= len(items):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    item = items[attachment_index]
+    data = await get_storage().load(str(item["path"]))
+    filename = str(item.get("filename") or "attachment")
+    media_type = str(item.get("content_type") or "application/octet-stream")
+    disposition = f"attachment; filename*=UTF-8''{quote(filename)}"
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": disposition},
     )
 
 
@@ -406,6 +565,15 @@ from pydantic import BaseModel, Field  # noqa: E402
 class AssignReviewersBody(BaseModel):
     reviewer_ids: list[int] = Field(min_length=1, max_length=3)
     due_days: int = Field(default=14, ge=1, le=90)
+    # 主编指定的外审专家：只记录邀请性质，不另建账号。
+    is_external: bool = False
+    external_affiliation: str | None = Field(default=None, max_length=120)
+
+
+class AdjudicateBody(BaseModel):
+    reviewer_id: int = Field(ge=1)
+    due_days: int = Field(default=14, ge=1, le=90)
+    reason: str = Field(default="", max_length=2000)
 
 
 class EditorDecisionBody(BaseModel):
@@ -451,25 +619,42 @@ async def assign_reviewers(
                 detail="禁止指派给稿件作者（自审）",
             )
 
-    # 已有 assignments 中，pending/accepted 的占 slot
-    existing = (
+    existing_all = (
         await db.execute(
             select(ReviewAssignment).where(
                 ReviewAssignment.submission_id == submission_id,
                 ReviewAssignment.tenant_id == tenant_id,
-                ReviewAssignment.status.in_(["pending", "accepted"]),
             )
         )
     ).scalars().all()
+    # 轮次：上一轮还有 pending/accepted/completed 的，继续同一轮；
+    # 全部 cancelled/declined（作者已重投）才进入下一轮。
+    _rounds = [a.round or 1 for a in existing_all]
+    _last_round = max(_rounds) if _rounds else 1
+    _last_rows = [a for a in existing_all if (a.round or 1) == _last_round]
+    if _last_rows and all(a.status in ("cancelled", "declined") for a in _last_rows):
+        round_no = _last_round + 1
+    else:
+        round_no = _last_round
+    existing = [a for a in existing_all if (a.round or 1) == round_no and a.status in ("pending", "accepted")]
     used_slots = {a.slot for a in existing}
     next_slot = 1
     created = []
     for rid in body.reviewer_ids:
-        # 跳过已存在的 assignment（同一 reviewer 重复邀请）
+        reviewer = await db.get(User, rid)
+        if reviewer is None or not reviewer.is_active:
+            raise HTTPException(status_code=400, detail=f"Reviewer {rid} not found or inactive")
+        if not (
+            await user_has_role(db, reviewer, ROLE_REVIEWER)
+            or await user_has_role(db, reviewer, ROLE_SENIOR_REVIEWER)
+        ):
+            raise HTTPException(status_code=422, detail=f"User {rid} is not a reviewer")
+        # 同一轮内已邀请过的不重复；旧轮 cancelled/declined 不拦新一轮
         dup = await db.execute(
             select(ReviewAssignment).where(
                 ReviewAssignment.submission_id == submission_id,
                 ReviewAssignment.reviewer_id == rid,
+                ReviewAssignment.round == round_no,
             )
         )
         if dup.scalar_one_or_none() is not None:
@@ -485,12 +670,34 @@ async def assign_reviewers(
             assigned_by=current_user.id,
             status="pending",
             due_date=due,
-            round=1,
+            round=round_no,
             slot=next_slot,
+            is_external=body.is_external,
+            external_affiliation=(body.external_affiliation or "").strip() or None,
         )
         db.add(a)
         created.append(a)
 
+    if sub.status == "pending" and created:
+        sub.status = "under_review"
+    await db.flush()
+    for a in created:
+        reviewer = await db.get(User, a.reviewer_id)
+        if reviewer is not None:
+            await notifications.create(
+                db,
+                tenant_id=tenant_id,
+                user_id=a.reviewer_id,
+                type_="review.invited",
+                title=f"您被邀请审稿：{sub.title}",
+                body=(
+                    f"稿件 #{sub.id} 已分配给您，截止 {a.due_date.date().isoformat()}，"
+                    "请前往审稿工作台回应。"
+                    + ("（外审专家邀请）" if a.is_external else "")
+                ),
+                related_type="review_assignment",
+                related_id=str(a.id),
+            )
     await db.commit()
     return {"assigned": len(created), "submission_id": submission_id}
 
@@ -515,6 +722,9 @@ async def review_matrix(
         )
     ).scalars().all()
 
+    current_round = max((a.round or 1) for a in assignments) if assignments else 1
+    # 只统计当前轮；旧轮报告保留展示但不计入闸门，避免重投后拿旧意见放行。
+    current = [a for a in assignments if (a.round or 1) == current_round]
     now = utcnow()
     rows = []
     recommendations = []
@@ -537,33 +747,60 @@ async def review_matrix(
             "due_date": a.due_date.isoformat() if a.due_date else None,
             "is_overdue": status == "overdue",
             "is_adjudicator": a.is_adjudicator,
+            "is_external": bool(getattr(a, "is_external", False)),
+            "external_affiliation": getattr(a, "external_affiliation", None),
+            "round": a.round,
+            "is_current": (a.round or 1) == current_round,
         })
 
-    completed = _completed_reports_count(assignments)
-    distinct = _distinct_reviewers_completed(assignments)
-    # 冲突：有 accept 和 reject/major_revision 同时存在
-    conflict = False
-    if "accept" in recommendations and ("reject" in recommendations or "major_revision" in recommendations):
-        conflict = True
+    completed = _completed_reports_count(current)
+    distinct = _distinct_reviewers_completed(current)
+    accept_count = sum(1 for rec in recommendations if rec == "accept")
+    reject_count = sum(1 for rec in recommendations if rec == "reject")
+    major_count = sum(1 for rec in recommendations if rec == "major_revision")
+    # 冲突：有录用推荐，同时有拒稿/大修；或两份意见方向完全相反。
+    conflict = accept_count > 0 and (reject_count > 0 or major_count > 0)
+    adjudicator_rows = [a for a in current if a.is_adjudicator]
+    adjudicator_accepted = any(
+        a.status == "completed" and a.report and a.report[0].recommendation == "accept"
+        for a in adjudicator_rows
+    )
+    need_adjudication = bool(conflict and not adjudicator_accepted)
 
     return {
         "submission_id": submission_id,
         "assignments": rows,
         "reports_completed": completed,
         "distinct_reviewers": distinct,
-        "can_decide": distinct >= 2,
+        "accept_count": accept_count,
+        "reject_count": reject_count,
+        "major_revision_count": major_count,
+        "can_decide": accept_count >= 2 and (not conflict or adjudicator_accepted),
         "conflict": conflict,
+        "need_adjudication": need_adjudication,
+        "adjudicator_assigned": bool(adjudicator_rows),
+        "adjudicator_accepted": adjudicator_accepted,
     }
 
 
-@router.post("/submissions/{submission_id}/decision")
-async def editor_decision(
+@router.post("/submissions/{submission_id}/adjudicate", status_code=status.HTTP_201_CREATED)
+async def assign_adjudicator(
     submission_id: int,
-    body: EditorDecisionBody,
+    body: AdjudicateBody,
     current_user: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """编辑决定：≥2 份 completed 报告（不同 reviewer）才允许，否则 409。"""
+    """复议：主编/编辑指定第三方裁决人，对冲突意见做独立裁决。
+
+    只在已有至少 2 份 completed 报告时才允许发起；裁决人不能是作者，
+    也不能已经参与过同一稿件的评审。裁决意见同样通过
+    POST /review/assignments/{id}/submit 提交，recommendation 为 accept
+    时，最终录用闸门才放行。
+    """
+    from app.api.deps import ROLE_REVIEWER, ROLE_SENIOR_REVIEWER
+    from datetime import timedelta
+    from app.models import AuditLog
+
     tenant_id = require_tenant_id()
     sub = (
         await db.execute(
@@ -574,7 +811,118 @@ async def editor_decision(
     ).scalar_one_or_none()
     if sub is None:
         raise HTTPException(status_code=404, detail="Submission not found")
+    if sub.status not in ("pending", "under_review", "resubmitted"):
+        raise HTTPException(status_code=400, detail=f"Cannot adjudicate in status '{sub.status}'")
+    if body.reviewer_id == sub.submitted_by:
+        raise HTTPException(status_code=403, detail="Cannot assign author as adjudicator")
+    reviewer = (
+        await db.execute(
+            select(User).where(
+                User.id == body.reviewer_id,
+                User.tenant_id == tenant_id,
+                User.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if reviewer is None:
+        raise HTTPException(status_code=400, detail="Reviewer not found or inactive")
+    if not (
+        await user_has_role(db, reviewer, ROLE_REVIEWER)
+        or await user_has_role(db, reviewer, ROLE_SENIOR_REVIEWER)
+    ):
+        raise HTTPException(status_code=422, detail="Assigned user is not a reviewer")
 
+    assignments = (
+        await db.execute(
+            select(ReviewAssignment)
+            .where(
+                ReviewAssignment.submission_id == submission_id,
+                ReviewAssignment.tenant_id == tenant_id,
+            )
+            .options(selectinload(ReviewAssignment.report))
+            .order_by(ReviewAssignment.slot)
+        )
+    ).scalars().all()
+    current_round = max((a.round or 1) for a in assignments) if assignments else 1
+    current = [a for a in assignments if (a.round or 1) == current_round]
+    completed = _completed_reports_count(current)
+    distinct = _distinct_reviewers_completed(current)
+    if distinct < 2:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "adjudication_requires_two_reviews",
+                "message": f"第三方裁决前至少需要 2 位不同审稿人提交意见（当前 {distinct}/2）。",
+                "distinct_reviewers": distinct,
+            },
+        )
+    if any(a.reviewer_id == body.reviewer_id for a in assignments):
+        raise HTTPException(status_code=409, detail="该审稿人已参与本稿评审，不能兼任第三方裁决人")
+
+    due = utcnow() + timedelta(days=body.due_days)
+    slot = max((a.slot or 0) for a in assignments) + 1
+    # 裁决人与被裁决的意见必须同轮，否则矩阵当前轮只剩裁决人一份，
+    # 录用闸门反而永远过不了。
+    round_no = current_round
+    a = ReviewAssignment(
+        tenant_id=tenant_id,
+        submission_id=submission_id,
+        reviewer_id=body.reviewer_id,
+        assigned_by=current_user.id,
+        status="pending",
+        due_date=due,
+        round=round_no,
+        slot=slot,
+        is_adjudicator=True,
+    )
+    db.add(a)
+    await db.flush()
+    await notifications.create(
+        db,
+        tenant_id=tenant_id,
+        user_id=body.reviewer_id,
+        type_="review.adjudicator_invited",
+        title=f"第三方裁决邀请：{sub.title}",
+        body=(
+            f"稿件 #{sub.id} 的审稿意见存在分歧，现邀请您作为第三方裁决人。"
+            f"截止 {due.date().isoformat()}。"
+            + (f" 说明：{body.reason}" if body.reason else "")
+        ),
+        related_type="review_assignment",
+        related_id=str(a.id),
+    )
+    db.add(AuditLog(
+        tenant_id=tenant_id,
+        actor_user_id=current_user.id,
+        action="review.adjudicator_assigned",
+        target_type="submission",
+        target_id=str(submission_id),
+        payload={"reviewer_id": body.reviewer_id, "assignment_id": a.id, "reason": body.reason},
+    ))
+    await db.commit()
+    return {
+        "submission_id": submission_id,
+        "assignment_id": a.id,
+        "reviewer_id": body.reviewer_id,
+        "due_date": due.isoformat(),
+        "is_adjudicator": True,
+    }
+
+
+@router.post("/submissions/{submission_id}/decision")
+async def editor_decision(
+    submission_id: int,
+    body: EditorDecisionBody,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """已废弃：最终裁决统一走 PATCH /submissions/{id}/decision。
+
+    旧端点只写 AuditLog、不改业务状态，和投稿模块的真裁决端点形成两套
+    互相矛盾的规则。保留路径是为了让旧客户端拿到明确指引，而不是静默
+    记一条"已决定"却什么都没发生。
+    """
+    tenant_id = require_tenant_id()
     assignments = (
         await db.execute(
             select(ReviewAssignment).where(
@@ -583,24 +931,16 @@ async def editor_decision(
             )
         )
     ).scalars().all()
-    completed = _completed_reports_count(assignments)
     distinct = _distinct_reviewers_completed(assignments)
     if distinct < 2:
-        missing = 2 - distinct
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"还差 {missing} 份审稿报告（已收 {completed}/2）",
+            detail=f"还差 {2 - distinct} 份审稿报告（已收 {distinct}/2）",
         )
-
-    # 写审计
-    from app.models import AuditLog
-    db.add(AuditLog(
-        tenant_id=tenant_id,
-        actor_user_id=current_user.id,
-        action="review.editor_decision",
-        target_type="submission",
-        target_id=str(submission_id),
-        payload={"decision": body.decision, "reason": body.reason},
-    ))
-    await db.commit()
-    return {"submission_id": submission_id, "decision": body.decision, "reports_completed": completed}
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail={
+            "code": "deprecated_use_submission_decision",
+            "message": "最终裁决请使用 PATCH /api/submissions/{id}/decision（主编/执行编辑权限）。",
+        },
+    )

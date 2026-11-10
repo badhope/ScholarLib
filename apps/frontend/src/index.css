@@ -3,10 +3,12 @@
 
 @theme {
   --font-serif: "Noto Serif SC Variable", "Noto Serif SC", "Source Han Serif SC",
-    "Songti SC", "SimSun", ui-serif, Georgia, serif;
-  /* 标题黑体：走系统无衬线栈，不额外加载字体（中文字体包体代价高） */
-  --font-heading: "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC",
-    "Noto Sans CJK SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+    ui-serif, Georgia, "DejaVu Serif", serif;
+  /* 标题无衬线：走系统无衬线栈，不额外加载字体（中文字体包体代价高） */
+  --font-heading: "Noto Sans SC", "Source Han Sans SC",
+    ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --default-mono-font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -182,7 +184,7 @@ h4 {
 
 /* ---------------------------------------------------------------------------
  * 在线阅读 Markdown 学术排版（manuscript-view）
- * 正文宋体、标题黑体分级、摘要卡片、图注/表注、三线表、文献悬挂缩进。
+ * 正文衬线、标题无衬线分级、摘要卡片、图注/表注、三线表、文献悬挂缩进。
  * 移动端只收紧字号与间距；宽表由 .md-table-wrap 横向滚动，不撑破页面。
  * ------------------------------------------------------------------------- */
 .markdown-body {
@@ -277,10 +279,10 @@ h4 {
 .markdown-body sub { font-size: 0.72em; line-height: 0; }
 .markdown-body sup { vertical-align: super; }
 .markdown-body sub { vertical-align: sub; }
-/* 书名号 / 中文引号：楷体，不用西文斜体硬套中文；书名号点出品牌绿。 */
+/* 书名号 / 中文引号：霞鹜文楷优先，未安装则回退思源宋体；不用西文斜体硬套中文。 */
 .markdown-body .md-book-title,
 .markdown-body .md-quote-cn {
-  font-family: "KaiTi", "STKaiti", "楷体", "Kaiti SC", var(--font-serif);
+  font-family: "LXGW WenKai", "Noto Serif SC", "Source Han Serif SC", var(--font-serif);
   font-style: normal;
 }
 .markdown-body .md-book-title { color: var(--color-primary); }
@@ -370,7 +372,7 @@ h4 {
   text-indent: 0;
 }
 .markdown-body .md-keywords strong { color: var(--color-foreground); }
-/* 摘要卡片：与正文拉开层次，标题用小型黑体标签 */
+/* 摘要卡片：与正文拉开层次，标题用小型无衬线标签 */
 .markdown-body .md-abstract {
   margin: 0.4rem 0 2rem;
   padding: 1.15rem 1.35rem 1.2rem;
@@ -457,7 +459,7 @@ h4 {
 .markdown-body tbody tr:last-child td { border-bottom: 2px solid var(--color-foreground); }
 .markdown-body tbody tr:hover { background: color-mix(in oklab, var(--color-primary) 3%, transparent); }
 .markdown-body code {
-  font-family: ui-monospace, "SF Mono", Consolas, "Cascadia Code", monospace;
+  font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace;
   font-size: 0.875em;
   background: color-mix(in oklab, var(--color-muted) 78%, transparent);
   border: 1px solid var(--color-border);
@@ -755,4 +757,26 @@ html {
   .reading-progress {
     transition: none;
   }
+}
+
+/* 宽表 / 超宽图 / 长公式是文章内唯一允许横向滚动的区域。
+   contain 阻止滚动到边界后把横向手势传给页面，避免移动端“左右滑整页抖”。 */
+.md-table-wrap,
+.md-wide-figure,
+.katex-display {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 路由切换加载条：数据慢时也给出明确“正在跳转”的反馈 */
+@keyframes route-progress {
+  0% { transform: translateX(-100%); }
+  60% { transform: translateX(160%); }
+  100% { transform: translateX(300%); }
+}
+.route-progress {
+  animation: route-progress 0.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-progress { animation: none; width: 100%; }
 }

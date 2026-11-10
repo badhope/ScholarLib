@@ -6,12 +6,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import mimetypes
 import os
 import re
+import tempfile
+from pathlib import Path
 from uuid import uuid4
 
-from fastapi import Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,11 +107,207 @@ _MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 # 前端 accept 属性与错误文案共用这份扩展名清单（由 /capabilities 下发）。
 _ALLOWED_UPLOAD_EXTENSIONS = (
-    ".pdf .doc .docx .odt .rtf .txt .md .tex .ps "
+    ".docx .doc .pdf .odt .rtf .txt .md .tex .ps "
     ".pptx .xls .xlsx .csv .json .bib "
     ".png .jpg .jpeg .svg .tif .tiff "
     ".zip .gz .tar .7z .ipynb"
 ).split()
+
+
+async def _read_upload_for_conversion(file: UploadFile) -> tuple[bytes, str, str]:
+    """校验上传并读取字节，返回 (contents, original_filename, actual_format)。
+
+    只用于“提交前识别 / 原文件预览”两个无数据库端点，不落盘、不建稿件。
+    与正式上传共用同一扩展名白名单和 50MB 上限。
+    """
+    upload_name = file.filename or "upload"
+    upload_ext = os.path.splitext(upload_name)[1].lower()
+    if upload_ext not in set(_ALLOWED_UPLOAD_EXTENSIONS):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file type: {upload_ext or 'no extension'}",
+        )
+    contents = b""
+    while True:
+        chunk = await file.read(64 * 1024)
+        if not chunk:
+            break
+        contents += chunk
+        if len(contents) > _MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File exceeds the {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB limit.",
+            )
+    from app.modules.submission.fileformat import detect_format
+
+    detected = detect_format(contents, upload_name)
+    return contents, upload_name, detected.actual
+
+
+@router.post("/convert-preview")
+async def convert_submission_preview(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    """提交前把 Word/PDF 识别成 Markdown，回填编辑器。
+
+    以前作者选完文件后，转换要到“提交成功”才在后台发生，编辑器仍是空的；
+    作者无法校对识别结果。这里在选文件当下就跑同一条 ``convert_manuscript``
+    管线，把 Markdown 返回给表单；正式提交时仍由上传端点再转换一次并落库，
+    两次使用同一实现，不引入第二套解析口径。
+    """
+    from app.modules.submission.manuscript import convert_manuscript_async
+
+    contents, original_filename, actual_format = await _read_upload_for_conversion(file)
+    result = await convert_manuscript_async(contents, original_filename)
+    warnings: list[str] = []
+    if result.extension_mismatch:
+        warnings.append("扩展名与实际格式不一致（已按文件头识别）")
+    if result.needs_docx:
+        warnings.append(result.reason or "无法识别为可编辑正文，请另存为 .docx 后重试")
+    return {
+        "markdown": result.markdown or "",
+        "warnings": warnings,
+        "actual_format": actual_format,
+        "extension_mismatch": result.extension_mismatch,
+        "needs_docx": result.needs_docx,
+        "reason": result.reason,
+    }
+
+
+def _source_preview_dir() -> Path:
+    path = Path(tempfile.gettempdir()) / "rubbish-source-preview"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+async def _uploaded_file_to_pdf(file: UploadFile) -> bytes:
+    """与 /source-preview 同一条转换口径：PDF 原样、DOCX 转 PDF。"""
+    from app.modules.submission.export_docs import docx_to_pdf
+
+    contents, original_filename, actual_format = await _read_upload_for_conversion(file)
+    if actual_format == "pdf":
+        return contents
+    if actual_format == "docx":
+        try:
+            return await asyncio.to_thread(docx_to_pdf, contents)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Word 原件转 PDF 失败：{exc}",
+            ) from exc
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="原件预览只支持 PDF / DOCX；老式 .doc、RTF 请先另存为 .docx。",
+    )
+
+
+@router.post("/source-preview/pages")
+async def preview_uploaded_source_pages(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """提交前原件预览：先落一份 PDF，返回分页 PNG 的 token 与页数。
+
+    和发表版文章页的「PDF 版式预览」走同一条分页 PNG 渲染链路，不再让
+    投稿页单独跑 pdf.js。页面图片由下面的 GET 端点按需渲染，避免一次
+    返回几十张大图。
+    """
+    import pymupdf
+
+    pdf_bytes = await _uploaded_file_to_pdf(file)
+    token = hashlib.sha256(b"srcprev:" + pdf_bytes).hexdigest()[:32]
+    cache_path = _source_preview_dir() / f"{token}.pdf"
+    if not cache_path.exists():
+        temp_path = cache_path.with_suffix(".tmp")
+        temp_path.write_bytes(pdf_bytes)
+        temp_path.replace(cache_path)
+    with pymupdf.open(cache_path) as document:
+        pages = document.page_count
+    return {"token": token, "pages": pages}
+
+
+@router.get("/source-preview/{token}.pdf")
+async def preview_uploaded_source_pdf(token: str) -> Response:
+    """token 对应的预览 PDF，供“直接下载原件”兜底。"""
+    from fastapi.responses import FileResponse
+
+    if not re.fullmatch(r"[0-9a-f]{32}", token):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
+    cache_path = _source_preview_dir() / f"{token}.pdf"
+    if not cache_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
+    return FileResponse(
+        cache_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="source-preview.pdf"'},
+    )
+
+
+@router.get("/source-preview/{token}/{page}.png")
+async def preview_uploaded_source_page(token: str, page: int) -> Response:
+    """按需把缓存的预览 PDF 渲染成分页 PNG。"""
+    import pymupdf
+
+    if not re.fullmatch(r"[0-9a-f]{32}", token):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
+    cache_path = _source_preview_dir() / f"{token}.pdf"
+    if not cache_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Preview not found")
+    try:
+        with pymupdf.open(cache_path) as document:
+            if page < 1 or page > document.page_count:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
+            pixmap = document[page - 1].get_pixmap(matrix=pymupdf.Matrix(1.6, 1.6), alpha=False)
+            png = pixmap.tobytes("png")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"原件分页渲染失败：{exc}",
+        ) from exc
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=600"},
+    )
+
+
+@router.post("/source-preview")
+async def preview_uploaded_source(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    """把作者上传的 Word/PDF 原样转成 PDF 流，用于提交前“原件预览”。
+
+    这是识别结果的对照视图：用户能看到 Word 里真实排版/图片，再检查
+    Markdown 是否漏段、错序或丢图。只接受 PDF / DOCX；老式 .doc 与 RTF
+    返回明确错误，不静默换成别的格式。
+    """
+    from app.modules.submission.export_docs import docx_to_pdf
+
+    contents, original_filename, actual_format = await _read_upload_for_conversion(file)
+    if actual_format == "pdf":
+        pdf_bytes = contents
+    elif actual_format == "docx":
+        try:
+            pdf_bytes = await asyncio.to_thread(docx_to_pdf, contents)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Word 原件转 PDF 失败：{exc}",
+            ) from exc
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="原件预览只支持 PDF / DOCX；老式 .doc、RTF 请先另存为 .docx。",
+        )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="source-preview.pdf"'},
+    )
 
 
 @router.post(
@@ -322,10 +522,226 @@ async def upload_submission_cover(
     return _to_response(entry)
 
 
+def _anonymized_markdown(md: str) -> str:
+    """Remove author-identifying blocks from a submission Markdown.
+
+    Two layouts exist in the corpus:
+    * title/author block before the first ``##`` section (328-style);
+    * a dedicated ``## 作者信息`` section after the title (329-style).
+
+    Both must be removed.  The generated Word document writes its own title
+    page from metadata, so retaining those raw lines would leak identity into
+    the reviewer's download.
+    """
+    lines = md.splitlines()
+
+    # Layout 2: remove author/affiliation/funding/acknowledgement sections
+    # wherever they occur (normally immediately after the title).
+    drop_section = re.compile(
+        r"^#{1,6}\s*(作者信息|作者简介|作者贡献|通信作者|通讯作者|基金项目|致谢)\b",
+        re.I,
+    )
+    cleaned: list[str] = []
+    skipping = False
+    for line in lines:
+        if drop_section.match(line.strip()):
+            skipping = True
+            continue
+        if skipping and re.match(r"^#{1,6}\s+", line.strip()):
+            skipping = False
+        if not skipping:
+            cleaned.append(line)
+
+    # Layout 1: drop textual lines before the first real body heading, but
+    # keep figures that legitimately precede it.
+    first_heading = next(
+        (i for i, line in enumerate(cleaned) if re.match(r"^#{1,6}\s+", line.strip())),
+        None,
+    )
+    if first_heading is not None:
+        prefix = cleaned[:first_heading]
+        kept = [line for line in prefix if line.strip().startswith("![")]
+        cleaned = kept + cleaned[first_heading:]
+
+    # Inline fallback for lines that survived a non-standard author block.
+    author_line = re.compile(
+        r"(第一作者|合作者|通讯作者|通信作者|作者简介|作者单位|邮箱|ORCID|"
+        r"E-?mail|@)[：:]?",
+        re.I,
+    )
+    body = "\n".join(line for line in cleaned if not author_line.search(line))
+    body = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", body)
+    body = re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", body)
+    return body
+
+
+def _strip_leading_title(md: str, title: str) -> str:
+    """Drop a Markdown ``# Title`` line that duplicates the metadata title."""
+    if not title:
+        return md
+    lines = md.splitlines()
+    for i, line in enumerate(lines):
+        if not line.strip():
+            continue
+        m = re.match(r"^#{1,2}\s+(.+)$", line.strip())
+        if m and re.sub(r"[*_`]", "", m.group(1)).strip() == title.strip():
+            del lines[i]
+        break
+    return "\n".join(lines)
+
+
+def _redact_identity_text(text: str, entry, *, names=None, affiliations=None) -> str:
+    """Remove author names/affiliations from metadata fields and prose.
+
+    The body anonymizer only drops author blocks; on 322 the author's pen name
+    appears in the abstract itself ("Zabwerk 在备课的时候…").  The generated
+    Word writes ``meta.abstract`` separately, so it must be scrubbed too.
+    """
+    if not text:
+        return text
+    names = list(names if names is not None else (getattr(entry, "authors", None) or []))
+    affiliations = list(
+        affiliations
+        if affiliations is not None
+        else (getattr(entry, "affiliations", None) or [])
+    )
+    for name in names:
+        name = str(name).strip()
+        if not name:
+            continue
+        # Two-letter Latin names are too ambiguous to replace globally.
+        if re.fullmatch(r"[A-Za-z .'-]{2,}", name) and len(name) < 3:
+            continue
+        text = re.sub(re.escape(name), "作者", text, flags=re.I)
+    for aff in affiliations:
+        aff = str(aff).strip()
+        if len(aff) >= 4:
+            text = re.sub(re.escape(aff), "作者单位", text, flags=re.I)
+    text = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", text)
+    text = re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", text)
+    return text
+
+
+async def _generated_download(
+    entry,
+    output_format: str,
+    *,
+    anonymized: bool,
+    resource=None,
+) -> Response:
+    """Build a submission download from its Markdown.
+
+    Default format is Word.  This is also the double-blind path: instead of
+    refusing the reviewer because no editor-uploaded anonymized PDF exists, we
+    render an anonymized Word/PDF directly from the stored Markdown.
+    """
+    if not entry.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This submission has no online manuscript to generate a download from",
+        )
+
+    storage = get_storage()
+    try:
+        raw = await storage.load(entry.markdown_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored manuscript is missing",
+        ) from exc
+
+    # Published resources carry the calibrated title/abstract/keywords that the
+    # web article and the public /export use.  A submission's own abstract can
+    # still be the pre-normalization version (299 is the proof), so prefer the
+    # resource metadata whenever the submission has been linked to one.
+    canonical_title = (getattr(resource, "title", None) or entry.title or "")
+    canonical_abstract = (
+        getattr(resource, "abstract", None) or getattr(entry, "abstract", None) or ""
+    )
+    canonical_authors = list(
+        getattr(resource, "authors", None) or getattr(entry, "authors", None) or []
+    )
+    canonical_affiliations = list(
+        getattr(resource, "affiliations", None)
+        or getattr(entry, "affiliations", None)
+        or []
+    )
+    canonical_keywords = list(
+        getattr(resource, "keywords", None) or getattr(entry, "keywords", None) or []
+    )
+    if resource is not None:
+        canonical_keywords += list(getattr(resource, "tags", None) or [])
+
+    md = raw.decode("utf-8", errors="replace")
+    md = _strip_leading_title(md, canonical_title)
+    if anonymized:
+        md = _anonymized_markdown(md)
+        md = _redact_identity_text(
+            md,
+            entry,
+            names=canonical_authors,
+            affiliations=canonical_affiliations,
+        )
+    else:
+        # Even in a non-blind download, contact details must not be exposed in
+        # the generated file; the site already masks them in article previews.
+        md = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md)
+        md = re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md)
+
+    from app.modules.submission.docx_template import Meta, build, parse_meta
+
+    meta = parse_meta(md, fallback_title=canonical_title or f"submission-{entry.id}")
+    meta.title = canonical_title or meta.title
+    if anonymized:
+        meta.authors = ["[双盲评审：作者信息已隐藏]"]
+        meta.affiliations = []
+    else:
+        meta.authors = canonical_authors
+        meta.affiliations = canonical_affiliations
+    if canonical_abstract:
+        meta.abstract = (
+            _redact_identity_text(
+                canonical_abstract,
+                entry,
+                names=canonical_authors,
+                affiliations=canonical_affiliations,
+            )
+            if anonymized
+            else canonical_abstract
+        )
+    if canonical_keywords:
+        meta.keywords = canonical_keywords
+
+    docx_bytes = await asyncio.to_thread(build, md, meta)
+
+    if output_format == "pdf":
+        from app.modules.submission.export_docs import docx_to_pdf
+
+        payload = await asyncio.to_thread(docx_to_pdf, docx_bytes)
+        media = "application/pdf"
+        ext = "pdf"
+    else:
+        payload = docx_bytes
+        media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ext = "docx"
+
+    # The title goes into RFC 5987 filename*; _content_disposition supplies an
+    # ASCII fallback, so Chinese names survive the browser download.
+    base = re.sub(r'[\r\n"\\/:*?<>|]+', "-", canonical_title.strip())[:60].strip(" -")
+    filename = f"{base or f'submission-{entry.id}'}-{'anonymized' if anonymized else 'manuscript'}.{ext}"
+
+    return Response(
+        content=payload,
+        media_type=media,
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
 @router.get("/{submission_id}/files")
 async def download_submission_file(
     submission_id: int,
     request: Request,
+    file_format: str = Query(default="docx", alias="format", pattern="^(docx|pdf|md)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -343,10 +759,10 @@ async def download_submission_file(
     与预签名失败时改为服务端流式返回，权限校验始终发生在这里。
     """
     entry = await _get_or_404(db, submission_id)
-    if not entry.file_path:
+    if not entry.file_path and not entry.markdown_path:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="This submission has no uploaded file",
+            detail="This submission has no uploaded file or online manuscript",
         )
 
     allowed = entry.submitted_by == current_user.id or await user_has_role(
@@ -373,40 +789,108 @@ async def download_submission_file(
             detail="You do not have access to this submission file",
         )
 
+    # 作者/编辑可直接取回 Markdown 源文件（审稿人仍走匿名通道）。
+    if file_format == "md" and (entry.file_path or entry.markdown_path):
+        is_privileged_md = entry.submitted_by == current_user.id or await user_has_role(
+            db, current_user, ROLE_EDITOR
+        )
+        if is_privileged_md:
+            # 作者上传的 .md 原件优先（保留原始换行/字节）；没有原件时
+            # 退回规范化后的在线阅读 Markdown。
+            path = (
+                entry.file_path
+                if entry.file_path and str(entry.file_path).lower().endswith(".md")
+                else entry.markdown_path
+            )
+            if not path:
+                raise HTTPException(status_code=404, detail="No markdown source")
+            data = await get_storage().load(path)
+            return Response(
+                content=data,
+                media_type="text/markdown; charset=utf-8",
+                headers={
+                    "Content-Disposition": f'attachment; filename="submission-{entry.id}.md"'
+                },
+            )
+
     # 双盲评审：原始上传文件不能交给审稿人。
     #
-    # 修复前，双盲只在 JSON 字段上做抹除（authors/邮箱/submitted_by/venue/doi），
-    # 文件下载端点却把**原始 PDF** 直接返回给被指派的审稿人——标题页和 PDF
-    # 元数据里就是作者姓名与单位，双盲在核心流程上等于不存在。
-    #
-    # 第二层修复（双盲绕过 v2）：重定向目标曾用 ``download_url``，但该字段
-    # **作者可控**（创建端点与作者编辑端点均可写）——作者填一条带身份的
-    # URL 即可直穿双盲（重定向目标对审稿人可见，页面内容更可直接暴露身份）。
-    # 现在只放行编辑端点写入的 ``anonymized_file_url``；没有匿名稿则明确报错，
-    # 由编辑补上传。服务端不具备剥离 PDF 元数据的能力，不假装能做到。
+    # 旧实现要求编辑先上传一条 ``anonymized_file_url``，否则直接 403；线上
+    # ``review_mode=double_blind``，但 328/329 都没有匿名稿，于是审稿人连
+    # 稿件都下载不了，整个评审流程卡死。现在改为**从 Markdown 现场生成**
+    # 匿名 Word/PDF：不依赖外部 URL，也不会把原始 PDF 的元数据带出去。
     is_privileged = entry.submitted_by == current_user.id or await user_has_role(
         db, current_user, ROLE_EDITOR
     )
+    needs_anonymized = False
     if not is_privileged:
         # 函数级导入：blinding 模块读取设置，保持与原实现一致的加载时机，
         # 规避潜在的模块环。
         from app.modules.review.blinding import get_review_mode
 
         mode = await get_review_mode(db, entry.tenant_id)
-        if mode == "double_blind":
+        needs_anonymized = mode == "double_blind"
+        if needs_anonymized and not entry.markdown_path:
             anon_url = (entry.anonymized_file_url or "").strip()
             if anon_url.lower().startswith(("http://", "https://")):
                 return RedirectResponse(anon_url, status_code=status.HTTP_302_FOUND)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "Double-blind review is enabled: the original manuscript may reveal "
-                    "author identity. Ask the editor to provide an anonymized version "
-                    "(editor: PUT /api/submissions/{id}/anonymized-file) before reviewing."
+                    "Double-blind review is enabled and this submission has no online "
+                    "manuscript to anonymize. Ask the author to provide Markdown or the "
+                    "editor to upload an anonymized version."
                 ),
             )
 
+    # Canonical source of truth is the online Markdown: web article, Word and
+    # PDF must render the same text and the same house layout.  Old uploads
+    # (Word 2016/WPS PDFs) predate the normalization pass and are kept only as
+    # an archival fallback when there is no Markdown at all.
+    serve_stored = (
+        not needs_anonymized
+        and not entry.markdown_path
+        and bool(entry.file_path)
+    )
     storage = get_storage()
+    if serve_stored and entry.file_path:
+        # The DB row can outlive the object on disk (old submissions were
+        # converted to Markdown and the source PDF was pruned).  A presigned
+        # URL would still be issued for such a missing key, and the PDF button
+        # would die at the object store.  Check existence first; when the
+        # original is gone, fall back to generating the requested format from
+        # Markdown instead of returning 404.
+        try:
+            stored_exists = await storage.exists(entry.file_path)
+        except Exception:
+            stored_exists = False
+        if not stored_exists:
+            if entry.markdown_path:
+                return await _generated_download(
+                    entry, file_format, anonymized=needs_anonymized
+                )
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Stored file is missing",
+            )
+
+    if not serve_stored:
+        canonical_resource = None
+        if getattr(entry, "resource_id", None):
+            from app.modules.catalog.models import Resource
+
+            canonical_resource = (
+                await db.execute(
+                    select(Resource).where(Resource.id == entry.resource_id)
+                )
+            ).scalar_one_or_none()
+        return await _generated_download(
+            entry,
+            file_format,
+            anonymized=needs_anonymized,
+            resource=canonical_resource,
+        )
+
     url = storage.presigned_url(entry.file_path)
     if url:
         # S3 预签名 URL 直接重定向到对象存储；对象存储自身会依据客户端的

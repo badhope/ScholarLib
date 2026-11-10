@@ -12,6 +12,7 @@ import type {
   TwoFactorLoginRequest,
   UserCreate,
   UserLogin,
+  UserProfileUpdate,
   UserResponse,
   VerifyEmailRequest,
 } from '@/lib/types'
@@ -147,6 +148,17 @@ export function useMe(enabled = true) {
 export function useUpdateBio() {
   const qc = useQueryClient()
   return useMutation<UserResponse, Error, { bio: string | null }>({
+    mutationFn: async (body) => (await api.patch<UserResponse>('/users/me', body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })
+    },
+  })
+}
+
+// 完整资料：PATCH /users/me。仅提交本次改动的字段，未提交的字段保持原值。
+export function useUpdateProfile() {
+  const qc = useQueryClient()
+  return useMutation<UserResponse, Error, UserProfileUpdate>({
     mutationFn: async (body) => (await api.patch<UserResponse>('/users/me', body)).data,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })

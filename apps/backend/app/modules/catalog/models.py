@@ -25,6 +25,8 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -129,6 +131,21 @@ class Resource(Base, TenantScopedMixin):
     # 内容赛道派生值（P0）：paper|essay。academic→paper，fun/rant→essay。
     # DB 可空时由响应层按 content_category 回退计算；R 因子/篇均指标只统计 paper。
     content_track: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # 娱乐轨文体细分（v1.16）：joke/fiction/review/guide/essay/poetry/rant。
+    # 只对 essay 有值；论文轨恒为 NULL。用于娱乐区导航与筛选，不参与学术评分。
+    content_genre: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, index=True
+    )
+    # 特别篇（篇幅特许）：正常稿件不得超过轨道篇幅上限；只有显式特批的
+    # 长稿才置 true，并在阅读端打「特别篇」标签。理由/操作人/时间留痕。
+    is_special_issue: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false", index=True
+    )
+    special_issue_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    special_issue_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    special_issue_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # 中图分类号（P0）：clc_code 如 TP3、clc_label 如「计算技术、计算机技术」。
     clc_code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     clc_label: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -142,6 +159,11 @@ class Resource(Base, TenantScopedMixin):
     )
     # 归类键：封面主题、专题聚合使用（如 universe / lab / ocean / society）。
     cover_theme: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # Nature 式栏目：this-week / news-focus / books-arts / opinion / work /
+    # research / amendments / collections。仅对外展示分组，不改轨道判定。
+    article_section: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    # 期次内分部分（Editorial / Features / Articles / Reviews / Corrections…）。
+    issue_part: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
@@ -300,3 +322,54 @@ class AuthorClaim(Base, TenantScopedMixin):
 
 
 __all__ = ["AuthorClaim", "Discipline", "Resource", "Subdiscipline"]
+
+
+class Appeal(Base, TenantScopedMixin):
+    """作者申诉：撤回稿件、重审分数、重审分区。
+
+    与站内反馈分开存：申诉需要状态流转（pending → accepted/rejected）、
+    处置说明和操作人，不能只留一条审计日志。
+    """
+
+    __tablename__ = "appeals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resource_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    submission_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default="pending")
+    editor_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decided_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PageView(Base, TenantScopedMixin):
+    """匿名页面访问事件（第一方统计，不依赖第三方 SDK）。
+
+    只记 path / referrer / 时间，不写 IP、不写 UA、不关联 user_id；
+    用于回答“哪些文章与入口真的有人来”，不能反查个人。
+    """
+
+    __tablename__ = "page_views"
+    __table_args__ = (
+        Index("ix_page_views_tenant_created", "tenant_id", "created_at"),
+        Index("ix_page_views_path", "path"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    path: Mapped[str] = mapped_column(String(300), nullable=False)
+    referrer: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )

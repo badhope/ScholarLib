@@ -72,6 +72,20 @@ async def update_me(
     # 未提供（缺键）时不触碰，与 orcid 的 None-保持不变约定一致。
     if "bio" in payload.model_fields_set:
         current_user.bio = payload.bio
+    # 扩展资料：字段出现即写入，缺键保持不变。空串在 schema 层已归一为 None。
+    for field in (
+        "display_name",
+        "real_name",
+        "affiliation",
+        "department",
+        "academic_title",
+        "research_interests",
+        "website",
+        "google_scholar",
+        "location",
+    ):
+        if field in payload.model_fields_set:
+            setattr(current_user, field, getattr(payload, field))
     try:
         await db.commit()
     except IntegrityError as exc:

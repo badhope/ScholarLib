@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
   ArrowLeft,
   BarChart3,
@@ -8,6 +8,7 @@ import {
   Lock,
   Scale,
   Sparkles,
+  FileText,
   Trash2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
@@ -15,6 +16,10 @@ import { RevealSection } from '@/components/common/reveal-section'
 import { Card, CardContent } from '@/components/ui/card'
 
 export const Route = createFileRoute('/policies')({
+  // 政策规范与等级规则合并为 /rules 的两个页签，旧入口只做跳转。
+  beforeLoad: () => {
+    throw redirect({ to: '/guide', search: { tab: 'policies' } })
+  },
   component: PoliciesPage,
 })
 
@@ -42,11 +47,33 @@ const SECTIONS = [
   },
   {
     icon: Sparkles,
-    title: '虚构与娱乐内容声明',
+    title: '虚构与副刊内容声明',
     body: [
-      '本刊部分文章具有明确的虚构与娱乐性质：它们用规范的学术格式讨论脑洞命题，其"研究"可能基于想象、玩笑或不可复现的观察。',
+      '本刊副刊中的部分文章具有明确的虚构性质：它们可能借用学术语气讨论脑洞命题，其“研究”基于想象、玩笑或不可复现的观察。',
       '这类内容不代表编辑部认可其中的事实陈述；引用时请像引用小说一样保持清醒。',
-      '内容按学术、娱乐、吐槽三类标注，娱乐与吐槽类文章不参与学术指标统计。',
+      '内容按学术、副刊、吐槽三类标注，副刊与吐槽类文章不参与学术指标统计。',
+    ],
+  },
+  {
+    icon: FileText,
+    title: '副刊（Rubbish Supplement）格式与版式',
+    body: [
+      '副刊是与正刊并列的一本刊，不是正刊的附属栏目。小说、随笔、评论、诗歌、指南、吐槽都可以投，但发表后同样按期刊文章归档、可被引用。',
+      '硬性要求：标题 2–80 字；正文 800–8000 字（诗歌 10–200 行）；至少 2 个自然段；标点与分段可读；署名真实或使用已登记的笔名。',
+      '必须提交 50–300 字导读，说明这篇写什么、为什么值得读；不强制摘要、关键词、参考文献、方法/结果/讨论、CLC 与 DOI。',
+      '版式统一为副刊模板：标题、作者、导读、正文、标签；不套论文多级编号，也不印“引言/方法/结论”这类学术骨架。',
+      '底线：不人身攻击、不地域或群体歧视、不侵犯著作权与隐私、不写违法内容；AI 辅助写作须在文末声明工具与用途。',
+      '副刊走格式与合规审查，不计分、不进 R 因子；学术正刊仍按同行评审与评分细则执行。两刊共用站点与账号，但目录、投稿入口与版式分开。',
+    ],
+  },
+  {
+    icon: FileText,
+    title: '本站刊号与官方 DOI',
+    body: [
+      '每篇录用稿自动分配本站刊号：R-<六位刊号>-<YYYYMMDD>-<四位流水>。流水按全站入库顺序递增，因此按刊号排序与按发表时间排序一致。',
+      '本站刊号用于站内归档、引用与查重，不是 DOI，也不具备 DOI 解析能力。',
+      '官方 DOI 由作者自行决定是否注册：投稿时可填入已注册的 DOI，未注册就留空；本站不代注册，也不伪造 DOI。',
+      '导出 Word / PDF 时，本站刊号与作者填写的官方 DOI 会并列印在首页引文行，方便读者区分两者。',
     ],
   },
   {
@@ -92,14 +119,14 @@ const SECTIONS = [
     icon: EyeOff,
     title: '评审保密',
     body: [
-      '双盲评审：审稿人身份对作者保密，作者身份对审稿人保密，双方由系统匿名中转。',
+      '匿名评审：默认隐藏作者身份；编辑可按稿件选择单盲或双盲，双方由系统匿名中转。',
       '审稿意见在录用后仅向作者公开；编辑部不公开审稿人之间的分歧讨论。',
       '任何一方试图打听或人肉对方身份，均视为破坏评审制度，按社区规范顶格处理。',
     ],
   },
 ]
 
-function PoliciesPage() {
+export function PoliciesPage() {
   return (
     <div className="mx-auto max-w-4xl py-8">
       <Link

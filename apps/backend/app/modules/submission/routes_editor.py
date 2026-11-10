@@ -338,6 +338,11 @@ async def assign_reviewer(
         submission_title=entry.title,
         last_reminded_at=assignment.last_reminded_at,
         reminder_count=assignment.reminder_count,
+        round=assignment.round,
+        slot=assignment.slot,
+        is_adjudicator=assignment.is_adjudicator,
+        is_external=assignment.is_external,
+        external_affiliation=assignment.external_affiliation,
     )
 
 
@@ -365,6 +370,7 @@ async def list_assignments(
                 .options(
                     selectinload(ReviewAssignment.reviewer),
                     selectinload(ReviewAssignment.submission),
+                    selectinload(ReviewAssignment.report),
                 )
                 .order_by(ReviewAssignment.invited_at.desc())
             )
@@ -391,6 +397,13 @@ async def list_assignments(
                 submission_title=entry.title,
                 last_reminded_at=a.last_reminded_at,
                 reminder_count=a.reminder_count,
+                report_id=a.report[0].id if a.report else None,
+                attachments=(a.report[0].attachments or []) if a.report else [],
+                round=a.round,
+                slot=a.slot,
+                is_adjudicator=a.is_adjudicator,
+                is_external=a.is_external,
+                external_affiliation=a.external_affiliation,
             )
             for a in rows
         ],
@@ -529,6 +542,7 @@ async def list_review_reports(
                     scores=r.scores,
                     comments_to_editor=r.comments_to_editor,
                     comments_to_author=r.comments_to_author,
+                    attachments=r.attachments or [],
                     submitted_at=r.submitted_at,
                 )
             )
@@ -587,34 +601,85 @@ async def editor_decision(
     # desk accept（编辑直接录用）在真实期刊里确实存在，但它是一个需要
     # 明确声明的例外，而不是沉默的默认路径。确需直接录用时，先走
     # POST /{id}/waive-review 记录理由与审计，再裁决。
-    if decision == "accept":
-        from app.modules.review.models import ReviewAssignment
-
-        completed_reviews = (
+    if decision == "accept" and not entry.review_waived_at:
+        # 发表闸门：至少 2 名不同审稿人提交"录用"推荐，才允许 accept。
+        # 只有 1 份意见、或 1 录用 + 1 拒稿/大修时，必须先走第三方裁决
+        # （POST /review/submissions/{id}/adjudicate），不能由编辑直接放行。
+        current_round = (
             await db.execute(
-                select(func.count(ReviewAssignment.id)).where(
+                select(func.max(ReviewAssignment.round)).where(
+                    ReviewAssignment.submission_id == entry.id,
+                    ReviewAssignment.tenant_id == entry.tenant_id,
+                )
+            )
+        ).scalar() or 1
+        rows = (
+            await db.execute(
+                select(
+                    ReviewAssignment.reviewer_id,
+                    ReviewAssignment.is_adjudicator,
+                    ReviewReport.recommendation,
+                )
+                .join(ReviewReport, ReviewReport.assignment_id == ReviewAssignment.id)
+                .where(
                     ReviewAssignment.submission_id == entry.id,
                     ReviewAssignment.tenant_id == entry.tenant_id,
                     ReviewAssignment.status == "completed",
+                    ReviewAssignment.round == current_round,
                 )
             )
-        ).scalar_one()
-        if completed_reviews < 1 and not entry.review_waived_at:
+        ).all()
+        accept_ids = {rid for rid, _adj, rec in rows if rec == "accept"}
+        reject_count = sum(1 for _rid, _adj, rec in rows if rec == "reject")
+        major_count = sum(1 for _rid, _adj, rec in rows if rec == "major_revision")
+        adjudicator_accept = any(
+            rec == "accept" and bool(adj) for _rid, adj, rec in rows
+        )
+        completed_reviews = len(rows)
+
+        if len(accept_ids) < 2:
+            _code = "no_completed_reviews" if completed_reviews == 0 else "insufficient_accept_reviews"
+            _message = (
+                "该稿件尚无已完成的审稿意见，不能直接录用。"
+                "请先分配审稿人并等待意见返回；如确需免评审录用，请先调用 waive-review 记录理由。"
+                if completed_reviews == 0
+                else (
+                    f"发表需要至少 2 名不同审稿人给出录用推荐，当前只有 "
+                    f"{len(accept_ids)} 名（已完成报告 {completed_reviews} 份）。"
+                    "请继续送审，或在意见冲突时指定第三方裁决人。"
+                )
+            )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
-                    "code": "no_completed_reviews",
+                    "code": _code,
+                    "message": _message,
+                    "accept_recommendations": len(accept_ids),
+                    "completed_reviews": completed_reviews,
+                },
+            )
+        if (reject_count or major_count) and not adjudicator_accept:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "review_conflict_requires_adjudication",
                     "message": (
-                        "该稿件尚无已完成的审稿意见，不能直接录用。"
-                        "请先分配审稿人并等待意见返回；"
-                        "如确需免评审录用，请先调用 waive-review 记录理由。"
+                        "审稿意见存在冲突（录用 vs 拒稿/大修），不能直接录用。"
+                        "请先指定第三方裁决人，并等待其给出录用意见。"
                     ),
-                    "completed_reviews": int(completed_reviews),
+                    "accept_recommendations": len(accept_ids),
+                    "reject_recommendations": reject_count,
+                    "major_revision_recommendations": major_count,
                 },
             )
 
     now = utcnow()
-    entry.editor_note = body.editor_note
+    _editor_note = (body.editor_note or "").strip()
+    if body.arbitration_note and body.arbitration_note.strip():
+        _editor_note = (
+            _editor_note + "\n\n【冲突裁决理由】" + body.arbitration_note.strip()
+        ).strip()
+    entry.editor_note = _editor_note or None
     entry.reviewed_by = current_user.id
     entry.reviewed_at = now
 
@@ -769,7 +834,7 @@ async def editor_decision(
         title=f"稿件决定通知：{entry.title}",
         body=(
             f"您的稿件 #{entry.id} 收到编辑决定：{decision_labels.get(decision, decision)}。"
-            + (f" 编辑备注：{body.editor_note}" if body.editor_note else "")
+            + (f" 编辑备注：{entry.editor_note}" if entry.editor_note else "")
             + ("（文章已收录进公开目录，点击查看发表页面）" if accepted else "")
         ),
         related_type="resource" if accepted else "submission",
@@ -786,7 +851,8 @@ async def editor_decision(
             payload={
                 "decision": decision,
                 "resource_id": entry.resource_id,
-                "editor_note_present": bool(body.editor_note),
+                "editor_note_present": bool(entry.editor_note),
+                "arbitration_note_present": bool(body.arbitration_note),
             },
         )
     )
@@ -866,6 +932,23 @@ async def request_rework(
     entry.status = "under_review"
     entry.editor_note = body.note
     requirements_text = "\n".join(f"{i + 1}. {r}" for i, r in enumerate(body.requirements))
+
+    # 作者也要知道稿件被退回修改：状态回到 under_review，作者仍可继续
+    # 上传修订稿；如果只通知审稿人，作者会在不知情的情况下等下去。
+    await notifications.create(
+        db,
+        tenant_id=entry.tenant_id,
+        user_id=entry.submitted_by,
+        type_="submission.rework_requested",
+        title=f"稿件需要修改：{entry.title}",
+        body=(
+            f"稿件 #{entry.id} 已被编辑部退回修改，当前进入复审阶段。\n"
+            f"修改要求：\n{requirements_text}\n\n"
+            "你可以在「我的提交」中上传修订稿；审稿人复审后编辑部会给出下一步决定。"
+        ),
+        related_type="submission",
+        related_id=str(entry.id),
+    )
 
     # 通知审稿人：该稿被打回，需要补审或说明（这是打回此刻的唯一外发通知）
     from app.modules.review.models import ReviewAssignment

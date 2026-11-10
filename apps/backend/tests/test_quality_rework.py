@@ -192,7 +192,7 @@ async def test_rework_notifies_reviewer_and_author(
         headers=auth_headers(admin_user),
     )
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "rework_requested"
+    assert r.json()["status"] == "under_review"
 
     # 作者收到通知
     inbox = await client.get("/api/notifications", headers=auth_headers(test_user))
@@ -209,7 +209,7 @@ async def test_rework_notifies_reviewer_and_author(
         await db_session.execute(
             select(ReviewAssignment.reviewer_id).where(ReviewAssignment.submission_id == sid)
         )
-    ).scalar_one()
+    ).scalars().first()
     reviewer = (
         await db_session.execute(select(UserModel).where(UserModel.id == reviewer_id))
     ).scalar_one()

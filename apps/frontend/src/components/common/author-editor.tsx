@@ -133,8 +133,10 @@ export function AuthorEditor({
             <button
               type="button"
               onClick={() => remove(idx)}
-              className="rounded p-1 text-destructive hover:bg-destructive/10"
+              disabled={sorted.length <= 1}
+              className="rounded p-1 text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-30"
               aria-label="删除作者"
+              title={sorted.length <= 1 ? '至少保留 1 位作者' : '删除作者'}
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -154,7 +156,7 @@ export function AuthorEditor({
               <Input
                 value={author.affiliation ?? ''}
                 onChange={(e) => update(idx, { affiliation: e.target.value })}
-                placeholder="韩山师范学院"
+                placeholder="清华大学"
               />
             </div>
           </div>
@@ -164,17 +166,20 @@ export function AuthorEditor({
               type="email"
               value={author.email ?? ''}
               onChange={(e) => update(idx, { email: e.target.value })}
-              placeholder="zhang@hstc.edu.cn"
+              placeholder="name@university.edu.cn"
             />
           </div>
-          <div className="flex gap-4">
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            邮箱可留空；公开仅对已完成认领的作者生效。
+          </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
             <label className="flex items-center gap-1.5 text-xs">
               <input
                 type="checkbox"
                 checked={author.roles.includes('first')}
                 onChange={() => toggleRole(idx, 'first')}
               />
-              第一作者 †（唯一）
+              第一作者（仅 1 位）
             </label>
             <label className="flex items-center gap-1.5 text-xs">
               <input
@@ -182,7 +187,7 @@ export function AuthorEditor({
                 checked={author.roles.includes('corresponding')}
                 onChange={() => toggleRole(idx, 'corresponding')}
               />
-              通讯作者 ✉（唯一，可空）
+              通讯作者（可选 1 位）
             </label>
           </div>
         </div>

@@ -624,3 +624,26 @@ async def test_r_index_uses_adjusted_events(
     assert body["saves"] == 1
     assert body["r_index"] > 0
     assert body["quartile"] == "R1"
+
+
+def test_response_tolerates_legacy_invalid_content_genre() -> None:
+    """历史库里的空串/article 不得触发 Literal 校验 500（2026-11-08 线上故障）。"""
+    from datetime import UTC, datetime
+
+    from app.modules.catalog.schemas import ResourceResponse
+
+    for legacy in ("", "article", "  "):
+        payload = ResourceResponse(
+            id=1,
+            type="paper",
+            title="Legacy paper",
+            authors=["Alice"],
+            year=2026,
+            discipline="computer-science",
+            abstract="legacy abstract",
+            content_track="paper",
+            content_genre=legacy,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        assert payload.content_genre is None

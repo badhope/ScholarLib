@@ -132,8 +132,21 @@ export function formatAuthors(authors: string[], limit = 2): string {
 // Deduplicates the blob-download logic previously hand-rolled in
 // exportResources() and downloadSubmissionFile().
 export function downloadBlob(data: Blob, disposition: string, fallbackName: string): void {
-  const match = /filename="?([^";]+)"?/.exec(disposition)
-  const filename = match?.[1] ?? fallbackName
+  // RFC 5987 takes precedence: filename*=UTF-8''... carries Chinese titles.
+  // Without this, the ASCII fallback (`filename="..."`) wins and the user
+  // receives a file named with underscores instead of the article title.
+  const encoded = /filename\*=UTF-8''([^;\n]+)/i.exec(disposition)
+  let filename = fallbackName
+  if (encoded?.[1]) {
+    try {
+      filename = decodeURIComponent(encoded[1].trim())
+    } catch {
+      filename = fallbackName
+    }
+  } else {
+    const match = /filename="?([^";]+)"?/.exec(disposition)
+    filename = match?.[1] ?? fallbackName
+  }
   const url = URL.createObjectURL(data)
   const a = document.createElement('a')
   a.href = url

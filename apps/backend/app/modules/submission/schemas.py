@@ -61,6 +61,9 @@ class SubmissionCreate(BaseModel):
     venue: str | None = Field(default=None, max_length=500)
     discipline: str = Field(min_length=1, max_length=100)
     subdiscipline: str | None = Field(default=None, max_length=100)
+    # 栏目 / 期次分部：与 catalog Resource 字段同名，录用时直接物化。
+    article_section: str | None = Field(default=None, max_length=40)
+    issue_part: str | None = Field(default=None, max_length=40)
     keywords: list[str] = Field(default_factory=list, max_length=50)
     jel_codes: list[str] = Field(default_factory=list, max_length=20)
     tags: list[str] = Field(default_factory=list, max_length=50)
@@ -121,6 +124,8 @@ class SubmissionDecision(BaseModel):
     # 确需破例时置 true，且必须在 editor_note 里写明理由——破例本身要
     # 可追溯，否则"D 级硬发"会变成常规操作。
     force_accept_d_grade: bool = False
+    # 仲裁人第三方意见或编辑的冲突裁决理由；会并入 editor_note 留痕。
+    arbitration_note: str | None = Field(default=None, max_length=5000)
 
 
 class AnonymizedFileUpdate(BaseModel):
@@ -186,6 +191,8 @@ class SubmissionResponse(BaseModel):
     venue: str | None = None
     discipline: str
     subdiscipline: str | None = None
+    article_section: str | None = None
+    issue_part: str | None = None
     keywords: list[str] = Field(default_factory=list)
     jel_codes: list[str] = Field(default_factory=list)
     tags: list[str]
@@ -218,6 +225,15 @@ class SubmissionResponse(BaseModel):
     # 上传结果提示（P0）：扩展名与实际格式不一致、needs_docx 原因、
     # 中图分类号待校正等。仅上传端点返回。
     upload_warnings: list[str] = []
+    # 审稿进度（列表页/详情页共用）：发表闸门依赖这些数字。
+    reports_completed: int = 0
+    distinct_reviewers: int = 0
+    accept_recommendations: int = 0
+    reject_recommendations: int = 0
+    can_decide: bool = False
+    conflict: bool = False
+    adjudicator_assigned: bool = False
+    adjudicator_accepted: bool = False
 
 
 class SubmissionListResponse(BaseModel):
@@ -254,6 +270,8 @@ class SubmissionUpdate(BaseModel):
     venue: str | None = Field(default=None, max_length=500)
     discipline: str | None = Field(default=None, min_length=1, max_length=100)
     subdiscipline: str | None = Field(default=None, max_length=100)
+    article_section: str | None = Field(default=None, max_length=40)
+    issue_part: str | None = Field(default=None, max_length=40)
     keywords: list[str] | None = Field(default=None, max_length=50)
     jel_codes: list[str] | None = Field(default=None, max_length=20)
     tags: list[str] | None = Field(default=None, max_length=50)

@@ -175,3 +175,7 @@ apps/backend/prebuilt-static/templates/
 .env
 .env.*
 !.env.example
+
+# TanStack Router generated route tree cache
+apps/frontend/.tanstack/
+*.bak-*

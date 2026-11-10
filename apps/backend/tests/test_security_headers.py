@@ -6,7 +6,7 @@ Verifies:
 - ``Referrer-Policy: strict-origin-when-cross-origin``
 - ``Content-Security-Policy`` present (non-empty)
 - ``Permissions-Policy`` present
-- ``X-API-Version`` present and non-empty
+- ``X-API-Version`` must not be exposed
 - ``Strict-Transport-Security`` present ONLY when ``is_production``
 - Non-HTTP scope (e.g. websocket upgrade) passes through untouched
 """
@@ -80,12 +80,10 @@ async def test_permissions_policy_present(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_x_api_version_present(client: AsyncClient) -> None:
-    """X-API-Version must be present and non-empty."""
+    """X-API-Version must not be exposed."""
     response = await client.get("/healthz")
     assert response.status_code == 200
-    version = response.headers.get("x-api-version")
-    assert version, "X-API-Version header missing"
-    assert len(version) > 0
+    assert "x-api-version" not in response.headers, "X-API-Version must not be exposed"
 
 
 @pytest.mark.asyncio

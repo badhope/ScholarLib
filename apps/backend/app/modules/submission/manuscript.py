@@ -22,6 +22,7 @@ pymupdf 自身对损坏文件抛异常而不是 segfault（mupdf 以外挂沙盒
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import math
 import os
@@ -491,6 +492,10 @@ _DATA_URI_IMG_RE = re.compile(
     r'!\[([^\]]*)\]\(data:image/([a-zA-Z0-9.+-]+);base64,([^)]*)\)'
 )
 
+# 期刊刊头 logo 的 sha256。历史稿里它被当作“图表”插进正文（297/299/302），
+# 阅读端按字节指纹识别并剔除；不碰原稿、不影响图片序号。
+JOURNAL_LOGO_SHA256 = "4e9299a816964e4844d5876fa391a79f64928f896ddf801ca9f62f641a204e8c"
+
 
 @dataclass(frozen=True)
 class EmbeddedImage:
@@ -541,6 +546,44 @@ def rewrite_embedded_images(md: str, resource_id: int) -> str:
         return md
 
 
+def strip_known_journal_logo(md: str, resource_id: int) -> str:
+    """剔除正文里被误当配图的期刊刊头 logo。
+
+    只在阅读端生效：先按原始图片序号改写 URL（保证其余图片 n 不漂移），
+    再删掉 logo 对应的 Markdown 图片。297 的 ``图1`` 假题注与被删图共用
+    一段，顺手剥掉题注前缀，避免留下“图 1 不存在”的悬空说明。
+    """
+    images = extract_embedded_images(md)
+    logo_numbers = [
+        i + 1
+        for i, img in enumerate(images)
+        if hashlib.sha256(img.data).hexdigest() == JOURNAL_LOGO_SHA256
+    ]
+    # 即便没有命中 logo，也必须把内嵌 base64 图改写成 /img/{n}：
+    # 阅读端首屏体积从 MB 级降到几十 KB。
+    rewritten = rewrite_embedded_images(md, resource_id)
+    if not logo_numbers:
+        return rewritten
+    for n in logo_numbers:
+        rewritten = re.sub(
+            rf"!\[[^\]]*\]\(/api/catalog/{resource_id}/img/{n}\)",
+            "",
+            rewritten,
+        )
+    # 297：图注在原始抽取里落在 logo 之后、真图之前。删掉错位题注，
+    # 再把同一句题注移到真正的“春风报告”截图（原图序号 2）上方。
+    if resource_id == 297:
+        caption = "图1 春风 TRYFUN 发布的报告部分内容"
+        rewritten = re.sub(r"\*{0,2}" + caption + r"\*{0,2}", "", rewritten)
+        rewritten = rewritten.replace(
+            "![](/api/catalog/297/img/2)",
+            f"{caption}\n\n![](/api/catalog/297/img/2)",
+            1,
+        )
+    rewritten = re.sub(r"\n{3,}", "\n\n", rewritten)
+    return rewritten
+
+
 def needs_docx_storage_key(file_path: str) -> str:
     """needs_docx 原因侧car key：``{file_path}.needs_docx``。"""
     return f"{file_path}.needs_docx".replace("\\", "/")
@@ -556,4 +599,5 @@ __all__ = [
     "markdown_storage_key",
     "needs_docx_storage_key",
     "rewrite_embedded_images",
+    "strip_known_journal_logo",
 ]

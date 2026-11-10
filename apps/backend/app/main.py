@@ -124,9 +124,9 @@ _RESERVED_SOFT_404 = frozenset({"docs", "openapi.json", "redoc", "docs/oauth2-re
 _SPA_ROUTE_PREFIXES = frozenset({
     "403", "about", "account", "admin", "archive", "auth", "authors", "browse",
     "catalog", "claim", "dashboard", "editor", "follows", "forgot-password", "forum", "ingest",
-    "journal-metrics", "levels", "library", "me", "login", "notifications", "policies",
-    "profile", "reader", "recommendations", "register", "reset-password", "review",
-    "settings", "submissions", "support", "verify-email",
+    "journal-metrics", "levels", "library", "me", "login", "notifications", "papers",
+    "policies", "profile", "reader", "recommendations", "register", "reset-password",
+    "review", "settings", "submissions", "support", "verify-email", "fun", "sections", "appeals", "help", "grade", "feedback", "guide", "rules",
 })
 
 app = FastAPI(
@@ -273,6 +273,9 @@ app.include_router(me.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(tenant_hosts.router, prefix="/api")
 app.include_router(modules.router, prefix="/api")
+
+from app.api import telemetry  # noqa: E402
+app.include_router(telemetry.router, prefix="/api")
 # OAI-PMH 2.0 元数据收割端点（DOAJ/CNKI/图书馆联盟索引对接，根路径挂载）。
 app.include_router(oai.router)
 # WebAuthn / Passkeys as an alternative to TOTP 2FA.
@@ -391,10 +394,14 @@ if _static_dir_env:
                 # Per-route <title>/description/OG/citation tags: the SPA has
                 # a single HTML shell, so crawlers would otherwise see the
                 # same metadata on every article page.
-                html_text, _status = await seo.build_index_html(
+                html_text, status = await seo.build_index_html(
                     index_file.read_text(encoding="utf-8"), full_path, request, db
                 )
-                return Response(content=html_text, media_type="text/html; charset=utf-8")
+                return Response(
+                    content=html_text,
+                    media_type="text/html; charset=utf-8",
+                    status_code=int(status),
+                )
             raise HTTPException(status_code=404, detail="Frontend build not found")
 
         logger.info("static_serving_enabled", static_dir=str(_static_root))

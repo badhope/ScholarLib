@@ -97,6 +97,8 @@ def _assignment_row(a: ReviewAssignment, now: datetime) -> dict[str, Any]:
         "is_overdue": is_overdue,
         "completed_at": a.completed_at,
         "reminder_count": a.reminder_count or 0,
+        "report_id": a.report[0].id if a.report else None,
+        "attachments": (a.report[0].attachments or []) if a.report else [],
     }
 
 

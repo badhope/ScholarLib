@@ -41,6 +41,16 @@ export interface UserResponse {
   created_at: string
   // 一句话简介（迁移 012；PATCH /users/me 可改）
   bio?: string | null
+  // 可扩展资料（迁移 026）
+  display_name?: string | null
+  real_name?: string | null
+  affiliation?: string | null
+  department?: string | null
+  academic_title?: string | null
+  research_interests?: string | null
+  website?: string | null
+  google_scholar?: string | null
+  location?: string | null
   // admin 端点会填入；普通 /auth/* 端点保持空数组
   roles: string[]
   /** 等级体系：XP 与生效等级（1–9） */
@@ -48,6 +58,23 @@ export interface UserResponse {
   level?: number
   rules_accepted?: boolean
 }
+
+// 可编辑的个人资料字段（PATCH /users/me）。空串表示清除，缺键表示保持不变。
+export type UserProfileUpdate = Partial<
+  Pick<
+    UserResponse,
+    | 'bio'
+    | 'display_name'
+    | 'real_name'
+    | 'affiliation'
+    | 'department'
+    | 'academic_title'
+    | 'research_interests'
+    | 'website'
+    | 'google_scholar'
+    | 'location'
+  >
+>
 
 // 可分配的角色名（与 backend ASSIGNABLE_ROLES 一致；admin 不在此处，由 is_admin 控制）
 export type AssignableRole =
@@ -65,6 +92,8 @@ export interface UserCreate {
   email: string
   username: string
   password: string
+  captcha_token?: string
+  captcha_answer?: string
 }
 
 export interface UserLogin {
@@ -150,9 +179,9 @@ export interface CapabilitiesResponse {
 export type ResourceType = 'paper' | 'book' | 'dataset' | 'tutorial'
 export type PublicationStatus = 'published' | 'in_review' | 'draft'
 
-/** 赛道：历史字段，已下线（对齐后端 core/tracks.py）。仅保留 serious，
- *  旧值由后端归一化。 */
-export type Track = 'serious'
+/** 论文子类型：serious=学术论文 / absurd=荒诞论文。
+ *  只对 content_track=paper 有意义；副刊不展示。 */
+export type Track = 'serious' | 'absurd'
 
 export interface ResourceBase {
   type: ResourceType
@@ -181,13 +210,22 @@ export interface ResourceBase {
   keywords?: string[] | null
   language: string
   publication_status: PublicationStatus
-  /** 质量评分（RQS v3.0，0–100）与 14 档等级 A+~F */
+  publish_at?: string | null
+  article_section?: string | null
+  issue_part?: string | null
+  /** 质量评分（评审质量分，0–100）与 14 档等级 A+~F */
   quality_score?: number | null
   quality_grade?: string | null
   content_category?: "academic" | "fun" | "rant" | null
   /** 内容赛道：essay 表示娱乐/随笔稿（与 content_category=fun/rant 同义，
    *  后端物化时可能只下发其一）；前端据此隐藏全部学术评分元素。 */
   content_track?: string | null
+  /** 娱乐轨文体细分：joke/fiction/review/guide/essay/poetry/rant。
+   *  只对 content_track=essay 有值；论文轨为 null。 */
+  content_genre?: 'joke' | 'fiction' | 'review' | 'guide' | 'essay' | 'poetry' | 'rant' | null
+  /** 特别篇：篇幅超过轨道上限、经显式特许的稿件。 */
+  is_special_issue?: boolean
+  special_issue_reason?: string | null
   // 编辑部评语挂在 quality_breakdown.comment（额外键，读取处自行收窄类型）
   quality_breakdown?: Record<string, { label: string; score: number; max: number }> | null
   /** 主题封面图（/covers/xx.jpg）；为空时回退生成式封面 */
@@ -203,6 +241,8 @@ export type ResourceUpdate = Partial<ResourceCreate>
 
 export interface ResourceResponse extends ResourceBase {
   id: number
+  /** 本站刊号：R-六位刊号-YYYYMMDD-流水；不是 DOI */
+  site_id?: string | null
   slug?: string | null
   created_at: string
   updated_at: string
@@ -315,6 +355,8 @@ export interface AssignOwnerRequest {
 
 export interface JournalMetrics {
   published_total: number
+  serious_total?: number
+  absurd_total?: number
   by_type: Record<string, number>
   by_discipline: Record<string, number>
   discipline_count: number
@@ -342,6 +384,8 @@ export interface ResourceStats {
   total: number
   by_type: Record<string, number>
   by_discipline: Record<string, number>
+  by_genre?: Record<string, number>
+  by_paper_kind?: Record<string, number>
   downloads_total?: number
   reads_total?: number
 }
@@ -358,10 +402,18 @@ export interface ResourceFacets {
 
 export interface ResourceListParams {
   type?: ResourceType
+  category?: 'academic' | 'fun' | 'rant' | 'essay'
+  track?: 'paper' | 'essay'
+  /** 论文子类型：serious=学术论文 / absurd=荒诞论文（只对 paper 生效） */
+  paper_kind?: Track
+  genre?: 'joke' | 'fiction' | 'review' | 'guide' | 'essay' | 'poetry' | 'rant'
   discipline?: string
   year?: number
   volume?: string
   issue?: string
+  section?: string
+  issue_part?: string
+  clc?: string
   q?: string
   page?: number
   page_size?: number
@@ -394,6 +446,9 @@ export interface SubmissionCreate {
   venue?: string | null
   discipline: string
   subdiscipline?: string | null
+  /** 栏目 / 期次分部（Nature 式 part slug，录用时直通目录资源） */
+  article_section?: string | null
+  issue_part?: string | null
   keywords?: string[]
   jel_codes?: string[]
   tags: string[]
@@ -449,6 +504,8 @@ export interface SubmissionResponse {
   venue?: string | null
   discipline: string
   subdiscipline?: string | null
+  article_section?: string | null
+  issue_part?: string | null
   keywords: string[]
   jel_codes: string[]
   tags: string[]
@@ -486,8 +543,18 @@ export interface SubmissionResponse {
   can_decide?: boolean
   /** 已完成的审稿报告数 */
   reports_completed?: number
-  /** 审稿意见是否冲突（需仲裁/裁决理由） */
+  /** 给出录用推荐的审稿人数（发表闸门要求 ≥2） */
+  accept_recommendations?: number
+  /** 给出拒稿推荐的审稿人数 */
+  reject_recommendations?: number
+  /** 参与过审稿的不同审稿人数 */
+  distinct_reviewers?: number
+  /** 审稿意见是否冲突（需第三方裁决/裁决理由） */
   conflict?: boolean
+  /** 是否已指定第三方裁决人 */
+  adjudicator_assigned?: boolean
+  /** 第三方裁决人是否已给出录用意见 */
+  adjudicator_accepted?: boolean
 }
 
 export interface SubmissionListResponse {
@@ -547,6 +614,43 @@ export interface AssignmentResponse {
   submission_title?: string | null
   last_reminded_at?: string | null
   reminder_count?: number
+  report_id?: number | null
+  attachments?: ReviewAttachment[]
+  round?: number
+  slot?: number
+  /** 第三方裁决人：意见冲突时由主编/编辑指定 */
+  is_adjudicator?: boolean
+  /** 外审专家（主编指定，可标注外省/外单位） */
+  is_external?: boolean
+  external_affiliation?: string | null
+}
+
+export interface ReviewMatrixRow {
+  reviewer_id: number
+  username?: string | null
+  slot: number
+  status: string
+  recommendation?: Recommendation | null
+  due_date?: string | null
+  is_overdue: boolean
+  is_adjudicator: boolean
+  is_external?: boolean
+  external_affiliation?: string | null
+}
+
+export interface ReviewMatrixResponse {
+  submission_id: number
+  assignments: ReviewMatrixRow[]
+  reports_completed: number
+  distinct_reviewers: number
+  accept_count: number
+  reject_count: number
+  major_revision_count: number
+  can_decide: boolean
+  conflict: boolean
+  need_adjudication: boolean
+  adjudicator_assigned: boolean
+  adjudicator_accepted: boolean
 }
 
 export interface AssignmentListResponse {
@@ -559,6 +663,15 @@ export interface ReviewSubmit {
   scores: Record<string, number>
   comments_to_editor?: string | null
   comments_to_author?: string | null
+  special_issue?: boolean
+  special_issue_reason?: string | null
+}
+
+export interface ReviewAttachment {
+  filename: string
+  path: string
+  content_type: string
+  size: number
 }
 
 export interface ReviewReportResponse {
@@ -568,6 +681,7 @@ export interface ReviewReportResponse {
   scores: Record<string, number>
   comments_to_editor?: string | null
   comments_to_author?: string | null
+  attachments?: ReviewAttachment[]
   submitted_at: string
 }
 

@@ -26,6 +26,7 @@ import {
 } from '@/hooks/api/use-modules'
 import { extractError } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
+import { HelpTip } from '@/components/common/help-tip'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -207,6 +208,10 @@ function EditorWorkbenchPage() {
         title="主编工作台"
         description="四栏流水线：待指派 → 评审中 → 待裁决 → 已决定。"
       />
+      <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+        <HelpTip text="指派前先看利益冲突；裁决必须写 20 字以上处置说明；撤回申诉受理后作品会下架，分数/分区重审要记录结论。" />
+        指派、裁决、申诉处置的边界
+      </p>
 
       {/* 邮件摘要状态条：诚实报告"邮件到底有没有发出去"。
           站内通知照常，邮件侧若没配 SMTP 必须明说，不能写成"已通知"。 */}

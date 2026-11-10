@@ -4,7 +4,7 @@ import { getAuthState, useAuthStore } from '@/lib/auth'
 import { useMe, useResendVerification } from '@/hooks/api/use-auth'
 import { TwoFactorSection } from '@/components/settings/two-factor-section'
 import { ChangePasswordCard } from '@/components/settings/change-password-card'
-import { BioCard } from '@/components/settings/bio-card'
+import { ProfileDetailsCard } from '@/components/settings/profile-details-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,6 +54,24 @@ function ProfileCard() {
         <CardDescription>当前登录账号的信息。</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
+        <div className="flex justify-between gap-4">
+          <span className="text-muted-foreground">展示名</span>
+          <span className="truncate text-right font-medium">
+            {user?.display_name ?? '未填写'}
+          </span>
+        </div>
+        {user?.affiliation ? (
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">单位</span>
+            <span className="text-right font-medium">{user.affiliation}</span>
+          </div>
+        ) : null}
+        {user?.academic_title ? (
+          <div className="flex justify-between gap-4">
+            <span className="text-muted-foreground">职称 / 身份</span>
+            <span className="text-right font-medium">{user.academic_title}</span>
+          </div>
+        ) : null}
         <div className="flex justify-between">
           <span className="text-muted-foreground">用户名</span>
           <span className="font-medium">{user?.username ?? '—'}</span>
@@ -111,16 +129,27 @@ function ProfileCard() {
   )
 }
 
-function ProfileBioCard() {
-  const { data } = useMe()
-  // key 绑定服务端 bio：保存成功后 query 失效 → bio 变化 → 组件重挂载，
-  // 草稿与服务端状态对齐（BioCard 内部不做 effect 回写）。
-  return <BioCard key={data?.bio ?? 'bio-empty'} initialBio={data?.bio ?? null} />
+function profileKey(user: ReturnType<typeof useMe>['data']) {
+  if (!user) return 'profile-empty'
+  return [
+    user.id,
+    user.display_name,
+    user.real_name,
+    user.affiliation,
+    user.department,
+    user.academic_title,
+    user.location,
+    user.research_interests,
+    user.website,
+    user.google_scholar,
+    user.bio,
+  ].join('|')
 }
 
 function SettingsPage() {
   const search = Route.useSearch()
   const navigate = useNavigate()
+  const { data: me } = useMe()
   // 初始 tab 来自 ?tab=security（旧 /account/security 链接转跳进来时直达安全页）
   const [tab, setTab] = useState<'profile' | 'security'>(search.tab ?? 'profile')
 
@@ -140,7 +169,7 @@ function SettingsPage() {
         </TabsList>
         <TabsContent value="profile" className="mt-4 space-y-6">
           <ProfileCard />
-          <ProfileBioCard />
+          <ProfileDetailsCard key={profileKey(me)} initial={me} />
         </TabsContent>
         <TabsContent value="security" className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <TwoFactorSection />

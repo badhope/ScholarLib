@@ -22,6 +22,7 @@ import { toast } from 'sonner'
 import { getAuthState } from '@/lib/auth'
 import {
   downloadSubmissionFile,
+  downloadSubmissionVersion,
   useDeleteSubmission,
   useMySubmissions,
   useResubmitSubmission,
@@ -39,6 +40,7 @@ import { typeLabel } from '@/lib/resource-labels'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { useCapabilities } from '@/hooks/use-capabilities'
 import { extractError } from '@/lib/utils'
+import { normalizeAbstract } from '@/lib/abstract'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
@@ -140,7 +142,7 @@ function SubmissionsPage() {
   const caps = useCapabilities()
   const uploadMaxMb = Math.round((caps.data?.upload_max_bytes ?? 50 * 1024 * 1024) / 1024 / 1024)
   const maxUploadBytes = caps.data?.upload_max_bytes ?? 50 * 1024 * 1024
-  const acceptAttr = (caps.data?.upload_extensions ?? ['.pdf', '.docx', '.doc', '.txt', '.zip']).join(',')
+  const acceptAttr = (caps.data?.upload_extensions ?? ['.docx', '.doc', '.pdf', '.txt', '.zip']).join(',')
   const search = useSearch({ strict: false }) as SubmissionSearch
   const statusTab = (search.status ?? 'all') as SubmissionStatus | 'all'
   const page = search.page ?? 1
@@ -455,7 +457,7 @@ function SubmissionsPage() {
               )}
               <div>
                 <span className="text-muted-foreground">摘要</span>
-                <p className="mt-1 whitespace-pre-wrap">{detail.abstract}</p>
+                <p className="mt-1 whitespace-pre-wrap">{normalizeAbstract(detail.abstract)}</p>
               </div>
               <div>
                 <span className="text-muted-foreground">预览</span>
@@ -551,10 +553,18 @@ function SubmissionsPage() {
                     <button
                       type="button"
                       className="inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
-                      onClick={() => void downloadSubmissionFile(detail.id)}
+                      onClick={() => void downloadSubmissionFile(detail.id, 'docx')}
                     >
                       <Download className="h-3.5 w-3.5" />
-                      下载
+                      下载 Word
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center gap-1 text-xs text-primary hover:underline"
+                      onClick={() => void downloadSubmissionFile(detail.id, 'pdf')}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      PDF
                     </button>
                   </div>
                 )}
@@ -644,6 +654,20 @@ function SubmissionsPage() {
                             {new Date(v.created_at).toLocaleString()}
                             {v.file_path ? ' · 含稿件文件' : ''}
                           </div>
+                          {v.file_path && (
+                            <button
+                              type="button"
+                              className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                              onClick={() =>
+                                void downloadSubmissionVersion(detail.id, v.version).catch(
+                                  (err) => toast.error(extractError(err, '该版本原件不可下载')),
+                                )
+                              }
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              下载该版本原件
+                            </button>
+                          )}
                           {v.note && (
                             <p className="mt-0.5 whitespace-pre-wrap text-sm">
                               修改说明：{v.note}

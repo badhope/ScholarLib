@@ -139,14 +139,14 @@ export function RoleApplicationsSection() {
             <>
               <li>
                 已录用稿件：<span className="tabular-nums text-foreground">{e.accepted_papers ?? 0}</span>
-                {' '}/ 1 篇
+                {' '}/ {e.thresholds?.accepted_papers ?? '—'} 篇
               </li>
               <li>
                 最高质量分（RQS）：
                 <span className="tabular-nums text-foreground">
                   {e.best_rqs != null ? Math.round(e.best_rqs) : '—'}
                 </span>
-                {' '}/ 60 分（未评分稿件不参与门槛）
+                {' '}/ {e.thresholds?.best_rqs ?? '—'} 分（未评分稿件不参与门槛）
               </li>
             </>
           ) : (

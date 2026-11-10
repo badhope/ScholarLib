@@ -185,11 +185,9 @@ export function useAnnouncementPortal() {
   const [open, setOpen] = useState(false)
   const seen = data ? announcementSeen(data.slug) : true
 
-  useEffect(() => {
-    if (!data || seen) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOpen(true)
-  }, [data, seen])
+  // 不做自动弹窗：公告以顶栏 chip + 红点提示，点击才展开。
+  // 自动弹窗会在首屏正中央盖住刊头与统计卡，移动端尤其像故障。
+
 
   const handleOpenChange = (next: boolean) => {
     if (!next && data) remember(data.slug)

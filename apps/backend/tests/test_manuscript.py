@@ -379,7 +379,7 @@ async def test_markdown_upload_preserves_original_bytes(
     )
     assert response.status_code == 200
     assert response.json()["file_path"] != response.json()["markdown_path"]
-    downloaded = await client.get(f"/api/submissions/{sid}/files", headers=headers)
+    downloaded = await client.get(f"/api/submissions/{sid}/files?format=md", headers=headers)
     assert downloaded.content == original
 
 

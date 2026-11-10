@@ -194,6 +194,17 @@ class User(Base, TenantScopedMixin):
     orcid: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # 用户自定义一句话简介（个人中心展示；迁移 012）。
     bio: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # --- 可扩展的个人资料（迁移 026） ---
+    # 全部可空：存量用户不需要补数据；PATCH /users/me 仅在字段出现时写入。
+    display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    real_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    affiliation: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    academic_title: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    research_interests: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    google_scholar: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Soft-delete timestamp. Set when the user requests account deletion
     # (GDPR right-to-erasure). The row is anonymised in place, and a
     # background job hard-deletes it after the grace window.

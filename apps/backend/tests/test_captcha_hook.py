@@ -63,19 +63,25 @@ async def test_register_accepts_captcha_token_when_policy_on(
 ) -> None:
     """When the policy is on and token is present, dev passthrough accepts."""
     monkeypatch.setattr(settings, "captcha_required_for_registration", True)
+    # 自建算术验证码：先取题，算出答案后连同 token 一起回传。
+    challenge = (await client.get("/api/auth/captcha")).json()
+    a, b = challenge["question"].replace("= ?", "").split("+")
+    answer = str(int(a.strip()) + int(b.strip()))
     r = await client.post(
         "/api/auth/register",
-        json=_payload(email="captcha3@example.com", username="captcha3"),
+        json={
+            **_payload(email="captcha3@example.com", username="captcha3"),
+            "captcha_token": challenge["token"],
+            "captcha_answer": answer,
+        },
     )
-    print("STATUS:", r.status_code, "BODY:", r.text)
-    assert r.status_code in (201, 200)
     assert r.status_code in (201, 200)
 
 
-def test_default_verifier_is_passthrough() -> None:
-    assert settings.captcha_verifier == ""
+def test_default_verifier_is_self_hosted() -> None:
+    assert settings.captcha_verifier.endswith("SelfHostedCaptchaVerifier")
     v = _load_verifier()
-    assert isinstance(v, _AlwaysPassVerifier)
+    assert hasattr(v, "verify")
 
 
 def test_load_verifier_rejects_bad_path() -> None:

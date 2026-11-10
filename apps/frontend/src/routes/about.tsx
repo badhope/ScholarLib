@@ -1,13 +1,38 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, Building2, Globe, Mail, Newspaper, ScrollText } from 'lucide-react'
 import { PageHeader } from '@/components/common/page-header'
 import { Card, CardContent } from '@/components/ui/card'
 import { CoverArt } from '@/components/common/cover-art'
 import { RevealSection } from '@/components/common/reveal-section'
+import { JournalMetricsPage } from './journal-metrics'
 
 export const Route = createFileRoute('/about')({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: search.tab === 'metrics' ? 'metrics' : 'about',
+  }),
   component: AboutPage,
 })
+
+function AboutTabs({ active }: { active: 'about' | 'metrics' }) {
+  return (
+    <div className="mb-6 flex gap-2 border-b pb-3">
+      <Link
+        to="/about"
+        search={{ tab: 'about' }}
+        className={active === 'about' ? 'rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground' : 'rounded-lg border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted'}
+      >
+        关于本刊
+      </Link>
+      <Link
+        to="/about"
+        search={{ tab: 'metrics' }}
+        className={active === 'metrics' ? 'rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground' : 'rounded-lg border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted'}
+      >
+        期刊指标
+      </Link>
+    </div>
+  )
+}
 
 // 关于本刊：定位、理念、编委会、卷期与联系方式。
 // 编委会为编辑部化名的虚构阵容（本刊自己就是一本正经与玩梗并存的刊物，
@@ -36,7 +61,7 @@ const BOARD = [
     name: '白鹿原上',
     role: '编委 · 审稿协调',
     affiliation: '编辑部',
-    note: '维护双盲评审的匿名管道与审稿人队伍。',
+    note: '维护匿名评审管道与审稿人队伍。',
   },
   {
     name: '林一苇',
@@ -53,12 +78,21 @@ const BOARD = [
 ]
 
 const TIMELINE = [
-  ['2026 年 10 月', '创刊。首卷第 1 期上线，投稿、双盲评审、在线阅读全流程开放。'],
+  ['2026 年 10 月', '创刊。首卷第 1 期上线，投稿、匿名评审、在线阅读全流程开放。'],
   ['2026 年 10 月', '引入 R 因子，建立基于站内互动的全刊热度指标。'],
   ['今天', '等你投稿。'],
 ]
 
 function AboutPage() {
+  const { tab } = useSearch({ from: '/about' })
+  if (tab === 'metrics') {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        <AboutTabs active="metrics" />
+        <JournalMetricsPage embedded />
+      </div>
+    )
+  }
   return (
     <div className="mx-auto max-w-4xl py-8">
       <Link
@@ -73,6 +107,7 @@ function AboutPage() {
         title="关于本刊"
         description="Rubbish 是一家严肃格式与自由主题兼容的开放获取学术期刊——用严格的格式，收纳一切认真的思考。"
       />
+      <AboutTabs active="about" />
 
       <div className="space-y-10">
         <RevealSection className="grid items-center gap-6 sm:grid-cols-[auto_1fr]">
@@ -111,7 +146,7 @@ function AboutPage() {
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            编委署名为编辑部化名。本刊实行双盲评审，真实审稿人身份仅编辑部掌握。
+            编委署名为编辑部化名。本刊实行匿名评审，审稿人身份仅编辑部掌握。
           </p>
         </RevealSection>
 
@@ -137,7 +172,7 @@ function AboutPage() {
             {[
               { icon: Newspaper, label: '刊名', value: 'Rubbish（开放获取学术期刊）' },
               { icon: Globe, label: '出版形式', value: '纯数字出版 · 滚动刊出 + 不定期合卷' },
-              { icon: ScrollText, label: '收录范围', value: '严肃格式与自由主题统一评审 · 学术/娱乐/吐槽分类呈现' },
+              { icon: ScrollText, label: '收录范围', value: '严肃格式与自由主题统一评审 · 学术/副刊/吐槽分类呈现' },
               { icon: Building2, label: '出版方', value: 'Rubbish 编辑部' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-start gap-3 rounded-lg border bg-card p-4">

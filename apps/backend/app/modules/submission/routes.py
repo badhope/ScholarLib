@@ -7,15 +7,20 @@
 
 from __future__ import annotations
 
+import mimetypes
+from pathlib import Path
+from urllib.parse import quote
+
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
     Query,
+    Response,
     status,
 )
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +30,7 @@ from app.api.deps import (
     user_has_role,
 )
 from app.core.db import get_db
+from app.core.storage import get_storage
 from app.models import Role, User, UserRole
 from app.modules.notifications import services as notifications
 from app.modules.submission._helpers import (
@@ -98,6 +104,8 @@ async def create_submission(
         venue=body.venue,
         discipline=body.discipline,
         subdiscipline=body.subdiscipline,
+        article_section=body.article_section,
+        issue_part=body.issue_part,
         keywords=body.keywords,
         jel_codes=body.jel_codes,
         tags=body.tags,
@@ -340,6 +348,53 @@ async def list_submission_versions(
     )
 
 
+@router.get("/{submission_id}/versions/{version}/file")
+async def download_submission_version(
+    submission_id: int,
+    version: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """下载某一历史版本的原件（作者本人 / 编辑 / 管理员）。"""
+    entry = await _get_or_404(db, submission_id)
+    allowed = (
+        entry.submitted_by == current_user.id
+        or current_user.is_admin
+        or await user_has_role(db, current_user, ROLE_EDITOR)
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied",
+        )
+    row = (
+        await db.execute(
+            select(SubmissionVersion).where(
+                SubmissionVersion.submission_id == entry.id,
+                SubmissionVersion.version == version,
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None or not row.file_path:
+        raise HTTPException(status_code=404, detail="该版本没有可下载的原件")
+    try:
+        data = await get_storage().load(row.file_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="该版本原件已不在存储中，无法下载；当前版本仍可正常下载",
+        ) from exc
+    name = Path(str(row.file_path)).name or f"v{version}"
+    media_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"
+        },
+    )
+
+
 @router.delete(
     "/{submission_id}",
     response_model=MessageResponse,
@@ -407,6 +462,31 @@ async def author_resubmit(
         )
     note = body.note if body else None
     entry.status = "under_review"
+    # 作者修回后，上一轮的审稿意见不能再计入新一轮闸门；否则“大修后
+    # 重投”会拿旧录用意见直接放行。旧报告保留在 review_reports 里供
+    # 追溯，但本轮 assignment 置 cancelled，必须重新送审。
+    from app.modules.review.models import ReviewAssignment as _RA
+    from sqlalchemy import update as _update
+
+    _rounds = (
+        await db.execute(
+            select(func.max(_RA.round)).where(
+                _RA.submission_id == entry.id,
+                _RA.tenant_id == entry.tenant_id,
+            )
+        )
+    ).scalar()
+    if _rounds:
+        await db.execute(
+            _update(_RA)
+            .where(
+                _RA.submission_id == entry.id,
+                _RA.tenant_id == entry.tenant_id,
+                _RA.round == _rounds,
+                _RA.status.in_(("pending", "accepted", "completed")),
+            )
+            .values(status="cancelled")
+        )
     # 快照与状态变更同事务：避免「状态翻了但没留版本」的历史空洞
     snapshot = await _snapshot_submission(db, entry, created_by=current_user.id, note=note)
     # commit 后 ORM 对象过期，异步会话下惰性刷新会炸；版本号在 commit 前取出

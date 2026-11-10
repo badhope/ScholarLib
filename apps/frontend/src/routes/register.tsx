@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AxiosError } from 'axios'
 import { toast } from 'sonner'
 import { useRegister } from '@/hooks/api/use-auth'
 import { useCapabilities } from '@/hooks/use-capabilities'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,23 @@ export function RegisterPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [captcha, setCaptcha] = useState<{ token: string; question: string } | null>(null)
+  const [captchaAnswer, setCaptchaAnswer] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void api
+      .get<{ token: string; question: string }>('/auth/captcha')
+      .then((r) => {
+        if (!cancelled) setCaptcha(r.data)
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('验证码加载失败，请刷新页面重试')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -34,7 +52,21 @@ export function RegisterPage() {
       return
     }
     try {
-      const result = await registerMut.mutateAsync({ email, username, password })
+      if (!captcha) {
+        toast.error('验证码还没加载好，请稍等或刷新页面')
+        return
+      }
+      if (!captchaAnswer.trim()) {
+        toast.error('请先回答验证码')
+        return
+      }
+      const result = await registerMut.mutateAsync({
+        email,
+        username,
+        password,
+        captcha_token: captcha.token,
+        captcha_answer: captchaAnswer.trim(),
+      })
       if (!('access_token' in result) || !result.access_token) {
         // 注册端点对成功与冲突返回同一响应（防枚举），且注册响应不再建立会话：
         // 有邮件投递 → 去验证页；否则 → 去登录页用刚设置的密码登录。
@@ -128,6 +160,18 @@ export function RegisterPage() {
                 minLength={8}
                 required
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="captcha">验证码：{captcha?.question ?? '加载中…'}</Label>
+              <Input
+                id="captcha"
+                inputMode="numeric"
+                autoComplete="off"
+                value={captchaAnswer}
+                onChange={(e) => setCaptchaAnswer(e.target.value)}
+                placeholder="填计算结果，防批量注册"
+              />
+              <p className="text-xs text-muted-foreground">自建算术题，不接第三方验证码，不产生费用。</p>
             </div>
             <Button type="submit" className="w-full" disabled={registerMut.isPending}>
               {registerMut.isPending ? '注册中…' : '注册'}

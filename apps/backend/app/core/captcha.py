@@ -15,8 +15,12 @@ is True.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import importlib
 import inspect
+import secrets
+import time
 from collections.abc import Awaitable, Callable
 from typing import Protocol, cast, runtime_checkable
 
@@ -90,6 +94,12 @@ def _resolve_verifier(dotted: str) -> CaptchaVerifier:
     if obj is None:
         raise RuntimeError(f"captcha_verifier {dotted!r} does not resolve to an attribute")
 
+    # A class is a factory, not an instance: instantiate it before the
+    # protocol check, otherwise its unbound ``verify`` is mistaken for a
+    # verifier and every call fails with "missing token".
+    if inspect.isclass(obj):
+        obj = obj()
+
     # 1) Already a verifier instance.
     if _is_verifier(obj):
         return cast("CaptchaVerifier", obj)
@@ -107,11 +117,59 @@ def _resolve_verifier(dotted: str) -> CaptchaVerifier:
     )
 
 
+# --- 自建算术验证码 ---------------------------------------------------------
+# 不依赖任何第三方 SaaS：签发一个带 HMAC 的短时 token + 一道算术题，
+# 注册时把答案一并回传。足够挡住脚本批量注册，且没有外部网络依赖。
+_CAPTCHA_TTL_SECONDS = 600
+
+
+def _captcha_sign(nonce: str, expiry: int, answer: str) -> str:
+    key = settings.secret_key.encode("utf-8")
+    msg = f"{nonce}.{expiry}.{answer}".encode("utf-8")
+    return hmac.new(key, msg, hashlib.sha256).hexdigest()[:32]
+
+
+def issue_captcha() -> dict[str, str]:
+    a = secrets.randbelow(9) + 1
+    b = secrets.randbelow(9) + 1
+    nonce = secrets.token_hex(8)
+    expiry = int(time.time()) + _CAPTCHA_TTL_SECONDS
+    answer = str(a + b)
+    return {
+        "token": f"{nonce}.{expiry}.{_captcha_sign(nonce, expiry, answer)}",
+        "question": f"{a} + {b} = ?",
+    }
+
+
+def verify_self_hosted(token: str | None, answer: str | None) -> bool:
+    if not token or not answer:
+        return False
+    try:
+        nonce, expiry_s, sig = token.split(".")
+        expiry = int(expiry_s)
+    except ValueError:
+        return False
+    if expiry < int(time.time()):
+        return False
+    expected = _captcha_sign(nonce, expiry, answer.strip())
+    return hmac.compare_digest(sig, expected)
+
+
+class SelfHostedCaptchaVerifier:
+    """Adapter so the generic CAPTCHA hook can call the self-hosted check."""
+
+    async def verify(
+        self, token: str, *, remote_ip: str | None = None, answer: str | None = None
+    ) -> bool:
+        return verify_self_hosted(token, answer)
+
+
 # Cache the configured verifier so registration requests do not re-import /
 # re-instantiate it on every call. Populated on first resolution of a
 # non-empty ``captcha_verifier``; the dev/CI passthrough is intentionally
 # NOT cached so toggling the setting mid-process is reflected immediately.
 _verifier_cache: CaptchaVerifier | None = None
+_verifier_cache_key: str | None = None
 
 
 def _load_verifier() -> CaptchaVerifier:
@@ -120,14 +178,17 @@ def _load_verifier() -> CaptchaVerifier:
     if not dotted:
         # No verifier configured: dev/CI passthrough.
         return _AlwaysPassVerifier()
-    global _verifier_cache
-    if _verifier_cache is not None:
+    global _verifier_cache, _verifier_cache_key
+    if _verifier_cache is not None and _verifier_cache_key == dotted:
         return _verifier_cache
     _verifier_cache = _resolve_verifier(dotted)
+    _verifier_cache_key = dotted
     return _verifier_cache
 
 
-async def verify_captcha_token(request: Request, token: str | None) -> None:
+async def verify_captcha_token(
+    request: Request, token: str | None, answer: str | None = None
+) -> None:
     """Validate the CAPTCHA token against the configured verifier.
 
     Call directly from the endpoint body (NOT a Depends), so the
@@ -146,7 +207,11 @@ async def verify_captcha_token(request: Request, token: str | None) -> None:
         )
     verifier = _load_verifier()
     remote_ip = request.client.host if request.client else None
-    ok = await verifier.verify(token, remote_ip=remote_ip)
+    try:
+        ok = await verifier.verify(token, remote_ip=remote_ip, answer=answer)
+    except TypeError:
+        # 兼容旧的自定义 verifier（只接收 token / remote_ip）。
+        ok = await verifier.verify(token, remote_ip=remote_ip)
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
