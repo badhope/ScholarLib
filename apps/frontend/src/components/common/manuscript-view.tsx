@@ -714,7 +714,7 @@ function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
         className="md-img-missing my-5 flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/70 bg-[repeating-linear-gradient(135deg,transparent_0,transparent_7px,color-mix(in_oklab,var(--color-muted)_35%,transparent)_7px,color-mix(in_oklab,var(--color-muted)_35%,transparent)_8px)] px-4 py-8 text-center"
       >
         <span className="font-mono text-[10px] tracking-[0.18em] text-muted-foreground/70">RUBBISH · FIGURE</span>
-        <span className="text-xs text-muted-foreground">{alt && alt !== 'figure' ? alt : '图示未随稿附上'}</span>
+        <span className="text-xs text-muted-foreground">图示未随稿附上</span>
       </span>
     )
   }

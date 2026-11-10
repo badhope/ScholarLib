@@ -36,6 +36,7 @@ describe('registration response', () => {
  })
 
  it('does not authenticate or claim automatic login for a message response', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { token: 'cap', question: '1 + 1 =' } })
   vi.spyOn(api, 'post').mockResolvedValue({ data: { message: 'generic response' } })
   render(<QueryClientProvider client={new QueryClient()}><RegisterPage /></QueryClientProvider>)
   const user = userEvent.setup()
@@ -43,6 +44,7 @@ describe('registration response', () => {
   await user.type(screen.getByLabelText('用户名'), 'testuser')
   await user.type(screen.getByLabelText('密码', { exact: true }), 'password123')
   await user.type(screen.getByLabelText('确认密码'), 'password123')
+  await user.type(screen.getByLabelText(/验证码/), '2')
   await user.click(screen.getByRole('button', { name: '注册' }))
   await waitFor(() => expect(success).toHaveBeenCalled())
   expect(success).not.toHaveBeenCalledWith('注册成功，已自动登录')
@@ -54,6 +56,7 @@ describe('registration response', () => {
 
  it('sends the user to email verification when delivery is configured', async () => {
   capabilities.emailDelivery = true
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { token: 'cap', question: '1 + 1 =' } })
   vi.spyOn(api, 'post').mockResolvedValue({ data: { message: 'generic response' } })
   render(<QueryClientProvider client={new QueryClient()}><RegisterPage /></QueryClientProvider>)
   const user = userEvent.setup()
@@ -61,6 +64,7 @@ describe('registration response', () => {
   await user.type(screen.getByLabelText('用户名'), 'testuser')
   await user.type(screen.getByLabelText('密码', { exact: true }), 'password123')
   await user.type(screen.getByLabelText('确认密码'), 'password123')
+  await user.type(screen.getByLabelText(/验证码/), '2')
   await user.click(screen.getByRole('button', { name: '注册' }))
   await waitFor(() =>
    expect(navigate).toHaveBeenCalledWith({
@@ -72,6 +76,7 @@ describe('registration response', () => {
  })
 
  it('authenticates and navigates when a token is returned', async () => {
+  vi.spyOn(api, 'get').mockResolvedValue({ data: { token: 'cap', question: '1 + 1 =' } })
   vi.spyOn(api, 'post').mockResolvedValue({ data: { access_token: 'token', user_id:1, username: 'testuser', is_admin: false, roles: [] } })
   render(<QueryClientProvider client={new QueryClient()}><RegisterPage /></QueryClientProvider>)
   const user = userEvent.setup()
@@ -79,6 +84,7 @@ describe('registration response', () => {
   await user.type(screen.getByLabelText('用户名'), 'testuser')
   await user.type(screen.getByLabelText('密码', { exact: true }), 'password123')
   await user.type(screen.getByLabelText('确认密码'), 'password123')
+  await user.type(screen.getByLabelText(/验证码/), '2')
   await user.click(screen.getByRole('button', { name: '注册' }))
   await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/dashboard' }))
   expect(useAuthStore.getState().token).toBe('token')

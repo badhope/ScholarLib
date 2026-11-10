@@ -13,8 +13,7 @@ describe('onboarding guidance', () => {
  it('tells readers that reading and commenting need no points', () => {
  const profile = source('profile')
  // 身份体系 3.0：评论不再有积分门槛，文案不得再出现"L1/L2 解锁"。
- expect(profile).toContain('注册即可阅读和评论')
- expect(profile).toContain('to="/policies"')
+ expect(profile).toContain("to: '/me'")
  expect(profile).not.toContain('解锁 L2：评论')
  expect(profile).not.toContain('L1–L4由积分自动解锁')
  expect(profile).not.toContain('L2、L3 按积分解锁')

@@ -84,10 +84,10 @@ describe('ManuscriptView', () => {
   const img = await screen.findByAltText(longAlt)
   // 模拟原图加载失败（404）
   fireEvent.error(img)
-  const placeholder = await screen.findByText('插图缺失（原图未上传）')
+  const placeholder = await screen.findByText('图示未随稿附上')
   expect(placeholder).toBeInTheDocument()
   // alt 长文本不作为可见文字渲染（只保留在 aria-label 里）
   expect(screen.queryByText(/LaTeX 公式回退内容/)).not.toBeInTheDocument()
-  expect(placeholder).toHaveAttribute('aria-label', longAlt)
+  expect(placeholder.closest('[role="img"]')).toHaveAttribute('aria-label', longAlt)
  })
 })

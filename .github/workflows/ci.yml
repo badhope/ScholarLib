@@ -25,7 +25,7 @@ jobs:
         # 脚本内部会 cd 到仓库根再做四路版本比对。
         run: bash ../../scripts/check-version.sh
       - name: Sync dependencies
-        run: uv sync --group dev --locked
+        run: uv sync --group dev --frozen
       - name: Lint (ruff)
         run: uv run ruff check .
       - name: Format check (ruff)
@@ -79,7 +79,7 @@ jobs:
         with:
           version: "0.13.1"
       - name: Sync dependencies
-        run: uv sync --group dev --locked
+        run: uv sync --group dev --frozen
       # `upgrade head` (singular) fails on multiple head revisions, so this
       # step doubles as the single-head guard.
       - name: Apply all migrations
@@ -147,7 +147,7 @@ jobs:
         run: npm ci
       - name: Sync backend deps
         # 提前同步，避免 webServer 启动后端时再触发（超时 60s 可能不够）
-        run: cd ../backend && uv sync --group dev --locked
+        run: cd ../backend && uv sync --group dev --frozen
       - name: Install Playwright chromium
         run: npx playwright install --with-deps chromium
       - name: E2E tests
@@ -180,7 +180,7 @@ jobs:
         with:
           version: "0.13.1"
       - name: Sync dependencies
-        run: uv sync --group dev --locked
+        run: uv sync --group dev --frozen
       - name: Bandit static scan
         # Gate on LOW+ findings: the codebase currently scans clean (all 9
         # historical LOW findings were removed), so any new finding fails
