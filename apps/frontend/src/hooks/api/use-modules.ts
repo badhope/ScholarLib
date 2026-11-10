@@ -1671,7 +1671,7 @@ export interface ReviewerWorkbenchResponse {
   completed: { count: number; items: ReviewerWorkbenchRow[] }
 }
 
-export interface EditorAssignmentRow extends ReviewerWorkbenchRow {}
+export type EditorAssignmentRow = ReviewerWorkbenchRow
 
 export interface EditorColumnItem {
   submission_id: number

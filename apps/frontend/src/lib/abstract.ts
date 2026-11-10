@@ -13,5 +13,6 @@ export function normalizeAbstract(text: string): string {
     .replace(/\n/g, ' ')
     // 有些摘要没有换行，直接以“。目的。”串联，也补回分段
     .replace(new RegExp(`(?<=[。；])\\s*${STRUCTURED_ABSTRACT_LABEL}[。：]`, 'g'), (m) => `\n\n${m.trim()}`)
+    // eslint-disable-next-line no-control-regex
     .replace(/\u0000/g, '\n\n')
 }

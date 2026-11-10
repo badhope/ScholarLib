@@ -198,4 +198,3 @@ export function contentTrackKind(
   // 缺省：保守按 paper 处理（本刊默认是学术刊）
   return 'paper'
 }
-

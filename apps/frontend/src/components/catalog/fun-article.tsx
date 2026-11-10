@@ -164,7 +164,7 @@ export function FunArticle({
             <span className="rounded-full bg-amber-600 px-2.5 py-1 font-medium text-white">
               {genre.emoji} {genre.label}
             </span>
-            
+
             <span>{data.year}</span>
             {data.reads != null ? <span>· 阅读 {data.reads}</span> : null}
             {data.is_special_issue ? (

@@ -517,7 +517,7 @@ export function humanizeFunMarkdown(md: string): string {
       const m = /^(#{2,4})[ \t]+(.+?)[ \t]*$/.exec(line)
       if (!m) return line
       // 去掉「1」「2.3」「一、」等论文式编号，保留标题本身
-      let title = m[2]
+      const title = m[2]
         .replace(/^\d+(?:\.\d+)*[.、]?\s*/, '')
         .replace(/^[一二三四五六七八九十]+[、.]\s*/, '')
         .trim()
@@ -554,7 +554,7 @@ export function humanizeFunMarkdown(md: string): string {
 // 整行移除；行内残留邮箱也删掉。注意不能吃掉邮箱相邻的作者名/字符。
 // 用负向后顾确保不从单词中间开始匹配（避免把 Zabwerk 削成 abwerk）。
 const EMAIL_LINE_RE =
-  /^[ \t>*\-]*\s*(?:邮箱[：:]|Email[：:]|E-mail[：:])?\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*[ \t]*$/gim
+  /^[ \t>*-]*\s*(?:邮箱[：:]|Email[：:]|E-mail[：:])?\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*[ \t]*$/gim
 // 行内邮箱：前后不能是字母数字（避免匹配到 XZabwerk@... 里的子串）
 const EMAIL_INLINE_RE = /(?<![A-Za-z0-9])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9])/g
 
@@ -763,11 +763,17 @@ function decorateInline(nodes: ReactNode): ReactNode {
 // CommonMark 的左右侧翼规则对「**作者：**马必略」这类中文相邻的强调标记
 // 常常判为不合法，结果整段显示成字面 **。这里在 mdast 文本节点上兜底：
 // 把残留的 **…** 直接转成 strong 节点，只处理文本节点，不碰代码块/公式。
+type MdNode = {
+  type?: string
+  value?: string
+  children?: MdNode[]
+}
+
 function remarkCjkStrong() {
-  return (tree: any) => {
-    const repair = (node: any) => {
+  return (tree: MdNode) => {
+    const repair = (node: MdNode) => {
       if (!Array.isArray(node.children)) return
-      const out: any[] = []
+      const out: MdNode[] = []
       for (const child of node.children) {
         if (child.type === 'text' && typeof child.value === 'string' && child.value.includes('**')) {
           const parts = child.value.split(/(\*\*[^*\n]+\*\*)/g)

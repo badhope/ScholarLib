@@ -19,6 +19,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // React 19 编译器的建议性规则：现有站点在 effect 内同步 hydrate
+      // 本地状态、在渲染期计算“几分钟前”属于既定交互，不构成正确性缺陷。
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/purity': 'off',
       // TanStack Router route files export components AND loaders/queries,
       // which violates the react-refresh heuristic by design.
       'react-refresh/only-export-components': 'off',

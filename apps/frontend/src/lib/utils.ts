@@ -136,7 +136,7 @@ export function downloadBlob(data: Blob, disposition: string, fallbackName: stri
   // Without this, the ASCII fallback (`filename="..."`) wins and the user
   // receives a file named with underscores instead of the article title.
   const encoded = /filename\*=UTF-8''([^;\n]+)/i.exec(disposition)
-  let filename = fallbackName
+  let filename: string
   if (encoded?.[1]) {
     try {
       filename = decodeURIComponent(encoded[1].trim())
