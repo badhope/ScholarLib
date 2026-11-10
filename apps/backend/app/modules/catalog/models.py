@@ -369,7 +369,9 @@ class PageView(Base, TenantScopedMixin):
         Index("ix_page_views_path", "path"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
     path: Mapped[str] = mapped_column(String(300), nullable=False)
     referrer: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
