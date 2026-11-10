@@ -1218,7 +1218,9 @@ async def _load_resource_source_pdf(
         )
         return pdf_bytes, token, "manuscript"
 
-    token = hashlib.sha1(b"source:" + str(resource_id).encode() + b":" + data).hexdigest()
+    token = hashlib.sha1(
+        b"source:" + str(resource_id).encode() + b":" + data, usedforsecurity=False
+    ).hexdigest()
     cache_dir = _export_cache_root() / "source-preview"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{token}.pdf"
@@ -1317,7 +1319,9 @@ async def _load_source_pdf_from_markdown(
     date_str = pub_date.strftime("%Y 年 %-m 月 %-d 日") if pub_date else ""
     byline = " · ".join(x for x in (authors_str, date_str) if x) or None
 
-    token = hashlib.sha1(b"source-md:" + str(resource_id).encode() + b":" + data).hexdigest()
+    token = hashlib.sha1(
+        b"source-md:" + str(resource_id).encode() + b":" + data, usedforsecurity=False
+    ).hexdigest()
     cache_dir = _export_cache_root() / "source-preview"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{token}.pdf"

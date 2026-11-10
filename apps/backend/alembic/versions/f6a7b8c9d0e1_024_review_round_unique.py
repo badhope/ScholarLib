@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import sqlalchemy as sa
+
 from alembic import op
 
 revision = "f6a7b8c9d0e1"
@@ -16,6 +18,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 历史迁移链中 round 列从未落库；补齐后再建唯一约束，保证空库可重放。
+    op.add_column(
+        "review_assignments",
+        sa.Column("round", sa.Integer(), nullable=False, server_default="1"),
+    )
     op.drop_constraint(
         "uq_review_assignment_submission_reviewer",
         "review_assignments",
