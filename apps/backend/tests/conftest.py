@@ -354,13 +354,7 @@ async def fake_email_sender() -> AsyncGenerator[FakeEmailSender, None]:
     email_module.reset_email_sender()
 
 
-async def complete_two_reviews(
-    client: AsyncClient, admin: dict, submission_id: int
-) -> None:
+async def complete_two_reviews(client: AsyncClient, admin: dict, submission_id: int) -> None:
     """两位不同审稿人都给出录用意见：发表闸门的正常路径。"""
-    await complete_one_review(
-        client, admin, submission_id, reviewer_name="reviewer_a"
-    )
-    await complete_one_review(
-        client, admin, submission_id, reviewer_name="reviewer_b"
-    )
+    await complete_one_review(client, admin, submission_id, reviewer_name="reviewer_a")
+    await complete_one_review(client, admin, submission_id, reviewer_name="reviewer_b")

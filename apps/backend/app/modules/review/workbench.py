@@ -17,7 +17,7 @@ accident (``require_reviewer`` vs ``require_editor`` on separate paths).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -36,7 +36,7 @@ from app.api.deps import (
 )
 from app.core.db import get_db
 from app.core.time import utcnow
-from app.models import AuditLog, Role, User, UserRole
+from app.models import AuditLog, User
 from app.modules.notifications import services as notifications
 from app.modules.notifications.models import EmailDigestRecord
 from app.modules.review.models import ReviewAssignment, ReviewReport
@@ -52,9 +52,10 @@ ACTIVE_ASSIGNMENT_STATUSES = ("pending", "accepted")
 # helpers
 # ---------------------------------------------------------------------------
 
+
 def _as_utc(dt: datetime | None) -> datetime | None:
     if dt is not None and dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -126,9 +127,7 @@ def _smtp_fields_configured() -> bool:
     )
 
 
-async def _email_digest_summary(
-    db: AsyncSession, tenant_id: Any, now: datetime
-) -> dict[str, Any]:
+async def _email_digest_summary(db: AsyncSession, tenant_id: Any, now: datetime) -> dict[str, Any]:
     """Honest email-digest side-channel summary for the workbench banner.
 
     - ``enabled``         — operator switch ``email_review_digest_enabled``.
@@ -206,20 +205,24 @@ async def reviewer_workbench(
     """
     now = utcnow()
     rows = (
-        await db.execute(
-            select(ReviewAssignment)
-            .where(
-                ReviewAssignment.reviewer_id == current_user.id,
-                ReviewAssignment.tenant_id == current_user.tenant_id,
+        (
+            await db.execute(
+                select(ReviewAssignment)
+                .where(
+                    ReviewAssignment.reviewer_id == current_user.id,
+                    ReviewAssignment.tenant_id == current_user.tenant_id,
+                )
+                .options(
+                    selectinload(ReviewAssignment.submission),
+                    selectinload(ReviewAssignment.reviewer),
+                    selectinload(ReviewAssignment.report),
+                )
+                .order_by(desc(ReviewAssignment.invited_at))
             )
-            .options(
-                selectinload(ReviewAssignment.submission),
-                selectinload(ReviewAssignment.reviewer),
-                selectinload(ReviewAssignment.report),
-            )
-            .order_by(desc(ReviewAssignment.invited_at))
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     pending: list[dict[str, Any]] = []
     completed: list[dict[str, Any]] = []
@@ -260,16 +263,23 @@ async def editor_workbench(
     tenant_id = require_tenant_id()
 
     submissions = (
-        await db.execute(
-            select(Submission)
-            .where(Submission.tenant_id == tenant_id)
-            .options(
-                selectinload(Submission.review_assignments)
-                .selectinload(ReviewAssignment.reviewer),
-                selectinload(Submission.review_assignments).selectinload(ReviewAssignment.report),
+        (
+            await db.execute(
+                select(Submission)
+                .where(Submission.tenant_id == tenant_id)
+                .options(
+                    selectinload(Submission.review_assignments).selectinload(
+                        ReviewAssignment.reviewer
+                    ),
+                    selectinload(Submission.review_assignments).selectinload(
+                        ReviewAssignment.report
+                    ),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     # 一次性取所有 report，避免 N+1
     sub_ids = [s.id for s in submissions]
@@ -285,7 +295,7 @@ async def editor_workbench(
                 )
             )
         ).all()
-        for rep, sid, rid in rep_rows:
+        for rep, sid, _rid in rep_rows:
             reports_by_submission.setdefault(sid, []).append(rep)
 
     to_assign: list[dict[str, Any]] = []
@@ -330,10 +340,7 @@ async def editor_workbench(
             bucket["is_overdue"] = has_overdue
             if len(distinct_done) >= 2:
                 # 汇总各审稿意见供裁决
-                recs = [
-                    {"reviewer_id": a.reviewer_id, "recommendation": _rec_of(a)}
-                    for a in done
-                ]
+                recs = [{"reviewer_id": a.reviewer_id, "recommendation": _rec_of(a)} for a in done]
                 bucket["recommendations"] = recs
                 to_decide.append(bucket)
             else:
@@ -393,13 +400,17 @@ async def editor_email_digest_records(
         where.append(EmailDigestRecord.status == status)
 
     rows = (
-        await db.execute(
-            select(EmailDigestRecord)
-            .where(*where)
-            .order_by(desc(EmailDigestRecord.created_at))
-            .limit(limit)
+        (
+            await db.execute(
+                select(EmailDigestRecord)
+                .where(*where)
+                .order_by(desc(EmailDigestRecord.created_at))
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return {
         "count": len(rows),
@@ -466,9 +477,7 @@ async def batch_assign(
             skipped.append({"submission_id": item.submission_id, "reason": "not_found"})
             continue
         if sub.status not in ("pending", "under_review", "resubmitted"):
-            skipped.append(
-                {"submission_id": item.submission_id, "reason": f"status_{sub.status}"}
-            )
+            skipped.append({"submission_id": item.submission_id, "reason": f"status_{sub.status}"})
             continue
 
         for rid in item.reviewer_ids:
@@ -492,7 +501,11 @@ async def batch_assign(
             ).scalar_one_or_none()
             if reviewer is None:
                 skipped.append(
-                    {"submission_id": item.submission_id, "reviewer_id": rid, "reason": "reviewer_not_found"}
+                    {
+                        "submission_id": item.submission_id,
+                        "reviewer_id": rid,
+                        "reason": "reviewer_not_found",
+                    }
                 )
                 continue
             if not (
@@ -500,7 +513,11 @@ async def batch_assign(
                 or await user_has_role(db, reviewer, ROLE_SENIOR_REVIEWER)
             ):
                 skipped.append(
-                    {"submission_id": item.submission_id, "reviewer_id": rid, "reason": "not_a_reviewer"}
+                    {
+                        "submission_id": item.submission_id,
+                        "reviewer_id": rid,
+                        "reason": "not_a_reviewer",
+                    }
                 )
                 continue
 
@@ -547,7 +564,10 @@ async def batch_assign(
             from app.core.email_templates import review_assigned
 
             subject, text, html = review_assigned(
-                reviewer.username, sub.title, f"{settings.frontend_base_url.rstrip('/')}/review/assignments", body.due_days
+                reviewer.username,
+                sub.title,
+                f"{settings.frontend_base_url.rstrip('/')}/review/assignments",
+                body.due_days,
             )
             await notifications.record_email_digest(
                 db,
@@ -647,7 +667,9 @@ async def check_conflicts(
         if name_match:
             warnings.append("与稿件作者同名：疑似共同作者/自审")
         if own_count > 0:
-            warnings.append(f"该用户已有 {own_count} 篇投稿（同单位/利益相关无法自动判定，请人工复核）")
+            warnings.append(
+                f"该用户已有 {own_count} 篇投稿（同单位/利益相关无法自动判定，请人工复核）"
+            )
 
         # 默认不选：命中作者/共同作者硬警告；仅"已有投稿"黄警仍默选，由编辑人工决定。
         default_selected = not (is_submitter or name_match)

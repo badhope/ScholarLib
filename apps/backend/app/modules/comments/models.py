@@ -17,9 +17,9 @@ without metadata gymnastics.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, String
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.time import utcnow
@@ -53,13 +53,11 @@ class Comment(Base, TenantScopedMixin):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="published", server_default="published"
     )
-    moderated_by: Mapped[Optional[int]] = mapped_column(
+    moderated_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    moderated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    moderation_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    moderated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    moderation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index("ix_comments_tenant_resource_created", "tenant_id", "resource_id", created_at.desc()),

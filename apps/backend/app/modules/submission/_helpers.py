@@ -207,7 +207,9 @@ def _to_response(entry: Submission, review_stats: dict | None = None) -> Submiss
     )
 
 
-async def _review_stats_for_submissions(db: AsyncSession, ids: list[int], tenant_id: str) -> dict[int, dict]:
+async def _review_stats_for_submissions(
+    db: AsyncSession, ids: list[int], tenant_id: str
+) -> dict[int, dict]:
     """批量算当前轮审稿进度，避免列表把“已有 1 份意见”显示成 0。"""
     if not ids:
         return {}
@@ -341,7 +343,11 @@ async def _list_submissions(
         order_by=(desc(Submission.submitted_at), Submission.id.asc()),
     )
     tenant_id = rows[0].tenant_id if rows else None
-    stats = await _review_stats_for_submissions(db, [r.id for r in rows], tenant_id) if tenant_id else {}
+    stats = (
+        await _review_stats_for_submissions(db, [r.id for r in rows], tenant_id)
+        if tenant_id
+        else {}
+    )
     return SubmissionListResponse(
         data=[_to_response(r, stats.get(r.id)) for r in rows],
         meta=meta,

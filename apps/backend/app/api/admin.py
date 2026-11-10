@@ -237,9 +237,7 @@ async def set_user_admin(
             detail="不能修改自己的管理员状态（避免把自己锁在门外）",
         )
     tenant_id = require_tenant_id()
-    result = await db.execute(
-        select(User).where(User.id == user_id, User.tenant_id == tenant_id)
-    )
+    result = await db.execute(select(User).where(User.id == user_id, User.tenant_id == tenant_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -866,9 +864,7 @@ async def assign_owner(
     tenant_id = require_tenant_id()
     resource = (
         await db.execute(
-            select(Resource).where(
-                Resource.id == resource_id, Resource.tenant_id == tenant_id
-            )
+            select(Resource).where(Resource.id == resource_id, Resource.tenant_id == tenant_id)
         )
     ).scalar_one_or_none()
     if resource is None:
@@ -893,7 +889,11 @@ async def assign_owner(
         )
     )
     await db.commit()
-    return {"resource_id": resource_id, "owner_id": body.user_id, "author_position": body.author_position}
+    return {
+        "resource_id": resource_id,
+        "owner_id": body.user_id,
+        "author_position": body.author_position,
+    }
 
 
 class AuthorInput(BaseModel):
@@ -913,17 +913,24 @@ def _validate_authors(authors: list[AuthorInput]) -> None:
     通讯位 email 格式合法。"""
     orders = [a.order for a in authors]
     if sorted(orders) != list(range(1, len(authors) + 1)):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="order 必须从 1 连续且唯一")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="order 必须从 1 连续且唯一"
+        )
     first = [a for a in authors if "first" in a.roles]
     if len(first) != 1:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="必须有且仅有一位第一作者")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="必须有且仅有一位第一作者"
+        )
     corr = [a for a in authors if "corresponding" in a.roles]
     if len(corr) > 1:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="通讯作者至多一位")
     import re
+
     for a in corr:
         if a.email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", a.email):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="通讯作者邮箱格式不合法")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="通讯作者邮箱格式不合法"
+            )
 
 
 @router.put("/resources/{resource_id}/authors")
@@ -939,9 +946,7 @@ async def edit_resource_authors(
     tenant_id = require_tenant_id()
     resource = (
         await db.execute(
-            select(Resource).where(
-                Resource.id == resource_id, Resource.tenant_id == tenant_id
-            )
+            select(Resource).where(Resource.id == resource_id, Resource.tenant_id == tenant_id)
         )
     ).scalar_one_or_none()
     if resource is None:

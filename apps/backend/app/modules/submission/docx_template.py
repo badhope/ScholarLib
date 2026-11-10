@@ -27,6 +27,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import base64
 import io
 import re
@@ -34,7 +36,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from docx import Document
-from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
 from docx.oxml import OxmlElement
@@ -82,8 +83,15 @@ class Meta:
     track: str = ""
 
 
-def _set_font(run, *, name: str, size: float, bold: bool = False, italic: bool = False,
-              latin: str | None = None) -> None:
+def _set_font(
+    run: Any,
+    *,
+    name: str,
+    size: float,
+    bold: bool = False,
+    italic: bool = False,
+    latin: str | None = None,
+) -> None:
     latin_font = latin or LATIN_FONT
     run.font.name = latin_font if not re.search(r"[\u4e00-\u9fff]", run.text or "") else name
     run.font.size = Pt(size)
@@ -100,8 +108,15 @@ def _set_font(run, *, name: str, size: float, bold: bool = False, italic: bool =
     fonts.set(qn("w:hAnsi"), latin_font)
 
 
-def _para(doc, *, align=WD_ALIGN_PARAGRAPH.JUSTIFY, indent_chars=0.0, before=0.0, after=0.0,
-          line=1.5):
+def _para(
+    doc: Any,
+    *,
+    align: Any = WD_ALIGN_PARAGRAPH.JUSTIFY,
+    indent_chars: float = 0.0,
+    before: float = 0.0,
+    after: float = 0.0,
+    line: float = 1.5,
+) -> Any:
     p = doc.add_paragraph()
     pf = p.paragraph_format
     p.alignment = align
@@ -113,7 +128,7 @@ def _para(doc, *, align=WD_ALIGN_PARAGRAPH.JUSTIFY, indent_chars=0.0, before=0.0
     return p
 
 
-def _page_number_footer(section) -> None:
+def _page_number_footer(section: Any) -> None:
     p = section.footer.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
@@ -128,7 +143,7 @@ def _page_number_footer(section) -> None:
     _set_font(run, name=BODY_FONT, size=CAPTION_PT)
 
 
-def _green_rule(paragraph, *, size: str = "8") -> None:
+def _green_rule(paragraph: Any, *, size: str = "8") -> None:
     """给段落加一条回收绿下边线（页眉、篇名用）。"""
     ppr = paragraph._p.get_or_add_pPr()
     borders = OxmlElement("w:pBdr")
@@ -141,7 +156,7 @@ def _green_rule(paragraph, *, size: str = "8") -> None:
     ppr.append(borders)
 
 
-def _brand_header(section, title: str) -> None:
+def _brand_header(section: Any, title: str) -> None:
     """页眉：绿色回收标 + 绿色刊名 + 篇名，下方一条品牌细线。
 
     logo 缺失时静默退化为纯文字刊头，绝不让下载接口因素材问题 500。
@@ -167,7 +182,7 @@ def _brand_header(section, title: str) -> None:
     _green_rule(p)
 
 
-def _three_line_table(table) -> None:
+def _three_line_table(table: Any) -> None:
     """三线表：顶线与底线 1.5pt，表头下 0.75pt，其余不画。"""
     tbl = table._tbl
     tblPr = tbl.tblPr
@@ -229,7 +244,7 @@ def _clean_inline(text: str) -> str:
     return _MATH_DOLLAR.sub(r"\1", text)
 
 
-def _add_inline(p, text: str, *, size: float = BODY_PT, name: str = BODY_FONT) -> None:
+def _add_inline(p: Any, text: str, *, size: float = BODY_PT, name: str = BODY_FONT) -> None:
     # 来源稿里大量跨段落的残破 `**` 无法与正文配对；宁可放弃少量粗体，
     # 也不能让 Word 下载件里印出 Markdown 符号。
     text = text.replace("```", "")
@@ -237,23 +252,30 @@ def _add_inline(p, text: str, *, size: float = BODY_PT, name: str = BODY_FONT) -
         if not part:
             continue
         if part.startswith("**") and part.endswith("**"):
-            r = p.add_run(part[2:-2]); _set_font(r, name=name, size=size, bold=True)
+            r = p.add_run(part[2:-2])
+            _set_font(r, name=name, size=size, bold=True)
         elif part.startswith("*") and part.endswith("*") and len(part) > 2:
-            r = p.add_run(part[1:-1]); _set_font(r, name=name, size=size, italic=True)
+            r = p.add_run(part[1:-1])
+            _set_font(r, name=name, size=size, italic=True)
         elif part.startswith("~~") and part.endswith("~~"):
-            r = p.add_run(part[2:-2]); _set_font(r, name=name, size=size); r.font.strike = True
+            r = p.add_run(part[2:-2])
+            _set_font(r, name=name, size=size)
+            r.font.strike = True
         elif part.startswith("`") and part.endswith("`"):
             # 行内码：西文也要等宽，不能被 _set_font 的 DejaVu Serif 回退吃掉。
-            r = p.add_run(part[1:-1]); _set_font(r, name="DejaVu Sans Mono", size=size, latin="DejaVu Sans Mono")
+            r = p.add_run(part[1:-1])
+            _set_font(r, name="DejaVu Sans Mono", size=size, latin="DejaVu Sans Mono")
         elif part.startswith(("《", "「", "“")):
             # 书名号/中文引号：按国内出版惯例走楷体，不用西文斜体硬套中文；
             # 书名额外用品牌墨绿点出，与页面上的「书名」语义一致。
-            r = p.add_run(part); _set_font(r, name=AUTHOR_FONT, size=size)
+            r = p.add_run(part)
+            _set_font(r, name=AUTHOR_FONT, size=size)
             if part.startswith("《"):
                 r.font.color.rgb = BRAND_DARK
-        elif (tag := _TAG_INNER.match(part)):
+        elif tag := _TAG_INNER.match(part):
             kind, inner = tag.group(1).lower(), tag.group(2)
-            r = p.add_run(inner); _set_font(r, name=name, size=size)
+            r = p.add_run(inner)
+            _set_font(r, name=name, size=size)
             if kind == "u":
                 r.font.underline = True
             elif kind == "mark":
@@ -271,17 +293,20 @@ def _add_inline(p, text: str, *, size: float = BODY_PT, name: str = BODY_FONT) -
             plain = re.sub(r"\s*\*{1,2}$", "", plain)
             if not plain:
                 continue
-            r = p.add_run(plain); _set_font(r, name=name, size=size)
+            r = p.add_run(plain)
+            _set_font(r, name=name, size=size)
 
 
-def _add_picture(doc, src: str, base_dir: Path | None) -> bool:
+def _add_picture(doc: Any, src: str, base_dir: Path | None) -> bool:
     try:
         if src.startswith("data:"):
             raw = base64.b64decode(src.split("base64,", 1)[1])
             doc.add_picture(io.BytesIO(raw), width=Cm(14.0))
-        elif src.startswith("/api/catalog/") or src.startswith(
-            "https://rubbish.argjiemi.cn/api/catalog/"
-        ) or src.startswith(("http://", "https://")):
+        elif (
+            src.startswith("/api/catalog/")
+            or src.startswith("https://rubbish.argjiemi.cn/api/catalog/")
+            or src.startswith(("http://", "https://"))
+        ):
             # 网页正文里的图片常写成 `/api/catalog/{rid}/img/{n}`。此前模板
             # 只认 data URI 和本地路径，这类引用会在 Word/PDF 里静默丢图，
             # 造成网页有图、下载件没图。这里按同站图片端点取回字节。
@@ -312,8 +337,14 @@ def _add_picture(doc, src: str, base_dir: Path | None) -> bool:
         return False
 
 
-def _caption(doc, text: str, *, above: bool = False) -> None:
-    p = _para(doc, align=WD_ALIGN_PARAGRAPH.CENTER, before=0 if above else 3, after=6 if above else 10, line=1.0)
+def _caption(doc: Any, text: str, *, above: bool = False) -> None:
+    p = _para(
+        doc,
+        align=WD_ALIGN_PARAGRAPH.CENTER,
+        before=0 if above else 3,
+        after=6 if above else 10,
+        line=1.0,
+    )
     _add_inline(p, text, size=CAPTION_PT)
 
 
@@ -337,8 +368,23 @@ def _plain_pipe_row(text: str) -> bool:
     return True
 
 
-
-_BACK_MATTER = ("参考文献", "致谢", "附录", "后记", "作者贡献", "利益冲突", "数据可用性", "数据与材料说明", "伦理声明", "伦理与数据声明", "作者回复", "审稿意见", "声明", "基金", "资助")
+_BACK_MATTER = (
+    "参考文献",
+    "致谢",
+    "附录",
+    "后记",
+    "作者贡献",
+    "利益冲突",
+    "数据可用性",
+    "数据与材料说明",
+    "伦理声明",
+    "伦理与数据声明",
+    "作者回复",
+    "审稿意见",
+    "声明",
+    "基金",
+    "资助",
+)
 _TOP_NUM = re.compile(r"^(?:\d+[.、]?\s|一、|二、|三、|四、|五、|六、|七、|八、|九、|十、)")
 
 
@@ -383,7 +429,9 @@ def _normalize_heading_levels(md: str) -> str:
         if text.startswith(_BACK_MATTER):
             continue
         seq += 1
-        cleaned = re.sub(r"^(?:\d+[\.、]?\s*|一、|二、|三、|四、|五、|六、|七、|八、|九、|十、)", "", text).strip()
+        cleaned = re.sub(
+            r"^(?:\d+[\.、]?\s*|一、|二、|三、|四、|五、|六、|七、|八、|九、|十、)", "", text
+        ).strip()
         lines[idx] = f"# {seq} {cleaned}"
     # 旧稿把标题粘在段落末尾（“。##### 10.1.4.2 全文强制…”），只换行不
     # 拆开会让 `#####` 原样印进 PDF（295 实锤）。仅在句末标点后拆。
@@ -423,9 +471,7 @@ def _is_title_line(text: str, meta: Meta) -> bool:
     return SequenceMatcher(None, key, tkey).ratio() >= 0.82
 
 
-_AUTHORISH = re.compile(
-    r"(通讯作者|作者简介|收稿日期|基金项目|E-?mail|邮箱|@|†)"
-)
+_AUTHORISH = re.compile(r"(通讯作者|作者简介|收稿日期|基金项目|E-?mail|邮箱|@|†)")
 
 
 def _clean_body_start(md: str, meta: Meta) -> str:
@@ -458,13 +504,22 @@ def _clean_body_start(md: str, meta: Meta) -> str:
             # 没有 Markdown 标题，前置块剥离抓不到（77 实锤：篇名以
             # “篇名M uzi”形式在导读上方重复一次）。只在 4 行内出现明显
             # 作者行且后面紧跟章节时才丢，避免吃掉真正的开篇段落。
-            nxt = next((l.strip() for l in lines[i + 1:] if l.strip()), "")
-            head_idx = next((k for k in range(i + 1, min(len(lines), i + 5))
-                             if re.match(r"^#{1,6}\s+", lines[k].strip())), None)
+            nxt = next((line.strip() for line in lines[i + 1 :] if line.strip()), "")
+            head_idx = next(
+                (
+                    k
+                    for k in range(i + 1, min(len(lines), i + 5))
+                    if re.match(r"^#{1,6}\s+", lines[k].strip())
+                ),
+                None,
+            )
             if (
                 head_idx is not None
                 and nxt
-                and (_AUTHORISH.search(nxt) or re.match(r"^[\w\u4e00-\u9fff·\- ]{2,40}[¹²³⁴\*†,]+", nxt))
+                and (
+                    _AUTHORISH.search(nxt)
+                    or re.match(r"^[\w\u4e00-\u9fff·\- ]{2,40}[¹²³⁴\*†,]+", nxt)
+                )
                 and len(nxt) <= 80
                 and (len(first) >= 12 or re.search(r"[A-Za-z]", first))
             ):
@@ -473,8 +528,11 @@ def _clean_body_start(md: str, meta: Meta) -> str:
             break
         plain = hm.group(1).strip()
         nxt_head = next(
-            (re.sub(r"^#{1,6}\s*", "", l.strip()).strip()
-             for l in lines[i + 1:] if re.match(r"^#{1,6}\s+", l.strip())),
+            (
+                re.sub(r"^#{1,6}\s*", "", line.strip()).strip()
+                for line in lines[i + 1 :]
+                if re.match(r"^#{1,6}\s+", line.strip())
+            ),
             "",
         )
         title_like = (not _SECTION_WORD.match(plain)) and (
@@ -482,10 +540,7 @@ def _clean_body_start(md: str, meta: Meta) -> str:
             or (
                 len(plain) >= 12
                 and nxt_head
-                and (
-                    _SECTION_WORD.match(nxt_head)
-                    or re.match(r"^\d+[\.、]?\s+", nxt_head)
-                )
+                and (_SECTION_WORD.match(nxt_head) or re.match(r"^\d+[\.、]?\s+", nxt_head))
             )
         )
         if not title_like:
@@ -507,11 +562,7 @@ def _clean_body_start(md: str, meta: Meta) -> str:
                 or re.match(r"^[\w\u4e00-\u9fff·\- ]{2,40}[¹²³⁴\*†,，]+", st)
             )
             # 标题后、第一节前的纯关键词行（151 这类）
-            is_kw = (
-                ("；" in st or ";" in st)
-                and "。" not in st
-                and len(st) <= 120
-            )
+            is_kw = ("；" in st or ";" in st) and "。" not in st and len(st) <= 120
             if is_author or is_kw:
                 del lines[i]
                 continue
@@ -541,10 +592,11 @@ def _strip_front_matter(md: str, meta: Meta) -> str:
             # 作者行。这样 287/286 这类中英标题不一致的旧稿也不会把篇名
             # 当成“1 论文可以水到什么地步”的正文一级章节。
             _plain = re.sub(r"^#{1,6}\s*", "", first).strip()
-            _nxt = next((l.strip() for l in lines[i + 1:] if l.strip()), "")
+            _nxt = next((line.strip() for line in lines[i + 1 :] if line.strip()), "")
             _heads = [
-                re.sub(r"^#{1,6}\s*", "", l.strip()).strip()
-                for l in lines[i + 1:] if re.match(r"^#{1,6}\s+", l.strip())
+                re.sub(r"^#{1,6}\s*", "", line.strip()).strip()
+                for line in lines[i + 1 :]
+                if re.match(r"^#{1,6}\s+", line.strip())
             ]
             _next_head = _heads[0] if _heads else ""
             _long_title = (
@@ -639,7 +691,13 @@ _FUN_HEADING_RULES: list[tuple[re.Pattern[str], str | None]] = [
     (re.compile(r"^(数据来源与采集边界)$"), "数据哪来的"),
     (re.compile(r"^(引言|绪论|前言|导论)(?:[：:].*)?$"), "开场"),
     (re.compile(r"^(文献综述|相关工作|Related Work)$", re.I), "前情提要"),
-    (re.compile(r"^(研究设计与方法|研究方法|方法|材料与方法|Methods?|Methodology|Materials and Methods)$", re.I), "怎么玩的"),
+    (
+        re.compile(
+            r"^(研究设计与方法|研究方法|方法|材料与方法|Methods?|Methodology|Materials and Methods)$",
+            re.I,
+        ),
+        "怎么玩的",
+    ),
     (re.compile(r"^(研究设计|实验设计|实验设置|Experimental Setup)$", re.I), "怎么搭的"),
     (re.compile(r"^(核心概念界定与理论基础|概念界定)$"), "先把词说清"),
     (re.compile(r"^(核心概念界定)$"), "语言通胀是个啥"),
@@ -673,7 +731,13 @@ _FUN_HEADING_RULES: list[tuple[re.Pattern[str], str | None]] = [
     (re.compile(r"^(关键词|关键字|Keywords?)$", re.I), None),
     (re.compile(r"^(参考文献|References?|Bibliography)$", re.I), None),
     (re.compile(r"^(致谢|Acknowledg(e)?ments?)$", re.I), None),
-    (re.compile(r"^(声明|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \t\u3000]*使用声明?)$", re.I), None),
+    (
+        re.compile(
+            r"^(声明|作者贡献|作者声明|贡献声明|利益冲突|基金项目?|资助|数据可用性|伦理声明|AI[ \t\u3000]*使用声明?)$",
+            re.I,
+        ),
+        None,
+    ),
 ]
 
 _FUN_FALLBACK_RULES: list[tuple[re.Pattern[str], str]] = [
@@ -726,6 +790,7 @@ def _dedupe_essay_against_abstract(md: str, abstract: str | None) -> str:
         kept.append(block)
     return "\n\n".join(kept)
 
+
 def _essayize(md: str, abstract: str | None = None) -> str:
     """副刊去论文范式：去作者上标块、去重复导读、改写小节标题、丢学术声明。"""
     md = re.sub(
@@ -775,6 +840,7 @@ def _essayize(md: str, abstract: str | None = None) -> str:
             continue
         out.append(f"{level} {mapped}")
     return "\n".join(out)
+
 
 def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
     md = _normalize_heading_levels(_clean_body_start(_strip_front_matter(md, meta), meta))
@@ -945,7 +1011,11 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
             continue
 
         # 表格：标准 Markdown 分隔线，或旧稿里丢了分隔线的纯文字 | a | b | c | 行
-        _std_table = t.startswith("|") and i + 1 < len(lines) and re.match(r"^\|[\s:|-]+\|$", lines[i + 1].strip())
+        _std_table = (
+            t.startswith("|")
+            and i + 1 < len(lines)
+            and re.match(r"^\|[\s:|-]+\|$", lines[i + 1].strip())
+        )
         _bare_table = _plain_pipe_row(t)
         if _std_table or _bare_table:
             rows: list[list[str]] = []
@@ -1010,9 +1080,13 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
         cap_t = re.sub(r"^\*{1,2}\s*", "", t)
         _caption_like = len(cap_t) <= 140 and "。" not in cap_t
         if _caption_like and re.match(r"^(图|附图)\s*\d", cap_t):
-            _caption(doc, cap_t, above=False); i += 1; continue
+            _caption(doc, cap_t, above=False)
+            i += 1
+            continue
         if _caption_like and re.match(r"^(表|附表)\s*\d", cap_t):
-            _caption(doc, cap_t, above=True); i += 1; continue
+            _caption(doc, cap_t, above=True)
+            i += 1
+            continue
 
         # 参考文献条目
         if re.match(r"^\[?\d{1,3}[\]\.、)]\s", t):
@@ -1036,8 +1110,10 @@ def build(md: str, meta: Meta, *, base_dir: Path | None = None) -> bytes:
         # 正文段（把软换行合回一段）
         para = [t]
         j = i + 1
-        while j < len(lines) and lines[j].strip() and not re.match(
-            r"^(#|\||[-*•]\s|\d+[\.、\)]\s|!\[|图\s*\d|表\s*\d)", lines[j].strip()
+        while (
+            j < len(lines)
+            and lines[j].strip()
+            and not re.match(r"^(#|\||[-*•]\s|\d+[\.、\)]\s|!\[|图\s*\d|表\s*\d)", lines[j].strip())
         ):
             _cont = re.sub(r"\[(?:图|图片|image)\]", "", lines[j].strip(), flags=re.I).strip()
             if _cont:
@@ -1059,6 +1135,7 @@ def _patch_theme(blob: bytes) -> bytes:
     一并换掉，避免模板在别人机器上又回退到商业字库。
     """
     import zipfile
+
     src = io.BytesIO(blob)
     out = io.BytesIO()
     mapping = {
@@ -1106,7 +1183,9 @@ def parse_meta(md: str, fallback_title: str = "") -> Meta:
     for ln in lines:
         m = re.match(r"^\**\s*关键词[：:]\**\s*(.+)$", ln.strip())
         if m:
-            meta.keywords = [k.strip(" 　*~") for k in re.split(r"[；;]", m.group(1)) if k.strip(" 　*~")]
+            meta.keywords = [
+                k.strip(" 　*~") for k in re.split(r"[；;]", m.group(1)) if k.strip(" 　*~")
+            ]
             break
     return meta
 

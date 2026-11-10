@@ -4,6 +4,7 @@
 原来的 (submission_id, reviewer_id) 唯一约束会拦住这次邀请，故改为
 (submission_id, reviewer_id, round)。
 """
+
 from __future__ import annotations
 
 from alembic import op

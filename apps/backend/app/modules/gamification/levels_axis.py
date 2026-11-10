@@ -28,7 +28,11 @@ Identity = Literal["author", "reviewer", "editor"]
 POINT_RULES: dict[str, dict[str, object]] = {
     "claim.approve": {"identity": "author", "delta": 20, "label": "认领审核通过"},
     "submission.accepted": {"identity": "author", "delta": 60, "label": "正式论文录用"},
-    "submission.accepted.essay": {"identity": "author", "delta": 0, "label": "娱乐/吐槽稿录用（仅记活跃度）"},
+    "submission.accepted.essay": {
+        "identity": "author",
+        "delta": 0,
+        "label": "娱乐/吐槽稿录用（仅记活跃度）",
+    },
     "review.completed": {"identity": "reviewer", "delta": 1, "label": "完成审稿报告"},
     "editor.decision": {"identity": "editor", "delta": 8, "label": "编辑裁决"},
 }
@@ -90,9 +94,7 @@ def next_threshold(identity: str, points: int) -> tuple[int | None, int]:
     return None, 0
 
 
-async def _get_level_row(
-    db: AsyncSession, user: User, identity: str
-) -> UserLevel:
+async def _get_level_row(db: AsyncSession, user: User, identity: str) -> UserLevel:
     row = (
         await db.execute(
             select(UserLevel).where(
@@ -173,9 +175,7 @@ async def award_points(
     return True
 
 
-async def level_snapshot(
-    db: AsyncSession, user: User, identity: str
-) -> dict[str, object]:
+async def level_snapshot(db: AsyncSession, user: User, identity: str) -> dict[str, object]:
     """某身份的等级快照：level/文案/points/下一档/距下一档。"""
     row = (
         await db.execute(
@@ -206,11 +206,7 @@ async def level_snapshot(
         "next_threshold": nxt,
         "to_next": to_next,
         # 进度条：当前档内已走过的比例（满级=1）。
-        "progress": (
-            1.0
-            if nxt is None
-            else (points - floor) / max(1, (ceiling - floor) + 1)
-        ),
+        "progress": (1.0 if nxt is None else (points - floor) / max(1, (ceiling - floor) + 1)),
     }
 
 
@@ -218,17 +214,21 @@ async def recent_events(
     db: AsyncSession, user: User, identity: str, limit: int = 20
 ) -> list[dict[str, object]]:
     rows = (
-        await db.execute(
-            select(PointEvent)
-            .where(
-                PointEvent.tenant_id == user.tenant_id,
-                PointEvent.user_id == user.id,
-                PointEvent.identity == identity,
+        (
+            await db.execute(
+                select(PointEvent)
+                .where(
+                    PointEvent.tenant_id == user.tenant_id,
+                    PointEvent.user_id == user.id,
+                    PointEvent.identity == identity,
+                )
+                .order_by(PointEvent.created_at.desc(), PointEvent.id.desc())
+                .limit(limit)
             )
-            .order_by(PointEvent.created_at.desc(), PointEvent.id.desc())
-            .limit(limit)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [
         {
             "reason": e.reason,

@@ -3,9 +3,11 @@
 主编可以指定外省/外单位的外审专家。这里只记录这次邀请的性质，
 不改变账号体系；第三方裁决人继续复用 is_adjudicator。
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "d3e4f5a6b7c8"

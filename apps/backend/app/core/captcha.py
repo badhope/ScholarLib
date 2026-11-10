@@ -125,7 +125,7 @@ _CAPTCHA_TTL_SECONDS = 600
 
 def _captcha_sign(nonce: str, expiry: int, answer: str) -> str:
     key = settings.secret_key.encode("utf-8")
-    msg = f"{nonce}.{expiry}.{answer}".encode("utf-8")
+    msg = f"{nonce}.{expiry}.{answer}".encode()
     return hmac.new(key, msg, hashlib.sha256).hexdigest()[:32]
 
 

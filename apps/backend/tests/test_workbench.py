@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Role, Tenant, UserRole
-from app.modules.notifications.models import EmailDigestRecord, Notification
+from app.modules.notifications.models import EmailDigestRecord
 
 _PAYLOAD = {
     "title": "Workbench Split Test",
@@ -35,7 +35,9 @@ _PAYLOAD = {
 }
 
 
-async def _create_submission(client: AsyncClient, user: dict, title: str = "Workbench Split Test") -> dict:
+async def _create_submission(
+    client: AsyncClient, user: dict, title: str = "Workbench Split Test"
+) -> dict:
     body = {**_PAYLOAD, "title": title, "doi": f"10.1234/wb.{abs(hash(title)) % 100000}"}
     resp = await client.post("/api/submissions", json=body, headers=auth_headers(user))
     resp.raise_for_status()
@@ -44,9 +46,7 @@ async def _create_submission(client: AsyncClient, user: dict, title: str = "Work
 
 async def _grant_role(db: AsyncSession, tenant: Tenant, user_id: int, role_name: str) -> None:
     role = (
-        await db.execute(
-            select(Role).where(Role.tenant_id == tenant.id, Role.name == role_name)
-        )
+        await db.execute(select(Role).where(Role.tenant_id == tenant.id, Role.name == role_name))
     ).scalar_one_or_none()
     if role is None:
         role = Role(tenant_id=tenant.id, name=role_name, description=f"test {role_name}")
@@ -66,7 +66,9 @@ async def _grant_role(db: AsyncSession, tenant: Tenant, user_id: int, role_name:
         await db.flush()
 
 
-async def _register_reviewer(client: AsyncClient, db_session: AsyncSession, tenant: Tenant, suffix: str) -> dict:
+async def _register_reviewer(
+    client: AsyncClient, db_session: AsyncSession, tenant: Tenant, suffix: str
+) -> dict:
     from conftest import register_user
 
     user = await register_user(
@@ -132,18 +134,31 @@ async def test_reviewer_workbench_completed_column(
     sub = await _create_submission(client, test_user, "WB completed item")
     batch = await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 7},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 7,
+        },
         headers=auth_headers(admin_user),
     )
     assignment_id = batch.json()["created"][0]["assignment_id"]
 
     # accept + submit report
-    await client.post(f"/api/review/assignments/{assignment_id}/accept", headers=auth_headers(reviewer))
+    await client.post(
+        f"/api/review/assignments/{assignment_id}/accept", headers=auth_headers(reviewer)
+    )
     rep = await client.post(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "minor_revision",
-            "scores": {"problem": 3, "argument": 3, "method": 3, "evidence": 3, "novelty": 3, "integrity": 5, "presentation": 3},
+            "scores": {
+                "problem": 3,
+                "argument": 3,
+                "method": 3,
+                "evidence": 3,
+                "novelty": 3,
+                "integrity": 5,
+                "presentation": 3,
+            },
             "comments_to_author": "ok",
         },
         headers=auth_headers(reviewer),
@@ -183,7 +198,10 @@ async def test_editor_workbench_four_columns(
     # 指派后 → 进入评审中
     await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 7},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 7,
+        },
         headers=auth_headers(admin_user),
     )
     wb2 = await client.get("/api/editor/workbench", headers=auth_headers(admin_user))
@@ -232,10 +250,14 @@ async def test_batch_assign_creates_records_and_notifications(
     # 邮件摘要落库（SMTP 未配置 → skipped_no_smtp，不假装已发）
     db_session.expire_all()
     digests = (
-        await db_session.execute(
-            select(EmailDigestRecord).where(EmailDigestRecord.user_id == reviewer["user_id"])
+        (
+            await db_session.execute(
+                select(EmailDigestRecord).where(EmailDigestRecord.user_id == reviewer["user_id"])
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(digests) == 2
     assert all(d.event_type == "assigned" for d in digests)
     assert all(d.status == "skipped_no_smtp" for d in digests)
@@ -269,7 +291,10 @@ async def test_manual_remind(
     sub = await _create_submission(client, test_user, "WB remind")
     batch = await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 3},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 3,
+        },
         headers=auth_headers(admin_user),
     )
     assignment_id = batch.json()["created"][0]["assignment_id"]
@@ -303,7 +328,10 @@ async def test_notification_category_filter_and_read_state(
     sub = await _create_submission(client, test_user, "WB notif filter")
     await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 5},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 5,
+        },
         headers=auth_headers(admin_user),
     )
 
@@ -345,7 +373,10 @@ async def test_editor_workbench_email_digest_summary_honest_when_no_smtp(
     sub = await _create_submission(client, test_user, "WB digest no smtp")
     await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 5},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 5,
+        },
         headers=auth_headers(admin_user),
     )
 
@@ -391,7 +422,10 @@ async def test_editor_email_digest_records_endpoint(
     sub = await _create_submission(client, test_user, "WB digest records")
     await client.post(
         "/api/editor/workbench/batch-assign",
-        json={"items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}], "due_days": 5},
+        json={
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
+            "due_days": 5,
+        },
         headers=auth_headers(admin_user),
     )
 

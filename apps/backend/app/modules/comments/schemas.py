@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -49,7 +49,7 @@ class CommentModerateRequest(BaseModel):
     """Body for POST /api/admin/comments/{id}/moderate."""
 
     action: ModerationAction
-    note: Optional[str] = Field(default=None, max_length=500)
+    note: str | None = Field(default=None, max_length=500)
 
 
 class AdminCommentRow(BaseModel):
@@ -57,15 +57,15 @@ class AdminCommentRow(BaseModel):
 
     id: int
     resource_id: int
-    resource_title: Optional[str] = None
+    resource_title: str | None = None
     user_id: int
     author_name: str
     body: str
     status: Literal["pending", "published", "rejected"]
-    moderation_note: Optional[str] = None
-    moderated_by: Optional[int] = None
-    moderated_by_name: Optional[str] = None
-    moderated_at: Optional[datetime] = None
+    moderation_note: str | None = None
+    moderated_by: int | None = None
+    moderated_by_name: str | None = None
+    moderated_at: datetime | None = None
     created_at: datetime
 
 

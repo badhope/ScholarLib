@@ -215,7 +215,9 @@ async def test_new_comment_lands_pending_but_still_publicly_visible(
     assert "status" not in listing["data"][0]
 
     # 后台：pending 列表能看到这条
-    pending = (await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))).json()
+    pending = (
+        await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))
+    ).json()
     assert pending["meta"]["total"] >= 1
     row = next(r for r in pending["data"] if r["id"] == posted["id"])
     assert row["status"] == "pending"
@@ -269,7 +271,9 @@ async def test_admin_can_approve_then_reject_comment(
     assert listing["data"] == []
 
     # 后台 rejected 列表能查到
-    rej = (await client.get("/api/admin/comments?status=rejected", headers=auth_headers(admin_user))).json()
+    rej = (
+        await client.get("/api/admin/comments?status=rejected", headers=auth_headers(admin_user))
+    ).json()
     assert any(r["id"] == cid for r in rej["data"])
 
 
@@ -293,7 +297,9 @@ async def test_admin_comment_list_status_filter_and_counts(
         )
     ).json()["id"]
 
-    counts = (await client.get("/api/admin/comments/counts", headers=auth_headers(admin_user))).json()
+    counts = (
+        await client.get("/api/admin/comments/counts", headers=auth_headers(admin_user))
+    ).json()
     assert counts["pending"] >= 2
     assert counts["rejected"] >= 0
 
@@ -305,12 +311,16 @@ async def test_admin_comment_list_status_filter_and_counts(
     )
     assert r.status_code == 200
 
-    pending = (await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))).json()
+    pending = (
+        await client.get("/api/admin/comments?status=pending", headers=auth_headers(admin_user))
+    ).json()
     pending_ids = [row["id"] for row in pending["data"]]
     assert c1 not in pending_ids
     assert c2 in pending_ids
 
-    published = (await client.get("/api/admin/comments?status=published", headers=auth_headers(admin_user))).json()
+    published = (
+        await client.get("/api/admin/comments?status=published", headers=auth_headers(admin_user))
+    ).json()
     assert c1 in [row["id"] for row in published["data"]]
 
 

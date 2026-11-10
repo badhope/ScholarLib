@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 from app.modules.quality.review_form import (
     CHECK_ITEMS,
     CHECK_ITEMS_BY_DIMENSION,
@@ -144,7 +146,7 @@ def test_rejected_only_below_40() -> None:
 def test_grade_bands_contiguous() -> None:
     """16 档分数带必须连续无缝隙：上一档 min = 下一档 max + 1（向下）。"""
     ordered = list(GRADE_BANDS)
-    for upper, lower in zip(ordered, ordered[1:]):
+    for upper, lower in itertools.pairwise(ordered):
         assert upper[2] == lower[3] + 1, f"{upper[0]} 与 {lower[0]} 之间有缝隙"
     assert ordered[0][2] == 97 and ordered[0][3] == 100
     assert ordered[-1][2] == 40
@@ -182,8 +184,22 @@ def test_rubric_payload_shape() -> None:
     assert len(payload["dimensions"]) == 7
     assert set(payload["profiles"]) == set(PROFILES)
     assert [g["code"] for g in payload["grades"]] == [
-        "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-",
-        "D+", "D", "D-", "E+", "E", "E-", "F",
+        "A+",
+        "A",
+        "A-",
+        "B+",
+        "B",
+        "B-",
+        "C+",
+        "C",
+        "C-",
+        "D+",
+        "D",
+        "D-",
+        "E+",
+        "E",
+        "E-",
+        "F",
     ]
     assert "integrity_veto" in payload
     assert "rejected_action" in payload

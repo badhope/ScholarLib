@@ -70,7 +70,6 @@ _RATE_WINDOW_SECONDS = 60.0
 _READ_EXEMPT_PATHS = frozenset({"/api/comments"})
 
 
-
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Sliding-window rate limiter keyed by client IP + path.
 

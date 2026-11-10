@@ -386,7 +386,7 @@ async def test_decision_accept_materializes_resource(
     client: AsyncClient, admin_user: dict, test_user: dict
 ) -> None:
     submission = await _create_submission(client, test_user)
-    from conftest import complete_one_review, complete_two_reviews
+    from conftest import complete_two_reviews
 
     await complete_two_reviews(client, admin_user, submission["id"])
     resp = await client.patch(
@@ -409,7 +409,7 @@ async def test_decision_accept_notification_deep_links_to_resource(
 ) -> None:
     """录用通知的 related 必须指向物化出的公开 Resource（作者点通知直达发表页）。"""
     submission = await _create_submission(client, test_user)
-    from conftest import complete_one_review, complete_two_reviews
+    from conftest import complete_two_reviews
 
     await complete_two_reviews(client, admin_user, submission["id"])
     resp = await client.patch(
@@ -481,7 +481,7 @@ async def test_decision_invalid_state_400(
 ) -> None:
     """已 accept 的稿件不能再决断。"""
     submission = await _create_submission(client, test_user)
-    from conftest import complete_one_review, complete_two_reviews
+    from conftest import complete_two_reviews
 
     await complete_two_reviews(client, admin_user, submission["id"])
     await client.patch(

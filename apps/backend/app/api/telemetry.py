@@ -6,7 +6,7 @@ the browser already sends. The table is tenant-scoped and RLS-protected.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field

@@ -14,6 +14,7 @@ Create Date: 2026-11-08
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "c1d2e3f4a5b6"

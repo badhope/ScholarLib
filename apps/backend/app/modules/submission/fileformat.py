@@ -89,9 +89,7 @@ def detect_format(contents: bytes, filename: str = "") -> DetectedFormat:
                 names = zf.namelist()
             if "[Content_Types].xml" in names:
                 # 进一步区分：xlsx/pptx 也有该文件。稿件通道只关心 docx。
-                has_docx = any(
-                    n.startswith("word/") for n in names
-                ) or any(
+                has_docx = any(n.startswith("word/") for n in names) or any(
                     "wordprocessingml" in n.lower() for n in names
                 )
                 actual = FMT_DOCX if has_docx else FMT_UNKNOWN
@@ -107,17 +105,19 @@ def detect_format(contents: bytes, filename: str = "") -> DetectedFormat:
     ext = os.path.splitext(filename or "")[1].lower()
     expected = _EXT_EXPECT.get(ext)
     mismatch = bool(expected) and expected != actual
-    return DetectedFormat(actual=actual, extension_mismatch=mismatch, expected_from_extension=expected)
+    return DetectedFormat(
+        actual=actual, extension_mismatch=mismatch, expected_from_extension=expected
+    )
 
 
 __all__ = [
-    "DetectedFormat",
-    "FMT_PDF",
-    "FMT_DOCX",
     "FMT_DOC",
-    "FMT_RTF",
+    "FMT_DOCX",
     "FMT_MARKDOWN",
+    "FMT_PDF",
+    "FMT_RTF",
     "FMT_TEXT",
     "FMT_UNKNOWN",
+    "DetectedFormat",
     "detect_format",
 ]

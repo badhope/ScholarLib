@@ -276,8 +276,22 @@ async def test_quality_rubric_is_public_and_frozen(client: AsyncClient) -> None:
     for profile in body["profiles"].values():
         assert sum(profile["weights"].values()) == 100
     assert [g["code"] for g in body["grades"]] == [
-        "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-",
-        "D+", "D", "D-", "E+", "E", "E-", "F",
+        "A+",
+        "A",
+        "A-",
+        "B+",
+        "B",
+        "B-",
+        "C+",
+        "C",
+        "C-",
+        "D+",
+        "D",
+        "D-",
+        "E+",
+        "E",
+        "E-",
+        "F",
     ]
     assert body["min_references"]["research"] == 8
     # 3.0 的关键承诺：学术价值维度 + 诚信一票否决 + <40 分不予发表必须打回

@@ -3,6 +3,7 @@
 Revision ID: d0e1f2a3b4c5
 Revises: b8c9d0e1f2a3
 """
+
 from __future__ import annotations
 
 revision = "d0e1f2a3b4c5"

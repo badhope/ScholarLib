@@ -122,7 +122,7 @@ class RoleApplication(Base, TenantScopedMixin):
     )
 
 
-__all__ = ["RoleApplication", "UserAchievement", "UserXpEvent", "UserLevel", "PointEvent"]
+__all__ = ["PointEvent", "RoleApplication", "UserAchievement", "UserLevel", "UserXpEvent"]
 
 
 # ---------------------------------------------------------------------------

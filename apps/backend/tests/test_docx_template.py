@@ -34,7 +34,12 @@ SAMPLE = """## 摘要
 def _render() -> Document:
     blob = build(
         SAMPLE,
-        Meta(title="绿色主题测试稿", authors=["张三"], abstract="本文研究绿色排版。", keywords=["绿色"]),
+        Meta(
+            title="绿色主题测试稿",
+            authors=["张三"],
+            abstract="本文研究绿色排版。",
+            keywords=["绿色"],
+        ),
     )
     assert blob.startswith(b"PK"), "生成的不是合法 docx"
     return Document(io.BytesIO(blob))
@@ -70,7 +75,9 @@ def test_title_and_labels_use_brand_dark() -> None:
 
 def test_heading_levels_are_not_flattened() -> None:
     doc = _render()
-    headings = [(p.style.name, p.text) for p in doc.paragraphs if p.style.name.startswith("Heading")]
+    headings = [
+        (p.style.name, p.text) for p in doc.paragraphs if p.style.name.startswith("Heading")
+    ]
     assert ("Heading 1", "1 引言") in headings
     assert ("Heading 2", "1.1 方法") in headings
     assert ("Heading 3", "1.1.1 细节") in headings

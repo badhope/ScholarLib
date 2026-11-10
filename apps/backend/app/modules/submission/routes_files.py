@@ -58,11 +58,13 @@ def _content_disposition(filename: str) -> str:
     """
     from urllib.parse import quote
 
-    ascii_name = "".join(
-        ch if 32 <= ord(ch) < 127 and ch not in '"\\' else "_" for ch in filename
-    ) or "download"
+    ascii_name = (
+        "".join(ch if 32 <= ord(ch) < 127 and ch not in '"\\' else "_" for ch in filename)
+        or "download"
+    )
     encoded = quote(filename, safe="")
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+
 
 _ALLOWED_UPLOAD_MIMES = frozenset(
     {
@@ -185,13 +187,13 @@ async def _uploaded_file_to_pdf(file: UploadFile) -> bytes:
     """与 /source-preview 同一条转换口径：PDF 原样、DOCX 转 PDF。"""
     from app.modules.submission.export_docs import docx_to_pdf
 
-    contents, original_filename, actual_format = await _read_upload_for_conversion(file)
+    contents, _original_filename, actual_format = await _read_upload_for_conversion(file)
     if actual_format == "pdf":
         return contents
     if actual_format == "docx":
         try:
             return await asyncio.to_thread(docx_to_pdf, contents)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Word 原件转 PDF 失败：{exc}",
@@ -262,7 +264,7 @@ async def preview_uploaded_source_page(token: str, page: int) -> Response:
             png = pixmap.tobytes("png")
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"原件分页渲染失败：{exc}",
@@ -287,7 +289,7 @@ async def preview_uploaded_source(
     """
     from app.modules.submission.export_docs import docx_to_pdf
 
-    contents, original_filename, actual_format = await _read_upload_for_conversion(file)
+    contents, _original_filename, actual_format = await _read_upload_for_conversion(file)
     if actual_format == "pdf":
         pdf_bytes = contents
     elif actual_format == "docx":
@@ -306,7 +308,7 @@ async def preview_uploaded_source(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="source-preview.pdf"'},
+        headers={"Content-Disposition": 'inline; filename="source-preview.pdf"'},
     )
 
 
@@ -440,7 +442,9 @@ async def upload_submission_file(
             warnings.append(result.reason)
     else:
         md_key = markdown_storage_key(rel_path)
-        await get_storage().save(md_key, result.markdown.encode("utf-8"), content_type="text/markdown")
+        await get_storage().save(
+            md_key, result.markdown.encode("utf-8"), content_type="text/markdown"
+        )
         entry.markdown_path = md_key
         # 清除可能存在的旧 needs_docx 侧car（重新上传成功）。
         await _try_delete_storage(old_sidecar)
@@ -601,9 +605,7 @@ def _redact_identity_text(text: str, entry, *, names=None, affiliations=None) ->
         return text
     names = list(names if names is not None else (getattr(entry, "authors", None) or []))
     affiliations = list(
-        affiliations
-        if affiliations is not None
-        else (getattr(entry, "affiliations", None) or [])
+        affiliations if affiliations is not None else (getattr(entry, "affiliations", None) or [])
     )
     for name in names:
         name = str(name).strip()
@@ -654,7 +656,7 @@ async def _generated_download(
     # web article and the public /export use.  A submission's own abstract can
     # still be the pre-normalization version (299 is the proof), so prefer the
     # resource metadata whenever the submission has been linked to one.
-    canonical_title = (getattr(resource, "title", None) or entry.title or "")
+    canonical_title = getattr(resource, "title", None) or entry.title or ""
     canonical_abstract = (
         getattr(resource, "abstract", None) or getattr(entry, "abstract", None) or ""
     )
@@ -662,9 +664,7 @@ async def _generated_download(
         getattr(resource, "authors", None) or getattr(entry, "authors", None) or []
     )
     canonical_affiliations = list(
-        getattr(resource, "affiliations", None)
-        or getattr(entry, "affiliations", None)
-        or []
+        getattr(resource, "affiliations", None) or getattr(entry, "affiliations", None) or []
     )
     canonical_keywords = list(
         getattr(resource, "keywords", None) or getattr(entry, "keywords", None) or []
@@ -688,7 +688,7 @@ async def _generated_download(
         md = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[邮箱已隐藏]", md)
         md = re.sub(r"\b1[3-9]\d{9}\b", "[手机号已隐藏]", md)
 
-    from app.modules.submission.docx_template import Meta, build, parse_meta
+    from app.modules.submission.docx_template import build, parse_meta
 
     meta = parse_meta(md, fallback_title=canonical_title or f"submission-{entry.id}")
     meta.title = canonical_title or meta.title
@@ -728,7 +728,9 @@ async def _generated_download(
     # The title goes into RFC 5987 filename*; _content_disposition supplies an
     # ASCII fallback, so Chinese names survive the browser download.
     base = re.sub(r'[\r\n"\\/:*?<>|]+', "-", canonical_title.strip())[:60].strip(" -")
-    filename = f"{base or f'submission-{entry.id}'}-{'anonymized' if anonymized else 'manuscript'}.{ext}"
+    filename = (
+        f"{base or f'submission-{entry.id}'}-{'anonymized' if anonymized else 'manuscript'}.{ext}"
+    )
 
     return Response(
         content=payload,
@@ -808,9 +810,7 @@ async def download_submission_file(
             return Response(
                 content=data,
                 media_type="text/markdown; charset=utf-8",
-                headers={
-                    "Content-Disposition": f'attachment; filename="submission-{entry.id}.md"'
-                },
+                headers={"Content-Disposition": f'attachment; filename="submission-{entry.id}.md"'},
             )
 
     # 双盲评审：原始上传文件不能交给审稿人。
@@ -847,11 +847,7 @@ async def download_submission_file(
     # PDF must render the same text and the same house layout.  Old uploads
     # (Word 2016/WPS PDFs) predate the normalization pass and are kept only as
     # an archival fallback when there is no Markdown at all.
-    serve_stored = (
-        not needs_anonymized
-        and not entry.markdown_path
-        and bool(entry.file_path)
-    )
+    serve_stored = not needs_anonymized and not entry.markdown_path and bool(entry.file_path)
     storage = get_storage()
     if serve_stored and entry.file_path:
         # The DB row can outlive the object on disk (old submissions were
@@ -866,9 +862,7 @@ async def download_submission_file(
             stored_exists = False
         if not stored_exists:
             if entry.markdown_path:
-                return await _generated_download(
-                    entry, file_format, anonymized=needs_anonymized
-                )
+                return await _generated_download(entry, file_format, anonymized=needs_anonymized)
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Stored file is missing",
@@ -880,9 +874,7 @@ async def download_submission_file(
             from app.modules.catalog.models import Resource
 
             canonical_resource = (
-                await db.execute(
-                    select(Resource).where(Resource.id == entry.resource_id)
-                )
+                await db.execute(select(Resource).where(Resource.id == entry.resource_id))
             ).scalar_one_or_none()
         return await _generated_download(
             entry,

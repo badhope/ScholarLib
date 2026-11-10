@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from app.core.captcha import _AlwaysPassVerifier, _load_verifier
+from app.core.captcha import _load_verifier
 from app.core.config import settings
 
 

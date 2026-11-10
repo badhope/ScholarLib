@@ -12,13 +12,13 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
+from conftest import auth_headers, register_reviewer
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import User
 from app.modules.gamification import levels_axis
-from conftest import auth_headers, register_reviewer, register_user
 
 
 @pytest_asyncio.fixture

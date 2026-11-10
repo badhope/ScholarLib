@@ -36,9 +36,7 @@ _CATEGORY_TO_TRACK: Final[dict[str, ContentTrack]] = {
 }
 
 
-def resolve_content_track(
-    track: str | None, category: str | None = None
-) -> ContentTrack:
+def resolve_content_track(track: str | None, category: str | None = None) -> ContentTrack:
     """规范化 content_track：合法 track 权威胜出；缺失时按 category 回推。
 
     fun / rant → essay；academic 或两者都缺省时按学术稿（paper）保守处理——
@@ -62,9 +60,7 @@ def resolve_category(track: str | None, category: str | None = None) -> str:
     return category if category in ("fun", "rant") else "fun"
 
 
-def canonicalize_track_category(
-    track: str | None, category: str | None = None
-) -> tuple[str, str]:
+def canonicalize_track_category(track: str | None, category: str | None = None) -> tuple[str, str]:
     """写入路径统一入口：返回 (track, category) 规范组合。
 
     track 合法时权威胜出；track 缺失时 category 回推赛道
@@ -89,6 +85,7 @@ def derive_content_track(content_category: str | None, db_value: str | None = No
 def is_paper_track(content_category: str | None, db_value: str | None = None) -> bool:
     """是否学术稿（paper）：R 因子/篇均指标只统计 paper。"""
     return resolve_content_track(db_value, content_category) == "paper"
+
 
 DEFAULT_TRACK: Final[Track] = "serious"
 ALL_TRACKS: Final[tuple[Track, ...]] = ("serious", "absurd")

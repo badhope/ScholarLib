@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -45,9 +45,7 @@ async def _usernames(db: AsyncSession, ids: list[int]) -> dict[int, str]:
     return {uid: uname for uid, uname in rows.all()}
 
 
-async def _serialize_admin(
-    db: AsyncSession, rows: list[Comment]
-) -> list[AdminCommentRow]:
+async def _serialize_admin(db: AsyncSession, rows: list[Comment]) -> list[AdminCommentRow]:
     """联表作者、被评论资源标题、审核人。"""
     user_ids: set[int] = set()
     resource_ids: list[int] = []
@@ -76,9 +74,7 @@ async def _serialize_admin(
             status=r.status,  # type: ignore[arg-type]
             moderation_note=r.moderation_note,
             moderated_by=r.moderated_by,
-            moderated_by_name=(
-                names.get(r.moderated_by) if r.moderated_by is not None else None
-            ),
+            moderated_by_name=(names.get(r.moderated_by) if r.moderated_by is not None else None),
             moderated_at=r.moderated_at,
             created_at=r.created_at,
         )

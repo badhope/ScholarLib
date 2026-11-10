@@ -22,11 +22,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_admin, require_editor, require_reviewer
+from app.api.deps import require_admin, require_editor, require_reviewer
 from app.core.db import get_db
 from app.core.logging import get_logger
 from app.models import AuditLog, User
-from app.modules.quality.batch import BatchRequest, MAX_BATCH_ITEMS, apply_review_items
+from app.modules.quality.batch import MAX_BATCH_ITEMS, BatchRequest, apply_review_items
 from app.modules.quality.review_form import form_payload, prompt_payload, score_answers
 from app.modules.quality.rubric import (
     RUBRIC_VERSION,

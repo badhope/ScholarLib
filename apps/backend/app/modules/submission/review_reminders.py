@@ -103,9 +103,7 @@ async def send_decision_email(
         try:
             from app.core.email import get_congrat_sender
 
-            await get_congrat_sender().send(
-                to=author.email, subject=subject, body=text, html=html
-            )
+            await get_congrat_sender().send(to=author.email, subject=subject, body=text, html=html)
             logger.info("congrat_email_sent", author_id=author.id, decision=decision)
             return
         except Exception:

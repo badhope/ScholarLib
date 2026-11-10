@@ -115,7 +115,9 @@ def upgrade() -> None:
             sa.Column("review_waive_reason", sa.Text(), nullable=True),
         )
     else:
-        op.add_column("submissions", sa.Column("review_waived_at", sa.DateTime(timezone=True), nullable=True))
+        op.add_column(
+            "submissions", sa.Column("review_waived_at", sa.DateTime(timezone=True), nullable=True)
+        )
         op.add_column("submissions", sa.Column("review_waived_by", sa.Integer(), nullable=True))
         op.add_column("submissions", sa.Column("review_waive_reason", sa.Text(), nullable=True))
 

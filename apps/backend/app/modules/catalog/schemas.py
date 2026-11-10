@@ -348,7 +348,7 @@ class ResourceResponse(ResourceBase):
         return v
 
     @model_validator(mode="after")
-    def _derive_derived_fields(self) -> "ResourceResponse":
+    def _derive_derived_fields(self) -> ResourceResponse:
         """读口径校正：content_track 为权威，content_category 按 track 反推。
 
         历史脏数据（paper+fun / essay+academic / 漏迁移）在响应层一律按
@@ -377,9 +377,7 @@ class ResourceResponse(ResourceBase):
         elif not self.content_genre:
             from app.modules.catalog.genre import classify_essay_genre
 
-            self.content_genre = classify_essay_genre(
-                self.title, category=self.content_category
-            )
+            self.content_genre = classify_essay_genre(self.title, category=self.content_category)
         if self.content_track == "essay":
             self.quality_score = None
             self.quality_grade = None
@@ -486,6 +484,7 @@ __all__ = [
     "AuthorMeta",
     "EssayGenre",
     "FacetBucket",
+    "IssueSummary",
     "JournalMetrics",
     "PaginationMeta",
     "PublicationStatus",
@@ -495,9 +494,8 @@ __all__ = [
     "ResourceListResponse",
     "ResourceResponse",
     "ResourceStats",
-    "IssueSummary",
-    "VolumeSummary",
-    "VolumeSummaryList",
     "ResourceType",
     "ResourceUpdate",
+    "VolumeSummary",
+    "VolumeSummaryList",
 ]

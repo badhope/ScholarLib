@@ -10,14 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.storage import get_storage
 from app.models import Tenant
 from app.modules.catalog.models import Resource
-from app.modules.submission.models import Submission
 from app.modules.submission.manuscript import needs_docx_storage_key
+from app.modules.submission.models import Submission
 
 
 async def _default_tenant(db: AsyncSession) -> Tenant:
-    return (
-        await db.execute(select(Tenant).where(Tenant.slug == "default"))
-    ).scalar_one()
+    return (await db.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
 
 
 @pytest.mark.asyncio
@@ -32,7 +30,8 @@ async def test_claim_403_when_owner_bound(
         type="paper",
         authors=["Author A"],
         year=2026,
-        discipline="computer-science", tags=[],
+        discipline="computer-science",
+        tags=[],
         abstract="abstract body",
         preview="preview",
         publication_status="published",
@@ -70,7 +69,8 @@ async def test_claim_open_when_no_owner(
         type="paper",
         authors=["Old Editor"],
         year=2024,
-        discipline="physics", tags=[],
+        discipline="physics",
+        tags=[],
         abstract="old",
         preview="old",
         publication_status="published",
@@ -103,19 +103,39 @@ async def test_clc_prefix_filter(
 ) -> None:
     """?clc=TP 前缀筛选：命中 TP 开头，不命中 F 开头。"""
     tenant = await _default_tenant(db_session)
-    db_session.add_all([
-        Resource(
-            tenant_id=tenant.id, title="CLC TP 稿", type="paper", authors=["A"],
-            year=2026, discipline="computer-science", abstract="x", preview="x", tags=[],
-            publication_status="published", clc_code="TP311.13", clc_label="计算机",
-            content_category="academic",
-        ),
-        Resource(
-            tenant_id=tenant.id, title="CLC F 稿", type="paper", authors=["A"],
-            year=2026, discipline="economics", abstract="x", preview="x", tags=[],
-            publication_status="published", clc_code="F83", content_category="academic",
-        ),
-    ])
+    db_session.add_all(
+        [
+            Resource(
+                tenant_id=tenant.id,
+                title="CLC TP 稿",
+                type="paper",
+                authors=["A"],
+                year=2026,
+                discipline="computer-science",
+                abstract="x",
+                preview="x",
+                tags=[],
+                publication_status="published",
+                clc_code="TP311.13",
+                clc_label="计算机",
+                content_category="academic",
+            ),
+            Resource(
+                tenant_id=tenant.id,
+                title="CLC F 稿",
+                type="paper",
+                authors=["A"],
+                year=2026,
+                discipline="economics",
+                abstract="x",
+                preview="x",
+                tags=[],
+                publication_status="published",
+                clc_code="F83",
+                content_category="academic",
+            ),
+        ]
+    )
     await db_session.commit()
 
     resp = await client.get("/api/catalog?clc=TP")
@@ -132,8 +152,15 @@ async def test_manuscript_409_needs_docx(
     """无 Markdown 且有 needs_docx 侧car → 409 + 原因 + 可下载原件。"""
     tenant = await _default_tenant(db_session)
     resource = Resource(
-        tenant_id=tenant.id, title="扫描件稿", type="paper", authors=["A"],
-        year=2026, discipline="physics", abstract="x", preview="x", tags=[],
+        tenant_id=tenant.id,
+        title="扫描件稿",
+        type="paper",
+        authors=["A"],
+        year=2026,
+        discipline="physics",
+        abstract="x",
+        preview="x",
+        tags=[],
         publication_status="published",
     )
     db_session.add(resource)
@@ -149,9 +176,17 @@ async def test_manuscript_409_needs_docx(
             tenant_id=tenant.id,
             resource_id=resource.id,
             submitted_by=admin_user["user_id"],
-            title="扫描件稿", type="paper", authors=["A"], year=2026,
-            discipline="physics", abstract="x", preview="x", tags=[],
-            status="accepted", file_path=rel_path, markdown_path=None,
+            title="扫描件稿",
+            type="paper",
+            authors=["A"],
+            year=2026,
+            discipline="physics",
+            abstract="x",
+            preview="x",
+            tags=[],
+            status="accepted",
+            file_path=rel_path,
+            markdown_path=None,
         )
     )
     await db_session.commit()
@@ -171,10 +206,20 @@ async def test_essay_scores_nulled(
     """P0 收口：essay 文章接口不下发 absurdity_index / quality_score / quality_grade。"""
     tenant = await _default_tenant(db_session)
     resource = Resource(
-        tenant_id=tenant.id, title="娱乐稿", type="paper", authors=["A"],
-        year=2026, discipline="physics", abstract="x", preview="x", tags=[],
-        publication_status="published", content_category="fun",
-        absurdity_index=5.5, quality_score=80.0, quality_grade="B",
+        tenant_id=tenant.id,
+        title="娱乐稿",
+        type="paper",
+        authors=["A"],
+        year=2026,
+        discipline="physics",
+        abstract="x",
+        preview="x",
+        tags=[],
+        publication_status="published",
+        content_category="fun",
+        absurdity_index=5.5,
+        quality_score=80.0,
+        quality_grade="B",
     )
     db_session.add(resource)
     await db_session.commit()
@@ -195,10 +240,20 @@ async def test_paper_scores_kept(
     """学术稿（paper）的评分字段保持原样不下发 null。"""
     tenant = await _default_tenant(db_session)
     resource = Resource(
-        tenant_id=tenant.id, title="学术稿", type="paper", authors=["A"],
-        year=2026, discipline="physics", abstract="x", preview="x", tags=[],
-        publication_status="published", content_category="academic",
-        absurdity_index=2.0, quality_score=88.0, quality_grade="A",
+        tenant_id=tenant.id,
+        title="学术稿",
+        type="paper",
+        authors=["A"],
+        year=2026,
+        discipline="physics",
+        abstract="x",
+        preview="x",
+        tags=[],
+        publication_status="published",
+        content_category="academic",
+        absurdity_index=2.0,
+        quality_score=88.0,
+        quality_grade="A",
     )
     db_session.add(resource)
     await db_session.commit()

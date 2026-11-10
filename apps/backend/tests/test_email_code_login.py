@@ -6,16 +6,15 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-import pytest
-
 from app.core.email_code import hash_code
-from app.models import EmailLoginCode, User
 from app.core.time import utcnow
+from app.models import EmailLoginCode, User
 
 
 async def _seed_code(
@@ -35,9 +34,7 @@ async def _seed_code(
 
 
 async def _user_tenant(db_session, email: str):
-    row = (
-        await db_session.execute(select(User).where(func_lower_email(email)))
-    ).scalar_one()
+    row = (await db_session.execute(select(User).where(func_lower_email(email)))).scalar_one()
     return row.tenant_id
 
 
@@ -72,7 +69,7 @@ async def test_verify_rejects_bad_and_expired_codes(
     assert r.status_code == 401
 
     # 过期码
-    row = await _seed_code(db_session, tenant_id, email.lower(), "888888", minutes=-1)
+    await _seed_code(db_session, tenant_id, email.lower(), "888888", minutes=-1)
     r = await client.post("/api/auth/email-code/verify", json={"email": email, "code": "888888"})
     assert r.status_code == 401
 
@@ -133,11 +130,11 @@ async def test_request_throttles_second_call_within_window(
 
     monkeypatch.setattr(settings, "email_backend", "smtp")
 
-    async def fake_send(*args, **kwargs):  # noqa: ANN002, ANN003
+    async def fake_send(*args, **kwargs):
         return None
 
     class FakeSender:
-        async def send(self, **kwargs):  # noqa: ANN003
+        async def send(self, **kwargs):
             return None
 
     from app.core import email as email_mod

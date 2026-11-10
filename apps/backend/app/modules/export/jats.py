@@ -117,7 +117,7 @@ def _strip_image_and_links(text: str) -> str:
 
 
 class _Block:
-    __slots__ = ("kind", "level", "lines", "lang")
+    __slots__ = ("kind", "lang", "level", "lines")
 
     def __init__(self, kind: str, level: int = 0, lang: str = "") -> None:
         self.kind = kind
@@ -183,7 +183,15 @@ def _parse_blocks(md: str) -> list[_Block]:
             current.lines.append(stripped.lstrip("> "))
             i += 1
             continue
-        if stripped.startswith("|") and i + 1 < len(lines) and re.match(r"^\|?[\s:|-]+\|?", lines[i + 1].strip()) and set(lines[i + 1].replace("|", "").replace("-", "").replace(":", "").replace(" ", "")) == set():
+        if (
+            stripped.startswith("|")
+            and i + 1 < len(lines)
+            and re.match(r"^\|?[\s:|-]+\|?", lines[i + 1].strip())
+            and set(
+                lines[i + 1].replace("|", "").replace("-", "").replace(":", "").replace(" ", "")
+            )
+            == set()
+        ):
             if current.lines:
                 blocks.append(current)
             current = _Block("table")
@@ -226,7 +234,7 @@ def _sec_tree(blocks: list[_Block]) -> str:
     """h1/h2/h3 + 后续内容 → 嵌套 <sec>。无标题的正文直接进 <body>。"""
 
     class _Sec:
-        __slots__ = ("title", "level", "children")
+        __slots__ = ("children", "level", "title")
 
         def __init__(self, title: str, level: int) -> None:
             self.title = title
@@ -277,11 +285,9 @@ def _render_block(b: _Block) -> str:
             f"<list-item><p>{_render_inline(_strip_image_and_links(t))}</p></list-item>"
             for t in b.lines
         )
-        return f"<list list-type=\"bullet\">{items}</list>"
+        return f'<list list-type="bullet">{items}</list>'
     if b.kind == "quote":
-        paras = "".join(
-            f"<p>{_render_inline(_strip_image_and_links(t))}</p>" for t in b.lines
-        )
+        paras = "".join(f"<p>{_render_inline(_strip_image_and_links(t))}</p>" for t in b.lines)
         return f"<disp-quote>{paras}</disp-quote>"
     if b.kind == "code":
         code = _esc("\n".join(b.lines))
@@ -290,10 +296,7 @@ def _render_block(b: _Block) -> str:
     if b.kind == "fig":
         alt = _esc(b.lines[0] if b.lines else "")
         src = _esc(b.lang)
-        return (
-            f'<fig><caption><p>{alt}</p></caption>'
-            f'<graphic xlink:href="{src}"/></fig>'
-        )
+        return f'<fig><caption><p>{alt}</p></caption><graphic xlink:href="{src}"/></fig>'
     if b.kind == "table":
         return _render_table(b.lines)
     return ""
@@ -312,13 +315,11 @@ def _render_table(lines: list[str]) -> str:
     thead = "".join(f"<th>{_render_inline(c)}</th>" for c in header)
     trs = []
     for row in body:
-        tds = "".join(
-            f"<td>{_render_inline(c)}</td>" for c in (list(row) + [""] * width)[:width]
-        )
+        tds = "".join(f"<td>{_render_inline(c)}</td>" for c in (list(row) + [""] * width)[:width])
         trs.append(f"<tr>{tds}</tr>")
     return (
-        '<table-wrap><table><thead>'
-        f'<tr>{thead}</tr></thead><tbody>{"".join(trs)}</tbody>'
+        "<table-wrap><table><thead>"
+        f"<tr>{thead}</tr></thead><tbody>{''.join(trs)}</tbody>"
         "</table></table-wrap>"
     )
 
@@ -326,16 +327,18 @@ def _render_table(lines: list[str]) -> str:
 def _front(meta: JatsMeta) -> str:
     parts: list[str] = [f"<journal-meta><journal-title>{_esc(meta.journal)}</journal-title>"]
     parts.append(
-        '<publisher><publisher-name>'
+        "<publisher><publisher-name>"
         f"{_esc(meta.publisher_name)}</publisher-name></publisher></journal-meta>"
     )
-    article_meta = [f'<article-id pub-id-type="doi">{_esc(meta.doi)}</article-id>'] if meta.doi else []
+    article_meta = (
+        [f'<article-id pub-id-type="doi">{_esc(meta.doi)}</article-id>'] if meta.doi else []
+    )
     if meta.article_id:
         article_meta.append(
             f'<article-id pub-id-type="publisher-id">{_esc(meta.article_id)}</article-id>'
         )
     article_meta.append(
-        f'<title-group><article-title>{_render_inline(meta.title)}</article-title></title-group>'
+        f"<title-group><article-title>{_render_inline(meta.title)}</article-title></title-group>"
     )
     contribs = []
     for i, name in enumerate(meta.authors):

@@ -108,11 +108,9 @@ async def record_email_digest(
         return record.status
 
     try:
-        await get_email_sender().send(
-            to=recipient_email, subject=subject, body=text, html=html
-        )
+        await get_email_sender().send(to=recipient_email, subject=subject, body=text, html=html)
         record.status = "sent"
-    except Exception:  # noqa: BLE001 — email is best-effort by contract
+    except Exception:
         logger.warning(
             "email_digest_send_failed",
             user_id=user_id,

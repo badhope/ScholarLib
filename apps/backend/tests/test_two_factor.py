@@ -402,9 +402,7 @@ async def test_disable_rejects_replayed_totp_code(
         headers=auth_headers(test_user),
     )
     assert resp.status_code == 200, resp.text
-    status_resp = await client.get(
-        "/api/auth/2fa/status", headers=auth_headers(test_user)
-    )
+    status_resp = await client.get("/api/auth/2fa/status", headers=auth_headers(test_user))
     # 关闭动作会吊销会话，此请求用的是被吊销的旧 token；401 即视为已吊销
     assert status_resp.status_code in (200, 401)
 

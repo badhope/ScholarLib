@@ -10,19 +10,17 @@
 from __future__ import annotations
 
 import pytest
+from conftest import auth_headers
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from conftest import auth_headers
 from app.models import Tenant
 from app.modules.catalog.models import Resource
 
 
 async def _default_tenant(db: AsyncSession) -> Tenant:
-    return (
-        await db.execute(select(Tenant).where(Tenant.slug == "default"))
-    ).scalar_one()
+    return (await db.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
 
 
 def _payload(title: str, **extra: object) -> dict[str, object]:
@@ -56,9 +54,7 @@ async def test_create_paper_with_fun_category_forced_to_academic(
     assert body["content_track"] == "paper"
     assert body["content_category"] == "academic"
 
-    row = (
-        await db_session.execute(select(Resource).where(Resource.id == body["id"]))
-    ).scalar_one()
+    row = (await db_session.execute(select(Resource).where(Resource.id == body["id"]))).scalar_one()
     assert row.content_track == "paper"
     assert row.content_category == "academic"
 
@@ -78,17 +74,13 @@ async def test_create_essay_without_category_defaults_fun(
     assert body["content_track"] == "essay"
     assert body["content_category"] == "fun"
 
-    row = (
-        await db_session.execute(select(Resource).where(Resource.id == body["id"]))
-    ).scalar_one()
+    row = (await db_session.execute(select(Resource).where(Resource.id == body["id"]))).scalar_one()
     assert row.content_track == "essay"
     assert row.content_category == "fun"
 
 
 @pytest.mark.asyncio
-async def test_create_essay_with_rant_preserved(
-    client: AsyncClient, admin_user: dict
-) -> None:
+async def test_create_essay_with_rant_preserved(client: AsyncClient, admin_user: dict) -> None:
     """essay 带 rant → rant。"""
     r = await client.post(
         "/api/catalog",

@@ -46,7 +46,9 @@ class CheckItem:
 
 CHECK_ITEMS: tuple[CheckItem, ...] = (
     # --- 问题价值 ---
-    CheckItem("q_specific", "problem", "研究问题是否被明确表述为可回答的问题（而非泛泛的主题）？", 2),
+    CheckItem(
+        "q_specific", "problem", "研究问题是否被明确表述为可回答的问题（而非泛泛的主题）？", 2
+    ),
     CheckItem("q_gap", "problem", "是否说明了既有研究为何未能回答该问题？", 2),
     CheckItem("q_significance", "problem", "是否说明了回答该问题的意义（理论或实践）？"),
     # --- 论证链 ---
@@ -189,7 +191,7 @@ def prompt_payload(article_type: str = "research") -> dict[str, object]:
     把"判断"拆成"逐条事实核查 + 固定的加权规则"，而不是让模型直接
     凭感觉给一个总分。
     """
-    from app.modules.quality.rubric import PROFILES, PROFILE_LABELS, RUBRIC_VERSION
+    from app.modules.quality.rubric import PROFILE_LABELS, PROFILES, RUBRIC_VERSION
 
     return {
         "rubric_version": RUBRIC_VERSION,
@@ -222,9 +224,9 @@ __all__ = [
     "ANSWER_VALUES",
     "CHECK_ITEMS",
     "CHECK_ITEMS_BY_DIMENSION",
-    "CheckItem",
     "DIMENSION_HINTS",
     "DIMENSION_LABELS",
+    "CheckItem",
     "form_payload",
     "prompt_payload",
     "score_answers",

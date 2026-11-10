@@ -3,6 +3,7 @@
 This no-op node keeps the migration graph single-headed on deployments that
 already stamped 024 manually. It intentionally has no schema operations.
 """
+
 from __future__ import annotations
 
 revision = "a7b8c9d0e1f2"

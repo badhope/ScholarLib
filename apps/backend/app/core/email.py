@@ -379,7 +379,7 @@ class SmtpPoolEmailSender:
             # 内层实例必须继承外层的外发许可：否则恭喜通道（外层 bypass）
             # 会被内层 guard 静默拦截，且 guard 静默 return 会让 pool 误记成功。
             if getattr(self, "_bypass_outbound_guard", False):
-                sender._bypass_outbound_guard = True  # noqa: SLF001 — 模块内私有约定
+                sender._bypass_outbound_guard = True
             try:
                 await sender.send(to=to, subject=subject, body=body, html=html)
                 self._record_success(account)
@@ -527,7 +527,7 @@ def get_congrat_sender() -> EmailSender:
             retries=settings.email_smtp_retries,
         )
     # 主编已通过 CONGRAT 开显式授权录用祝贺邮件：该实例旁路外发总闸。
-    _congrat_sender._bypass_outbound_guard = True  # noqa: SLF001 — 模块内私有约定
+    _congrat_sender._bypass_outbound_guard = True
     logger.info("congrat_sender_ready", accounts=len(accounts))
     return _congrat_sender
 

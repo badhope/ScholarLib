@@ -150,7 +150,10 @@ GRADE_BANDS: tuple[tuple[str, str, int, int], ...] = (
 # 0–100 分锚点：每个维度都用同一把尺子，避免"这位审稿人手松"。
 # 锚点按顶刊标准措辞，宁严勿宽——A 级必须是能拿去和顶刊文章对话的水准。
 SCORE_ANCHORS: tuple[tuple[int, str], ...] = (
-    (95, "顶刊典范（Science/Nature 级）：该维度的处理可以作为领域范本被引用，几乎无可指摘。绝大多数稿件达不到这一档。"),
+    (
+        95,
+        "顶刊典范（Science/Nature 级）：该维度的处理可以作为领域范本被引用，几乎无可指摘。绝大多数稿件达不到这一档。",
+    ),
     (90, "顶刊门槛：明显超出本领域已发表文章的典型水准，判断与执行都无可辩驳。A 级刻意稀缺。"),
     (80, "一流水准：整体扎实且有明显亮点，仅有 1–2 处可改进但不影响结论成立。"),
     (70, "合格期刊水准：方法与论证基本可靠，存在可指出的缺陷但不致命（需小幅修回）。"),
@@ -476,17 +479,17 @@ __all__ = [
     "DIMENSIONS",
     "DIMENSION_HINTS",
     "DIMENSION_LABELS",
-    "DimensionScore",
     "GRADE_BANDS",
     "LENGTH_TIERS",
     "MIN_REFERENCES",
     "PROFILES",
     "PROFILE_LABELS",
     "PROFILE_SECTIONS",
-    "PaperMetrics",
     "REQUIRED_SECTIONS",
     "RUBRIC_VERSION",
     "SCORE_ANCHORS",
+    "DimensionScore",
+    "PaperMetrics",
     "auto_precheck",
     "evaluate",
     "grade_for",

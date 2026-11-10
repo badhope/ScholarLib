@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     ROLE_EDITOR,
     get_current_user,
-    get_current_user_optional,
     require_admin,
     require_tenant_id,
     user_has_role,
@@ -121,11 +120,7 @@ async def _author_map(db: AsyncSession, user_ids: set[int]) -> dict[int, AuthorB
     """批量查作者，避免列表页 N+1。"""
     if not user_ids:
         return {}
-    rows = (
-        await db.execute(
-            select(User.id, User.username).where(User.id.in_(user_ids))
-        )
-    ).all()
+    rows = (await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))).all()
     return {r[0]: AuthorBrief(id=r[0], username=r[1]) for r in rows}
 
 
@@ -215,10 +210,12 @@ async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
                 ForumTopic.category,
                 func.count(ForumTopic.id),
                 func.max(func.coalesce(ForumTopic.last_reply_at, ForumTopic.created_at)),
-            ).where(
+            )
+            .where(
                 ForumTopic.tenant_id == tenant_id,
                 ForumTopic.deleted_at.is_(None),
-            ).group_by(ForumTopic.category)
+            )
+            .group_by(ForumTopic.category)
         )
     ).all()
     buckets: dict[str, dict[str, object]] = {
@@ -265,17 +262,21 @@ async def list_replies(
     """回帖按时间正序（讨论要按上下文读，倒序会读不懂）。"""
     tenant_id = require_tenant_id()
     rows = (
-        await db.execute(
-            select(ForumReply)
-            .where(
-                ForumReply.topic_id == topic_id,
-                ForumReply.tenant_id == tenant_id,
-                ForumReply.deleted_at.is_(None),
+        (
+            await db.execute(
+                select(ForumReply)
+                .where(
+                    ForumReply.topic_id == topic_id,
+                    ForumReply.tenant_id == tenant_id,
+                    ForumReply.deleted_at.is_(None),
+                )
+                .order_by(ForumReply.created_at.asc(), ForumReply.id.asc())
+                .limit(500)
             )
-            .order_by(ForumReply.created_at.asc(), ForumReply.id.asc())
-            .limit(500)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     authors = await _author_map(db, {r.author_id for r in rows})
     return [_reply_out(r, authors) for r in rows]
 
@@ -307,7 +308,9 @@ async def create_topic(
     db.add(topic)
     await db.commit()
     await db.refresh(topic)
-    return _topic_out(topic, {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)})
+    return _topic_out(
+        topic, {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)}
+    )
 
 
 @router.post(
@@ -376,9 +379,7 @@ async def moderate_topic(
     tenant_id = require_tenant_id()
     topic = (
         await db.execute(
-            select(ForumTopic).where(
-                ForumTopic.id == topic_id, ForumTopic.tenant_id == tenant_id
-            )
+            select(ForumTopic).where(ForumTopic.id == topic_id, ForumTopic.tenant_id == tenant_id)
         )
     ).scalar_one_or_none()
     if topic is None:
@@ -413,9 +414,7 @@ async def delete_topic(
     tenant_id = require_tenant_id()
     topic = (
         await db.execute(
-            select(ForumTopic).where(
-                ForumTopic.id == topic_id, ForumTopic.tenant_id == tenant_id
-            )
+            select(ForumTopic).where(ForumTopic.id == topic_id, ForumTopic.tenant_id == tenant_id)
         )
     ).scalar_one_or_none()
     if topic is None:
@@ -440,6 +439,7 @@ async def delete_topic(
 # ---------------------------------------------------------------------------
 # 举报（forum_reports）
 # ---------------------------------------------------------------------------
+
 
 class ReportCreate(BaseModel):
     topic_id: int | None = None

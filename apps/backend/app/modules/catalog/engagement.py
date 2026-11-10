@@ -183,7 +183,6 @@ async def compute_engagement(db: AsyncSession, rows: list[Resource]) -> dict[int
     maxima_by_discipline: dict[str, tuple[int, int, int]] = {}
     quartiles: dict[str, dict[int, str]] = {}
     global_band: dict[int, str] = {}
-    global_maxima: tuple[int, int, int] = (0, 0, 0)
     if disciplines:
         all_rows = list(
             (
@@ -209,20 +208,13 @@ async def compute_engagement(db: AsyncSession, rows: list[Resource]) -> dict[int
     global_rows = list(
         (
             await db.execute(
-                select(Resource).where(
-                    Resource.tenant_id == tenant_id, *public_conditions()
-                )
+                select(Resource).where(Resource.tenant_id == tenant_id, *public_conditions())
             )
         )
         .scalars()
         .all()
     )
     global_raw = await load_raw_engagement(db, [r.id for r in global_rows], tenant_id)
-    global_maxima = (
-        max((v[0] for v in global_raw.values()), default=0),
-        max((v[1] for v in global_raw.values()), default=0),
-        max((v[2] for v in global_raw.values()), default=0),
-    )
     global_band = _quartile_bands(global_rows, global_raw, "__global__")
 
     result: dict[int, Engagement] = {}
@@ -247,7 +239,11 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
     from app.modules.submission.models import Submission
 
     # 指标页只对论文轨负责：娱乐轨不计分、不进 R 因子，也不应计入“已发表论文/覆盖学科”。
-    published_filter = (Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
+    published_filter = (
+        Resource.tenant_id == tenant_id,
+        Resource.content_track == "paper",
+        *public_conditions(),
+    )
     total = (
         await db.execute(select(func.count(Resource.id)).where(*published_filter))
     ).scalar_one()
@@ -283,7 +279,11 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             select(func.coalesce(func.sum(ReadingHistory.visit_count), 0)).where(
                 ReadingHistory.tenant_id == tenant_id,
                 ReadingHistory.resource_id.in_(
-                    select(Resource.id).where(Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
+                    select(Resource.id).where(
+                        Resource.tenant_id == tenant_id,
+                        Resource.content_track == "paper",
+                        *public_conditions(),
+                    )
                 ),
             )
         )
@@ -293,7 +293,11 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             select(func.count(ReadingListItem.id)).where(
                 ReadingListItem.tenant_id == tenant_id,
                 ReadingListItem.resource_id.in_(
-                    select(Resource.id).where(Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
+                    select(Resource.id).where(
+                        Resource.tenant_id == tenant_id,
+                        Resource.content_track == "paper",
+                        *public_conditions(),
+                    )
                 ),
             )
         )

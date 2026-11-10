@@ -232,9 +232,7 @@ def _pdf_quality_gate(text: str) -> tuple[bool, str | None]:
         if ratio < _PDF_MIN_CJK_RATIO:
             return False, f"中文占比过低（{ratio:.0%}），疑似乱码，请另存为 .docx 后重新上传"
 
-    bad = sum(
-        1 for ch in stripped if ch == "\ufffd" or (ord(ch) < 32 and ch not in "\n\r\t")
-    )
+    bad = sum(1 for ch in stripped if ch == "\ufffd" or (ord(ch) < 32 and ch not in "\n\r\t"))
     if bad / max(len(stripped), 1) >= _PDF_MAX_BAD_CHAR_RATIO:
         return False, "乱码/控制符占比过高，请另存为 .docx 后重新上传"
 
@@ -325,7 +323,10 @@ CONVERT_TIMEOUT_SECONDS = 60.0
 
 
 async def convert_to_markdown_async(
-    contents: bytes, filename: str, *, timeout: float = CONVERT_TIMEOUT_SECONDS
+    contents: bytes,
+    filename: str,
+    *,
+    timeout: float = CONVERT_TIMEOUT_SECONDS,  # noqa: ASYNC109
 ) -> str | None:
     """``convert_to_markdown`` 的异步安全版本（线程池 + 硬超时）。
 
@@ -350,7 +351,7 @@ async def convert_to_markdown_async(
 
     try:
         return await asyncio.wait_for(anyio.to_thread.run_sync(_run), timeout=timeout)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning(
             "manuscript_convert_timeout ext=%s bytes=%s timeout=%ss",
             os.path.splitext(filename or "")[1].lower(),
@@ -384,10 +385,14 @@ def _convert_manuscript_inner(contents: bytes, filename: str) -> ManuscriptResul
         try:
             probe = pymupdf.open(stream=contents, filetype="pdf")
         except Exception:
-            return _needs_docx(actual, mismatch, "文件损坏或不是有效 PDF，请另存为 .docx 后重新上传")
+            return _needs_docx(
+                actual, mismatch, "文件损坏或不是有效 PDF，请另存为 .docx 后重新上传"
+            )
         try:
             if probe.is_encrypted:
-                return _needs_docx(actual, mismatch, "加密 PDF，无法抽取文本，请另存为 .docx 后重新上传")
+                return _needs_docx(
+                    actual, mismatch, "加密 PDF，无法抽取文本，请另存为 .docx 后重新上传"
+                )
             raw_text = "\n".join(page.get_text("text") for page in probe)
         finally:
             probe.close()
@@ -403,19 +408,21 @@ def _convert_manuscript_inner(contents: bytes, filename: str) -> ManuscriptResul
         md = clean(md)
         if not md:
             return _needs_docx(actual, mismatch, "PDF 抽取结果为空，请另存为 .docx 后重新上传")
-        return ManuscriptResult(
-            markdown=md, actual_format=actual, extension_mismatch=mismatch
-        )
+        return ManuscriptResult(markdown=md, actual_format=actual, extension_mismatch=mismatch)
 
     if actual == FMT_DOCX:
         md = _docx_to_markdown(contents)
         if not md:
-            return _needs_docx(actual, mismatch, "Word 文档解析失败，文件可能损坏，请另存为 .docx 后重新上传")
+            return _needs_docx(
+                actual, mismatch, "Word 文档解析失败，文件可能损坏，请另存为 .docx 后重新上传"
+            )
         return ManuscriptResult(markdown=md, actual_format=actual, extension_mismatch=mismatch)
 
     if actual == FMT_DOC:
         # 老式 OLE2 二进制 Word：明确拒绝，不静默回退。
-        return _needs_docx(actual, mismatch, "检测到老式 .doc 二进制格式，请在 Word 中另存为 .docx 后重新上传")
+        return _needs_docx(
+            actual, mismatch, "检测到老式 .doc 二进制格式，请在 Word 中另存为 .docx 后重新上传"
+        )
 
     if actual == FMT_RTF:
         return _needs_docx(actual, mismatch, "检测到 RTF 格式，请另存为 .docx 后重新上传")
@@ -435,7 +442,10 @@ def _convert_manuscript_inner(contents: bytes, filename: str) -> ManuscriptResul
 
 
 async def convert_manuscript_async(
-    contents: bytes, filename: str, *, timeout: float = CONVERT_TIMEOUT_SECONDS
+    contents: bytes,
+    filename: str,
+    *,
+    timeout: float = CONVERT_TIMEOUT_SECONDS,  # noqa: ASYNC109
 ) -> ManuscriptResult:
     """``convert_manuscript`` 的异步安全版本（线程池 + 硬超时）。
 
@@ -450,7 +460,7 @@ async def convert_manuscript_async(
 
     try:
         return await asyncio.wait_for(anyio.to_thread.run_sync(_run), timeout=timeout)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning(
             "manuscript_convert_timeout filename=%s bytes=%s timeout=%ss",
             filename,
@@ -488,9 +498,7 @@ def markdown_storage_key(file_path: str) -> str:
 # 改写成 `![alt](/api/catalog/{id}/img/{n})`，原图不迁移、不改存储；
 # /img/{n} 端点按序号从原 Markdown 里抽出第 n 个 data URI 返回字节。
 # 解析失败一律原样返回 Markdown，不得丢图、不得报错。
-_DATA_URI_IMG_RE = re.compile(
-    r'!\[([^\]]*)\]\(data:image/([a-zA-Z0-9.+-]+);base64,([^)]*)\)'
-)
+_DATA_URI_IMG_RE = re.compile(r"!\[([^\]]*)\]\(data:image/([a-zA-Z0-9.+-]+);base64,([^)]*)\)")
 
 # 期刊刊头 logo 的 sha256。历史稿里它被当作“图表”插进正文（297/299/302），
 # 阅读端按字节指纹识别并剔除；不碰原稿、不影响图片序号。
@@ -518,7 +526,7 @@ def extract_embedded_images(md: str) -> list[EmbeddedImage]:
             continue
         try:
             raw = base64.b64decode(payload, validate=False)
-        except Exception:  # noqa: BLE001 — 损坏的单张图跳过，不影响其余
+        except Exception:
             logger.warning("embedded_image_decode_failed subtype=%s", subtype)
             continue
         if not raw:
@@ -541,7 +549,7 @@ def rewrite_embedded_images(md: str, resource_id: int) -> str:
             return f"![{m.group(1)}](/api/catalog/{resource_id}/img/{counter['n']})"
 
         return _DATA_URI_IMG_RE.sub(_sub, md)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.warning("embedded_image_rewrite_failed resource_id=%s", resource_id, exc_info=True)
         return md
 

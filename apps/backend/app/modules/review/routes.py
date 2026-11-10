@@ -13,16 +13,17 @@ cohesion (both modules share the Submission row). See ``submission.routes``.
 
 from __future__ import annotations
 
+import mimetypes
+from pathlib import Path
+from urllib.parse import quote
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from fastapi.responses import Response
-from urllib.parse import quote
-import mimetypes
-from pathlib import Path
-from uuid import uuid4
 
 from app.api.deps import (
     ROLE_REVIEWER,
@@ -330,7 +331,19 @@ async def decline_assignment(
 
 
 _REVIEW_ATTACHMENT_MAX_BYTES = 50 * 1024 * 1024
-_REVIEW_ATTACHMENT_EXTS = {".pdf", ".docx", ".doc", ".md", ".txt", ".zip", ".png", ".jpg", ".jpeg", ".xlsx", ".csv"}
+_REVIEW_ATTACHMENT_EXTS = {
+    ".pdf",
+    ".docx",
+    ".doc",
+    ".md",
+    ".txt",
+    ".zip",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".xlsx",
+    ".csv",
+}
 
 
 def _report_response(report: ReviewReport) -> ReviewReportResponse:
@@ -397,9 +410,7 @@ async def submit_review_report(
         ).scalar_one_or_none()
         if resource is not None:
             resource.is_special_issue = True
-            resource.special_issue_reason = (
-                body.special_issue_reason or "审稿人确认篇幅特许"
-            )
+            resource.special_issue_reason = body.special_issue_reason or "审稿人确认篇幅特许"
             resource.special_issue_by = current_user.id
             resource.special_issue_at = utcnow()
     a.status = "completed"
@@ -491,9 +502,7 @@ async def upload_review_attachment(
 
     key = f"{current_user.tenant_id}/review/{report.id}/{uuid4().hex}{suffix}"
     stored_type = (
-        file.content_type
-        or mimetypes.guess_type(original_name)[0]
-        or "application/octet-stream"
+        file.content_type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
     )
     await get_storage().save(key, contents, content_type=stored_type)
     items = list(report.attachments or [])
@@ -620,13 +629,17 @@ async def assign_reviewers(
             )
 
     existing_all = (
-        await db.execute(
-            select(ReviewAssignment).where(
-                ReviewAssignment.submission_id == submission_id,
-                ReviewAssignment.tenant_id == tenant_id,
+        (
+            await db.execute(
+                select(ReviewAssignment).where(
+                    ReviewAssignment.submission_id == submission_id,
+                    ReviewAssignment.tenant_id == tenant_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     # 轮次：上一轮还有 pending/accepted/completed 的，继续同一轮；
     # 全部 cancelled/declined（作者已重投）才进入下一轮。
     _rounds = [a.round or 1 for a in existing_all]
@@ -636,7 +649,11 @@ async def assign_reviewers(
         round_no = _last_round + 1
     else:
         round_no = _last_round
-    existing = [a for a in existing_all if (a.round or 1) == round_no and a.status in ("pending", "accepted")]
+    existing = [
+        a
+        for a in existing_all
+        if (a.round or 1) == round_no and a.status in ("pending", "accepted")
+    ]
     used_slots = {a.slot for a in existing}
     next_slot = 1
     created = []
@@ -692,8 +709,7 @@ async def assign_reviewers(
                 title=f"您被邀请审稿：{sub.title}",
                 body=(
                     f"稿件 #{sub.id} 已分配给您，截止 {a.due_date.date().isoformat()}，"
-                    "请前往审稿工作台回应。"
-                    + ("（外审专家邀请）" if a.is_external else "")
+                    "请前往审稿工作台回应。" + ("（外审专家邀请）" if a.is_external else "")
                 ),
                 related_type="review_assignment",
                 related_id=str(a.id),
@@ -711,16 +727,20 @@ async def review_matrix(
     """审稿矩阵：每位审稿人状态/推荐/截止/超期/冲突。"""
     tenant_id = require_tenant_id()
     assignments = (
-        await db.execute(
-            select(ReviewAssignment)
-            .where(
-                ReviewAssignment.submission_id == submission_id,
-                ReviewAssignment.tenant_id == tenant_id,
+        (
+            await db.execute(
+                select(ReviewAssignment)
+                .where(
+                    ReviewAssignment.submission_id == submission_id,
+                    ReviewAssignment.tenant_id == tenant_id,
+                )
+                .options(selectinload(ReviewAssignment.report))
+                .order_by(ReviewAssignment.slot)
             )
-            .options(selectinload(ReviewAssignment.report))
-            .order_by(ReviewAssignment.slot)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     current_round = max((a.round or 1) for a in assignments) if assignments else 1
     # 只统计当前轮；旧轮报告保留展示但不计入闸门，避免重投后拿旧意见放行。
@@ -738,20 +758,22 @@ async def review_matrix(
             recommendations.append(rec)
         # reviewer username
         u = await db.get(User, a.reviewer_id)
-        rows.append({
-            "reviewer_id": a.reviewer_id,
-            "username": u.username if u else None,
-            "slot": a.slot,
-            "status": status,
-            "recommendation": rec,
-            "due_date": a.due_date.isoformat() if a.due_date else None,
-            "is_overdue": status == "overdue",
-            "is_adjudicator": a.is_adjudicator,
-            "is_external": bool(getattr(a, "is_external", False)),
-            "external_affiliation": getattr(a, "external_affiliation", None),
-            "round": a.round,
-            "is_current": (a.round or 1) == current_round,
-        })
+        rows.append(
+            {
+                "reviewer_id": a.reviewer_id,
+                "username": u.username if u else None,
+                "slot": a.slot,
+                "status": status,
+                "recommendation": rec,
+                "due_date": a.due_date.isoformat() if a.due_date else None,
+                "is_overdue": status == "overdue",
+                "is_adjudicator": a.is_adjudicator,
+                "is_external": bool(getattr(a, "is_external", False)),
+                "external_affiliation": getattr(a, "external_affiliation", None),
+                "round": a.round,
+                "is_current": (a.round or 1) == current_round,
+            }
+        )
 
     completed = _completed_reports_count(current)
     distinct = _distinct_reviewers_completed(current)
@@ -797,8 +819,9 @@ async def assign_adjudicator(
     POST /review/assignments/{id}/submit 提交，recommendation 为 accept
     时，最终录用闸门才放行。
     """
-    from app.api.deps import ROLE_REVIEWER, ROLE_SENIOR_REVIEWER
     from datetime import timedelta
+
+    from app.api.deps import ROLE_REVIEWER, ROLE_SENIOR_REVIEWER
     from app.models import AuditLog
 
     tenant_id = require_tenant_id()
@@ -833,19 +856,22 @@ async def assign_adjudicator(
         raise HTTPException(status_code=422, detail="Assigned user is not a reviewer")
 
     assignments = (
-        await db.execute(
-            select(ReviewAssignment)
-            .where(
-                ReviewAssignment.submission_id == submission_id,
-                ReviewAssignment.tenant_id == tenant_id,
+        (
+            await db.execute(
+                select(ReviewAssignment)
+                .where(
+                    ReviewAssignment.submission_id == submission_id,
+                    ReviewAssignment.tenant_id == tenant_id,
+                )
+                .options(selectinload(ReviewAssignment.report))
+                .order_by(ReviewAssignment.slot)
             )
-            .options(selectinload(ReviewAssignment.report))
-            .order_by(ReviewAssignment.slot)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     current_round = max((a.round or 1) for a in assignments) if assignments else 1
     current = [a for a in assignments if (a.round or 1) == current_round]
-    completed = _completed_reports_count(current)
     distinct = _distinct_reviewers_completed(current)
     if distinct < 2:
         raise HTTPException(
@@ -885,20 +911,21 @@ async def assign_adjudicator(
         title=f"第三方裁决邀请：{sub.title}",
         body=(
             f"稿件 #{sub.id} 的审稿意见存在分歧，现邀请您作为第三方裁决人。"
-            f"截止 {due.date().isoformat()}。"
-            + (f" 说明：{body.reason}" if body.reason else "")
+            f"截止 {due.date().isoformat()}。" + (f" 说明：{body.reason}" if body.reason else "")
         ),
         related_type="review_assignment",
         related_id=str(a.id),
     )
-    db.add(AuditLog(
-        tenant_id=tenant_id,
-        actor_user_id=current_user.id,
-        action="review.adjudicator_assigned",
-        target_type="submission",
-        target_id=str(submission_id),
-        payload={"reviewer_id": body.reviewer_id, "assignment_id": a.id, "reason": body.reason},
-    ))
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action="review.adjudicator_assigned",
+            target_type="submission",
+            target_id=str(submission_id),
+            payload={"reviewer_id": body.reviewer_id, "assignment_id": a.id, "reason": body.reason},
+        )
+    )
     await db.commit()
     return {
         "submission_id": submission_id,
@@ -924,13 +951,17 @@ async def editor_decision(
     """
     tenant_id = require_tenant_id()
     assignments = (
-        await db.execute(
-            select(ReviewAssignment).where(
-                ReviewAssignment.submission_id == submission_id,
-                ReviewAssignment.tenant_id == tenant_id,
+        (
+            await db.execute(
+                select(ReviewAssignment).where(
+                    ReviewAssignment.submission_id == submission_id,
+                    ReviewAssignment.tenant_id == tenant_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     distinct = _distinct_reviewers_completed(assignments)
     if distinct < 2:
         raise HTTPException(

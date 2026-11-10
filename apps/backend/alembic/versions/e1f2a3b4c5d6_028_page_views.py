@@ -5,9 +5,10 @@ Revises: d0e1f2a3b4c5
 Create Date: 2026-11-11
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "e1f2a3b4c5d6"
 down_revision = "f2a3b4c5d6e7"
@@ -22,8 +23,12 @@ def upgrade() -> None:
         sa.Column("tenant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("path", sa.String(300), nullable=False),
         sa.Column("referrer", sa.String(500), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False,
-                  server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_page_views_tenant_created", "page_views", ["tenant_id", "created_at"])

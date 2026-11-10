@@ -52,9 +52,9 @@ from app.modules.submission.schemas import (
     MessageResponse,
     ReviewerCandidate,
     ReviewerCandidateListResponse,
+    ReworkRequest,
     SubmissionDecision,
     SubmissionListResponse,
-    ReworkRequest,
     SubmissionResponse,
     SubmissionReview,
     WaiveReviewRequest,
@@ -632,13 +632,13 @@ async def editor_decision(
         accept_ids = {rid for rid, _adj, rec in rows if rec == "accept"}
         reject_count = sum(1 for _rid, _adj, rec in rows if rec == "reject")
         major_count = sum(1 for _rid, _adj, rec in rows if rec == "major_revision")
-        adjudicator_accept = any(
-            rec == "accept" and bool(adj) for _rid, adj, rec in rows
-        )
+        adjudicator_accept = any(rec == "accept" and bool(adj) for _rid, adj, rec in rows)
         completed_reviews = len(rows)
 
         if len(accept_ids) < 2:
-            _code = "no_completed_reviews" if completed_reviews == 0 else "insufficient_accept_reviews"
+            _code = (
+                "no_completed_reviews" if completed_reviews == 0 else "insufficient_accept_reviews"
+            )
             _message = (
                 "该稿件尚无已完成的审稿意见，不能直接录用。"
                 "请先分配审稿人并等待意见返回；如确需免评审录用，请先调用 waive-review 记录理由。"
@@ -954,14 +954,18 @@ async def request_rework(
     from app.modules.review.models import ReviewAssignment
 
     reviewers = (
-        await db.execute(
-            select(ReviewAssignment.reviewer_id).where(
-                ReviewAssignment.submission_id == entry.id,
-                ReviewAssignment.tenant_id == entry.tenant_id,
-                ReviewAssignment.status.in_(("pending", "accepted", "completed")),
+        (
+            await db.execute(
+                select(ReviewAssignment.reviewer_id).where(
+                    ReviewAssignment.submission_id == entry.id,
+                    ReviewAssignment.tenant_id == entry.tenant_id,
+                    ReviewAssignment.status.in_(("pending", "accepted", "completed")),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for reviewer_id in set(reviewers):
         await notifications.create(
             db,

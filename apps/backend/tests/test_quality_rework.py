@@ -9,10 +9,9 @@
 
 from __future__ import annotations
 
+import pytest
 from conftest import auth_headers, complete_one_review, register_user
 from httpx import AsyncClient
-
-import pytest
 
 _DIMS = ("problem", "argument", "method", "evidence", "novelty", "integrity", "presentation")
 
@@ -202,14 +201,18 @@ async def test_rework_notifies_reviewer_and_author(
     # 打回必须通知到「实际审过这篇稿子的人」，而不是通知编辑自己。
     from sqlalchemy import select
 
-    from app.modules.review.models import ReviewAssignment
     from app.models import User as UserModel
+    from app.modules.review.models import ReviewAssignment
 
     reviewer_id = (
-        await db_session.execute(
-            select(ReviewAssignment.reviewer_id).where(ReviewAssignment.submission_id == sid)
+        (
+            await db_session.execute(
+                select(ReviewAssignment.reviewer_id).where(ReviewAssignment.submission_id == sid)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     reviewer = (
         await db_session.execute(select(UserModel).where(UserModel.id == reviewer_id))
     ).scalar_one()

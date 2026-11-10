@@ -389,9 +389,7 @@ async def download_submission_version(
     return Response(
         content=data,
         media_type=media_type,
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"
-        },
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"},
     )
 
 
@@ -465,8 +463,9 @@ async def author_resubmit(
     # 作者修回后，上一轮的审稿意见不能再计入新一轮闸门；否则“大修后
     # 重投”会拿旧录用意见直接放行。旧报告保留在 review_reports 里供
     # 追溯，但本轮 assignment 置 cancelled，必须重新送审。
-    from app.modules.review.models import ReviewAssignment as _RA
     from sqlalchemy import update as _update
+
+    from app.modules.review.models import ReviewAssignment as _RA
 
     _rounds = (
         await db.execute(

@@ -133,9 +133,7 @@ class Resource(Base, TenantScopedMixin):
     content_track: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # 娱乐轨文体细分（v1.16）：joke/fiction/review/guide/essay/poetry/rant。
     # 只对 essay 有值；论文轨恒为 NULL。用于娱乐区导航与筛选，不参与学术评分。
-    content_genre: Mapped[str | None] = mapped_column(
-        String(32), nullable=True, index=True
-    )
+    content_genre: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     # 特别篇（篇幅特许）：正常稿件不得超过轨道篇幅上限；只有显式特批的
     # 长稿才置 true，并在阅读端打「特别篇」标签。理由/操作人/时间留痕。
     is_special_issue: Mapped[bool] = mapped_column(
@@ -345,12 +343,16 @@ class Appeal(Base, TenantScopedMixin):
     )
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", server_default="pending")
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending"
+    )
     editor_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     decided_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

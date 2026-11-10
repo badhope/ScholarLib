@@ -108,7 +108,9 @@ async def test_documents_and_static_assets_bypass(rate_limiter_with_strict_env) 
     # API 桶不受影响，仍按原阈值拦截
     for _ in range(10):
         await mw.dispatch(_make_request("/api/auth/login"), lambda req: _ok())
-    assert (await mw.dispatch(_make_request("/api/auth/login"), lambda req: _ok())).status_code == 429
+    assert (
+        await mw.dispatch(_make_request("/api/auth/login"), lambda req: _ok())
+    ).status_code == 429
 
 
 @pytest.mark.asyncio
@@ -120,14 +122,14 @@ async def test_comments_read_not_strict(rate_limiter_with_strict_env) -> None:
     """
     mw = rate_limiter_with_strict_env
     for i in range(60):
-        resp = await mw.dispatch(
-            _make_request("/api/comments", method="GET"), lambda req: _ok()
-        )
+        resp = await mw.dispatch(_make_request("/api/comments", method="GET"), lambda req: _ok())
         assert resp.status_code == 200, f"GET blocked at {i}"
     for _ in range(20):
         resp = await mw.dispatch(_make_request("/api/comments", method="POST"), lambda req: _ok())
         assert resp.status_code == 200
-    assert (await mw.dispatch(_make_request("/api/comments", method="POST"), lambda req: _ok())).status_code == 429
+    assert (
+        await mw.dispatch(_make_request("/api/comments", method="POST"), lambda req: _ok())
+    ).status_code == 429
 
 
 @pytest.mark.asyncio

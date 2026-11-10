@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
+import pytest
 from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
-import pytest
-
-from app.modules.export.exporters import export_resources, to_jats
+from app.modules.export.exporters import export_resources
 from app.modules.export.jats import JatsMeta, markdown_to_jats
 
 _DIMS = ("problem", "argument", "method", "evidence", "novelty", "integrity", "presentation")
@@ -48,9 +47,17 @@ def test_jats_converts_headings_and_inline_marks() -> None:
     body = root.find("body")
     assert body is not None
     text = ET.tostring(body, encoding="unicode")
-    for tag in ("<bold>加粗</bold>", "<italic>斜体</italic>", "<styled-content",
-                "<underline>下划线</underline>", "<sup>2</sup>", "<sub>2</sub>",
-                "<list", "<table-wrap>", "<sec><title>1 引言</title>"):
+    for tag in (
+        "<bold>加粗</bold>",
+        "<italic>斜体</italic>",
+        "<styled-content",
+        "<underline>下划线</underline>",
+        "<sup>2</sup>",
+        "<sub>2</sub>",
+        "<list",
+        "<table-wrap>",
+        "<sec><title>1 引言</title>",
+    ):
         assert tag in text, tag
 
 
@@ -65,14 +72,16 @@ def test_jats_escapes_raw_html_and_xml_specials() -> None:
 
 def test_bibliographic_jats_exporter(tmp_path) -> None:
     class R:  # Exportable duck type
+        from typing import ClassVar
+
         id = 1
         title = "JATS Paper"
-        authors = ["Alice"]
+        authors: ClassVar[list[str]] = ["Alice"]
         year = 2026
         venue = "Rubbish"
         type = "paper"
         discipline = None
-        tags = ["x"]
+        tags: ClassVar[list[str]] = ["x"]
         abstract = "Abs"
         doi = "10.1/x"
         download_url = None
@@ -80,7 +89,7 @@ def test_bibliographic_jats_exporter(tmp_path) -> None:
         volume = "1"
         issue = "01"
         pages = "1-2"
-        keywords = ["k"]
+        keywords: ClassVar[list[str]] = ["k"]
 
     out = export_resources("jats", [R()])
     root = _parse(out)
@@ -168,7 +177,9 @@ async def test_batch_rescore_requires_admin(client: AsyncClient, test_user: dict
 
 
 @pytest.mark.asyncio
-async def test_batch_rescore_rejects_missing_dimension(client: AsyncClient, admin_user: dict) -> None:
+async def test_batch_rescore_rejects_missing_dimension(
+    client: AsyncClient, admin_user: dict
+) -> None:
     res = await _create_resource(client, admin_user, "缺维度稿")
     r = await client.post(
         "/api/quality/batch-rescore",
@@ -193,9 +204,7 @@ async def test_rework_queue_can_include_published(client: AsyncClient, admin_use
     rid = res["id"]
     await client.post(
         "/api/quality/batch-rescore",
-        json={
-            "items": [{"resource_id": rid, "dimensions": _all(10), "absurdity_index": 8}]
-        },
+        json={"items": [{"resource_id": rid, "dimensions": _all(10), "absurdity_index": 8}]},
         headers=auth_headers(admin_user),
     )
     default = await client.get("/api/quality/rework-queue", headers=auth_headers(admin_user))

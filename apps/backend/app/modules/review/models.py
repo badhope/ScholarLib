@@ -48,7 +48,9 @@ class ReviewAssignment(Base, TenantScopedMixin):
         # 同一稿件、同一审稿人、同一轮只能有一条邀请；重投后可邀请同一
         # 审稿人进入新一轮，不能被旧的 (submission, reviewer) 约束拦住。
         UniqueConstraint(
-            "submission_id", "reviewer_id", "round",
+            "submission_id",
+            "reviewer_id",
+            "round",
             name="uq_review_assignment_submission_reviewer_round",
         ),
     )

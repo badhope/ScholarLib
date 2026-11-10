@@ -224,7 +224,7 @@ def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
     buf = io.BytesIO()
     writer = pymupdf.DocumentWriter(buf)
     mediabox = pymupdf.paper_rect("a4")
-    where = mediabox + (52, 56, -52, -56)
+    where = pymupdf.Rect(mediabox.x0 + 52, mediabox.y0 + 56, mediabox.x1 - 52, mediabox.y1 - 56)
     more = 1
     while more:
         dev = writer.begin_page(mediabox)
@@ -240,7 +240,7 @@ def html_to_pdf(body_html: str, title: str, byline: str | None = None) -> bytes:
     # 耗时 +0.12s；在 380 KB/s 的出口带宽下等于把下载时间从 8s 压到 1s。
     try:
         doc.subset_fonts()
-    except Exception:  # noqa: BLE001 - 老版本/异常字体不应让导出整体失败
+    except Exception:
         pass
     packed = io.BytesIO()
     doc.save(packed, deflate=True, garbage=4, deflate_images=True, deflate_fonts=True)
@@ -294,7 +294,7 @@ def md_to_docx(md: str, title: str, byline: str | None = None) -> bytes:
     ``byline`` 仍保留：导出接口从 Resource 元数据带过来的「作者 · 日期」，
     拆回作者列表交给模板排版。
     """
-    from app.modules.submission.docx_template import Meta, build, parse_meta
+    from app.modules.submission.docx_template import build, parse_meta
 
     meta = parse_meta(md, fallback_title=title)
     if byline:
@@ -328,8 +328,14 @@ p { margin: 4pt 0; text-align: justify; }
 
 
 def issue_front_matter_pdf(
-    *, volume: str, issue: str, theme: str, note: str, range_label: str,
-    entries: list[dict], editor: str = "Rubbish 编辑部",
+    *,
+    volume: str,
+    issue: str,
+    theme: str,
+    note: str,
+    range_label: str,
+    entries: list[dict],
+    editor: str = "Rubbish 编辑部",
 ) -> bytes:
     """把一期做成可下载的“版面”：封面、编后记、完整目录、版权页。"""
     import base64
@@ -350,12 +356,12 @@ def issue_front_matter_pdf(
         rows = "".join(
             f'<div class="toc-row"><span class="toc-no">{i + 1:02d}.</span> '
             f'<span class="toc-title">{esc(e["title"])}</span>'
-            f'{" <span class=\'toc-meta\'>[特别篇]</span>" if e.get("special") else ""}'
+            f"{" <span class='toc-meta'>[特别篇]</span>" if e.get('special') else ''}"
             f'<div class="toc-meta">{esc("、".join(e.get("authors") or []))} · '
-            f'{esc(e.get("discipline"))}{(" · CLC " + esc(e.get("clc"))) if e.get("clc") else ""}</div></div>'
+            f"{esc(e.get('discipline'))}{(' · CLC ' + esc(e.get('clc'))) if e.get('clc') else ''}</div></div>"
             for i, e in enumerate(group)
         )
-        return f'<h3>{esc(label)} · {len(group)} 篇</h3>{rows}'
+        return f"<h3>{esc(label)} · {len(group)} 篇</h3>{rows}"
 
     logo_path = Path(__file__).resolve().parent / "assets" / "brand-lockup.png"
     logo_b64 = base64.b64encode(logo_path.read_bytes()).decode() if logo_path.is_file() else ""
@@ -389,7 +395,7 @@ def issue_front_matter_pdf(
     buf = io.BytesIO()
     writer = pymupdf.DocumentWriter(buf)
     mediabox = pymupdf.paper_rect("a4")
-    where = mediabox + (56, 60, -56, -60)
+    where = pymupdf.Rect(mediabox.x0 + 56, mediabox.y0 + 60, mediabox.x1 - 56, mediabox.y1 - 60)
     more = 1
     while more:
         dev = writer.begin_page(mediabox)
@@ -447,8 +453,7 @@ def docx_to_pdf(docx_bytes: bytes, *, timeout: int = 90) -> bytes:
         proc = subprocess.run(
             cmd,
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=timeout,
             check=False,
         )

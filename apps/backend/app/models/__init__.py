@@ -365,12 +365,10 @@ class EmailLoginCode(Base, TenantScopedMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-
-
 __all__ = [
     "AuditLog",
-    "EmailLoginCode",
     "Base",
+    "EmailLoginCode",
     "Role",
     "Tenant",
     "TenantHost",

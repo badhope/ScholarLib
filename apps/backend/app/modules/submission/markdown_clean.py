@@ -612,18 +612,32 @@ def analyze_structure(md: str | None) -> dict[str, object]:
     word_count = len(body)
 
     # 必查节：引言/方法/结果/讨论/结论 + 摘要 + 参考文献
-    required = ["introduction", "method", "results", "discussion", "conclusion", "references"]
-    missing = [s for s in required if not found.get(s)]
 
     items: list[dict[str, object]] = [
-        {"key": "abstract", "label": "摘要", "ok": has_abstract,
-         "hint": "正文开头加一段「## 摘要」"},
-        {"key": "keywords", "label": "关键词", "ok": has_keywords,
-         "hint": "摘要后加一行「关键词：a；b；c」"},
-        {"key": "references", "label": "参考文献", "ok": found.get("references", False),
-         "hint": "文末加「## 参考文献」小节（≥4 条，GB/T 7714）"},
-        {"key": "word_count", "label": "篇幅（字符）", "ok": word_count >= MIN_BODY_CHARS,
-         "hint": f"短篇 ≥2500 字（当前约 {word_count} 字符）"},
+        {
+            "key": "abstract",
+            "label": "摘要",
+            "ok": has_abstract,
+            "hint": "正文开头加一段「## 摘要」",
+        },
+        {
+            "key": "keywords",
+            "label": "关键词",
+            "ok": has_keywords,
+            "hint": "摘要后加一行「关键词：a；b；c」",
+        },
+        {
+            "key": "references",
+            "label": "参考文献",
+            "ok": found.get("references", False),
+            "hint": "文末加「## 参考文献」小节（≥4 条，GB/T 7714）",
+        },
+        {
+            "key": "word_count",
+            "label": "篇幅（字符）",
+            "ok": word_count >= MIN_BODY_CHARS,
+            "hint": f"短篇 ≥2500 字（当前约 {word_count} 字符）",
+        },
     ]
     for slug, zh in [
         ("introduction", "引言"),
@@ -632,9 +646,13 @@ def analyze_structure(md: str | None) -> dict[str, object]:
         ("discussion", "讨论"),
         ("conclusion", "结论"),
     ]:
-        items.append({
-            "key": slug, "label": zh, "ok": bool(found.get(slug)),
-            "hint": f"缺「{zh}」一级节——对应规范 §3.1",
-        })
+        items.append(
+            {
+                "key": slug,
+                "label": zh,
+                "ok": bool(found.get(slug)),
+                "hint": f"缺「{zh}」一级节——对应规范 §3.1",
+            }
+        )
 
     return {"ok": all(i["ok"] for i in items), "items": items, "word_count": word_count}

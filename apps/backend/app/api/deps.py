@@ -261,7 +261,11 @@ def require_role(min_role: str):
         db: AsyncSession = Depends(get_db),
     ) -> User:
         # 2FA-for-admin 只对主编级生效（沿用 require_admin 的既有策略）。
-        if min_role == "editor_in_chief" and settings.require_2fa_for_admin and current_user.totp_enabled_at is None:
+        if (
+            min_role == "editor_in_chief"
+            and settings.require_2fa_for_admin
+            and current_user.totp_enabled_at is None
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

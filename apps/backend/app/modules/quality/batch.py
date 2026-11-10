@@ -78,13 +78,17 @@ async def apply_review_items(
     missing: list[int] = []
     ids = [item.resource_id for item in items]
     rows = (
-        await db.execute(
-            select(Resource).where(
-                Resource.id.in_(ids),
-                Resource.tenant_id == tenant_id,
+        (
+            await db.execute(
+                select(Resource).where(
+                    Resource.id.in_(ids),
+                    Resource.tenant_id == tenant_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     by_id = {r.id: r for r in rows}
     missing = [rid for rid in ids if rid not in by_id]
 
@@ -92,21 +96,16 @@ async def apply_review_items(
     updated = 0
     for item in items:
         if item.resource_id not in by_id:
-            results.append(
-                {"resource_id": item.resource_id, "ok": False, "error": "not_found"}
-            )
+            results.append({"resource_id": item.resource_id, "ok": False, "error": "not_found"})
             continue
         resource = by_id[item.resource_id]
         try:
             scores = [
-                DimensionScore(key=d.key, score=d.score, reason=d.reason)
-                for d in item.dimensions
+                DimensionScore(key=d.key, score=d.score, reason=d.reason) for d in item.dimensions
             ]
             evaluation = evaluate(scores, article_type=item.article_type)
         except ValueError as exc:
-            results.append(
-                {"resource_id": item.resource_id, "ok": False, "error": str(exc)[:300]}
-            )
+            results.append({"resource_id": item.resource_id, "ok": False, "error": str(exc)[:300]})
             continue
 
         resource.quality_score = float(evaluation["score"])
@@ -120,9 +119,7 @@ async def apply_review_items(
         from app.core.tracks import canonicalize_track_category
 
         if item.content_category is not None:
-            new_track, new_category = canonicalize_track_category(
-                None, item.content_category
-            )
+            new_track, new_category = canonicalize_track_category(None, item.content_category)
         elif resource.content_track in ("paper", "essay"):
             new_track, new_category = canonicalize_track_category(
                 resource.content_track, resource.content_category

@@ -20,6 +20,7 @@ Create Date: 2026-11-06
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "a6b7c8d9e0f1"
@@ -61,10 +62,7 @@ def upgrade() -> None:
         "UPDATE resources SET content_category = 'academic' "
         "WHERE content_category IS NULL AND type = 'paper'"
     )
-    op.execute(
-        "UPDATE resources SET content_category = 'fun' "
-        "WHERE content_category IS NULL"
-    )
+    op.execute("UPDATE resources SET content_category = 'fun' WHERE content_category IS NULL")
 
 
 def downgrade() -> None:

@@ -118,7 +118,7 @@ def email_login_code(code: str, expire_minutes: int) -> tuple[str, str, str]:
         f'<p style="margin:0 0 14px;">你正在登录 <strong>{escape(settings.site_name)}</strong>。'
         f"本次登录验证码为：</p>"
         f'<div style="margin:0 0 16px;padding:14px 20px;background:{PAPER};border:1px dashed {ACCENT};'
-        f'border-radius:8px;font-size:28px;font-weight:700;letter-spacing:8px;color:{INK};'
+        f"border-radius:8px;font-size:28px;font-weight:700;letter-spacing:8px;color:{INK};"
         f'text-align:center;">{escape(code)}</div>'
         f'<p style="margin:0 0 8px;font-size:13px;color:{MUTED};">'
         f"{expire_minutes} 分钟内有效，仅可使用一次。请勿把验证码告诉任何人——"

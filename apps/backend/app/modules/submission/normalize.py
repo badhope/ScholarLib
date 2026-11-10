@@ -36,10 +36,10 @@ _CJK = r"\u3400-\u4dbf\u4e00-\u9fff"
 # 顺序有讲究——图片必须排在链接前面，否则 ``![alt](url)`` 会先被链接规则
 # 吃掉 ``[alt](url)``，留下一个孤立的 ``!``。
 _PROTECT = re.compile(
-    r"(!\[[^\]]*\]\([^)]*\))"      # 图片
-    r"|(\[[^\]]*\]\([^)]*\))"      # 链接
-    r"|(`[^`\n]*`)"             # 行内代码
-    r"|(</?[A-Za-z][^>\n]*>)"   # HTML 标签
+    r"(!\[[^\]]*\]\([^)]*\))"  # 图片
+    r"|(\[[^\]]*\]\([^)]*\))"  # 链接
+    r"|(`[^`\n]*`)"  # 行内代码
+    r"|(</?[A-Za-z][^>\n]*>)"  # HTML 标签
 )
 
 _PLACEHOLDER = "\x00P{}\x00"
@@ -65,7 +65,7 @@ _CAPTION_NUM = re.compile(
 # 两段正文会被粘成一段（实测事故，务必保留 [ \t]）。
 # 表格单元格边界 ``） |`` 前的空格是列分隔的视觉留白，不能清掉，
 # 否则整行贴成 ``）| −1.2``，表格会读成一列散字。
-_SPACE_AFTER_CJK_PUNCT = re.compile(rf"([，。；：！？、）》」』】])[ \t]+(?![|])")
+_SPACE_AFTER_CJK_PUNCT = re.compile(r"([，。；：！？、）》」』】])[ \t]+(?![|])")
 
 # 破折号被 PDF 拆成两个单横线：``— —`` → ``——``
 _BROKEN_EMDASH = re.compile(r"—[ \t]+—")
@@ -86,8 +86,8 @@ _CLOSERS = "”’」』）】》\"'"
 # 块级行：标题、列表、引用、表格、围栏、图片占位、HTML、图/表题注。
 # 这些行自成一块，不与相邻文本合并——题注被并进正文是阅读版最刺眼的错位之一。
 _BLOCKISH = re.compile(
-    rf"^(#{{1,6}}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||```|~~~|<|!\[|\x00P\d+\x00"
-    rf"|(图|表|Figure|Fig\.?|Table)[ \t]*\d)"
+    r"^(#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|>|\||```|~~~|<|!\[|\x00P\d+\x00"
+    r"|(图|表|Figure|Fig\.?|Table)[ \t]*\d)"
 )
 
 
@@ -124,9 +124,7 @@ _HALF_BRACKET = re.compile(r"\(([^()\n]{1,60})\)")
 
 # 粗体编号标题：``**1.3　本文的效力声明**``。标题文字限 40 字符、不含句读，
 # 以免把正文里的行内强调误当标题。
-_BOLD_NUM_HEADING = re.compile(
-    rf"\*\*(\d{{1,2}}(?:\.\d{{1,2}}){{0,2}})[ \u3000]+([^*\n]{{1,40}}?)\*\*"
-)
+_BOLD_NUM_HEADING = re.compile(r"\*\*(\d{1,2}(?:\.\d{1,2}){0,2})[ \u3000]+([^*\n]{1,40}?)\*\*")
 
 # 句末切分（保留标点）
 _SENT_SPLIT = re.compile(r"(?<=[。！？])")
@@ -274,6 +272,7 @@ def _promote_bold_headings(md: str) -> str:
     只在「编号 + 空格 + 短标题」时触发：正文里的行内强调（``**注意**``）
     没有编号，不会被误提。
     """
+
     def _sub(m: re.Match[str]) -> str:
         num, title = m.group(1), m.group(2).strip().rstrip("：:")
         # 「0 级事实」是正文里的证据层级术语，「1.10.4 的地位…」是句子开头引用，
@@ -314,11 +313,7 @@ def _split_overlong_blocks(md: str, limit: int = 450) -> str:
     out: list[str] = []
     for block in md.split("\n\n"):
         s = block.strip()
-        if (
-            len(re.findall(rf"[{_CJK}]", s)) <= 600
-            or s[:1] in "#|!-*>`<"
-            or _BLOCKISH.match(s)
-        ):
+        if len(re.findall(rf"[{_CJK}]", s)) <= 600 or s[:1] in "#|!-*>`<" or _BLOCKISH.match(s):
             out.append(block)
             continue
 
@@ -383,9 +378,7 @@ def _reflow_shredded(md: str) -> str:
             flush()
             out.append("")
             continue
-        if _BLOCKISH.match(line) or (
-            _is_formula_text(line) and not re.search(rf"[{_CJK}]", line)
-        ):
+        if _BLOCKISH.match(line) or (_is_formula_text(line) and not re.search(rf"[{_CJK}]", line)):
             # 纯公式行也是块级：``a = b`` 不能和上下文拼成一句
             flush()
             out.append(line)
@@ -395,6 +388,7 @@ def _reflow_shredded(md: str) -> str:
             flush()
     flush()
     return "\n".join(out)
+
 
 # 中英文之间补空格。
 # 只处理拉丁**字母**，不处理数字：中文排版里「2024年度」「3个样本」是
@@ -577,7 +571,7 @@ def normalize_markdown(md: str) -> str:
     body = _fix_headings(body)
     body = unify_heading_levels(body)
     body = _demote_term_headings(body)
-    body = _fix_captions(body)      # 先规整题注编号，reflow 才能认出题注行
+    body = _fix_captions(body)  # 先规整题注编号，reflow 才能认出题注行
     body = _reflow_shredded(body)
     body = _fix_cjk_brackets(body)
     body = _split_overlong_blocks(body)
@@ -611,23 +605,29 @@ def audit_style(md: str | None) -> dict[str, object]:
 
     issues: list[dict[str, object]] = []
     if zh_lines and en_lines and len(en_lines) >= max(3, len(zh_lines) // 4):
-        issues.append({
-            "key": "mixed_language",
-            "label": "中英文段落混杂",
-            "detail": f"中文段落 {len(zh_lines)} 行 / 纯英文段落 {len(en_lines)} 行，需统一叙述语言",
-        })
+        issues.append(
+            {
+                "key": "mixed_language",
+                "label": "中英文段落混杂",
+                "detail": f"中文段落 {len(zh_lines)} 行 / 纯英文段落 {len(en_lines)} 行，需统一叙述语言",
+            }
+        )
 
     # 半角标点夹在中文里：中文阅读体验差，属排印问题而非内容问题
     half_in_zh = [ln for ln in zh_lines if re.search(rf"[{_CJK}],|[{_CJK}];", ln)]
     if len(half_in_zh) >= 3:
-        issues.append({
-            "key": "halfwidth_punct",
-            "label": "中文句子里用半角标点",
-            "detail": f"{len(half_in_zh)} 行，建议统一为全角",
-        })
+        issues.append(
+            {
+                "key": "halfwidth_punct",
+                "label": "中文句子里用半角标点",
+                "detail": f"{len(half_in_zh)} 行，建议统一为全角",
+            }
+        )
 
     if re.search(r"^#{1,6}\s*(摘要|Abstract)", md, re.M) is None:
-        issues.append({"key": "no_abstract", "label": "缺摘要标题", "detail": "阅读版应显式呈现摘要"})
+        issues.append(
+            {"key": "no_abstract", "label": "缺摘要标题", "detail": "阅读版应显式呈现摘要"}
+        )
     if re.search(r"^(#{1,6}\s*)?(参考文献|References)", md, re.M) is None:
         issues.append({"key": "no_references", "label": "缺参考文献", "detail": "文末需有文献表"})
 
@@ -637,10 +637,12 @@ def audit_style(md: str | None) -> dict[str, object]:
         dup_headings[key] = dup_headings.get(key, 0) + 1
     dups = [k for k, v in dup_headings.items() if v > 1]
     if dups:
-        issues.append({
-            "key": "duplicate_headings",
-            "label": "标题重复",
-            "detail": "、".join(dups[:5]),
-        })
+        issues.append(
+            {
+                "key": "duplicate_headings",
+                "label": "标题重复",
+                "detail": "、".join(dups[:5]),
+            }
+        )
 
     return {"ok": not issues, "issues": issues}

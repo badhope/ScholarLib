@@ -39,7 +39,7 @@ def outbound_off(monkeypatch: pytest.MonkeyPatch):
 class _ExplodingSMTP:
     """任何连接尝试都视为护栏失效。"""
 
-    def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+    def __init__(self, *args, **kwargs):
         raise AssertionError("外发总闸关闭时不应发生任何 SMTP 连接")
 
 
@@ -117,19 +117,19 @@ async def test_explicit_opt_in_still_delivers(monkeypatch) -> None:
     delivered: list[str] = []
 
     class _FakeSMTP:
-        def __init__(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        def __init__(self, *args, **kwargs):
             pass
 
         def __enter__(self):
             return self
 
-        def __exit__(self, *args):  # noqa: ANN002
+        def __exit__(self, *args):
             return False
 
-        def starttls(self, **kwargs):  # noqa: ANN003
+        def starttls(self, **kwargs):
             pass
 
-        def login(self, *args):  # noqa: ANN002
+        def login(self, *args):
             pass
 
         def send_message(self, msg):

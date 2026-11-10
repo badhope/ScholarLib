@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
 from conftest import auth_headers, register_user
 from httpx import AsyncClient
-
-import pytest
 
 
 async def _as_editor(client: AsyncClient, admin: dict, name: str) -> dict:
@@ -37,7 +36,11 @@ async def test_create_topic_requires_login(client: AsyncClient) -> None:
 async def test_create_topic_and_list(client: AsyncClient, test_user: dict) -> None:
     created = await client.post(
         "/api/forum/topics",
-        json={"title": "如何选择投稿赛道？", "body": "正经和荒诞该怎么选？", "category": "question"},
+        json={
+            "title": "如何选择投稿赛道？",
+            "body": "正经和荒诞该怎么选？",
+            "category": "question",
+        },
         headers=auth_headers(test_user),
     )
     assert created.status_code == 201, created.text
@@ -86,7 +89,9 @@ async def test_notice_category_requires_editor(client: AsyncClient, test_user: d
 
 
 @pytest.mark.asyncio
-async def test_editor_can_post_notice(client: AsyncClient, test_user: dict, admin_user: dict) -> None:
+async def test_editor_can_post_notice(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
     editor = await _as_editor(client, admin_user, "forum_editor")
     r = await client.post(
         "/api/forum/topics",
@@ -135,13 +140,9 @@ async def test_only_author_or_moderator_can_delete(
         )
     ).json()
     other = await register_user(client, email="other_forum@example.com", username="other_forum")
-    r = await client.delete(
-        f"/api/forum/topics/{topic['id']}", headers=auth_headers(other)
-    )
+    r = await client.delete(f"/api/forum/topics/{topic['id']}", headers=auth_headers(other))
     assert r.status_code == 403
-    ok = await client.delete(
-        f"/api/forum/topics/{topic['id']}", headers=auth_headers(test_user)
-    )
+    ok = await client.delete(f"/api/forum/topics/{topic['id']}", headers=auth_headers(test_user))
     assert ok.status_code == 204
     # 软删除后列表不再出现
     listing = await client.get("/api/forum/topics")
@@ -149,16 +150,22 @@ async def test_only_author_or_moderator_can_delete(
 
 
 @pytest.mark.asyncio
-async def test_pinned_topic_sorts_first(client: AsyncClient, test_user: dict, admin_user: dict) -> None:
+async def test_pinned_topic_sorts_first(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
     editor = await _as_editor(client, admin_user, "forum_pin_ed")
     t1 = (
         await client.post(
-            "/api/forum/topics", json={"title": "普通帖", "body": "正文内容"}, headers=auth_headers(test_user)
+            "/api/forum/topics",
+            json={"title": "普通帖", "body": "正文内容"},
+            headers=auth_headers(test_user),
         )
     ).json()
     t2 = (
         await client.post(
-            "/api/forum/topics", json={"title": "要置顶的帖", "body": "正文内容"}, headers=auth_headers(test_user)
+            "/api/forum/topics",
+            json={"title": "要置顶的帖", "body": "正文内容"},
+            headers=auth_headers(test_user),
         )
     ).json()
     await client.patch(

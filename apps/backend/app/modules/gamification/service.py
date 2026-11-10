@@ -18,7 +18,6 @@ from app.core.time import utcnow
 from app.models import Role, User, UserRole
 from app.modules.gamification.badges import BADGES, badge_payload
 from app.modules.gamification.ladder import (
-    IDENTITIES,
     IDENTITY_RANK,
     identities_payload,
     identity_for_roles,

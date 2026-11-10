@@ -2,9 +2,11 @@
 
 All columns are nullable so existing users keep working unchanged.
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "b8c9d0e1f2a4"

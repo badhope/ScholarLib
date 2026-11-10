@@ -15,8 +15,7 @@ bulk revocation (revoke-all, password change).
 from __future__ import annotations
 
 import json
-
-from datetime import timedelta, UTC
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, func, select
@@ -42,7 +41,6 @@ from app.core.email_code import (
     generate_code,
     hash_code,
 )
-from app.core.email_templates import email_login_code as _email_login_code_template
 from app.core.email_templates import (
     duplicate_registration,
 )
@@ -50,7 +48,6 @@ from app.core.email_templates import email_login_code as _email_login_code_templ
 from app.core.email_templates import (
     reset_password as reset_password_tpl,
 )
-from app.core.email_templates import email_login_code as _email_login_code_template
 from app.core.email_templates import (
     verify_email as verify_email_tpl,
 )
@@ -859,7 +856,9 @@ async def request_email_login_code(
         await sender.send(to=email, subject=subject, body=body, html=html)
         allow_email_to(email)
     except Exception as exc:
-        logger.warning("email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True)
+        logger.warning(
+            "email_login_code_send_failed", email_domain=email.split("@")[-1], exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="验证码邮件发送失败，请稍后再试或使用密码登录。",
@@ -945,27 +944,6 @@ async def verify_email_login_code(
             pending_token=create_two_factor_pending_token(user.id, user.token_version)
         )
     return await _issue_tokens(user, response, db)
-
-
-async def forgot_password(
-    payload: ForgotPasswordRequest,
-    db: AsyncSession = Depends(get_db),
-) -> MessageResponse:
-    """Trigger a password-reset email. Always returns 200 (don't leak
-    whether an account exists for the address)."""
-    tenant_id = get_current_tenant_id()
-    stmt = select(User).where(func.lower(User.email) == payload.email.strip().lower())
-    if tenant_id is not None:
-        stmt = stmt.where(User.tenant_id == tenant_id)
-    result = await db.execute(stmt)
-    user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
-        return MessageResponse(message="If the account exists, a reset email was sent")
-    try:
-        await _send_password_reset_email(user)
-    except Exception:
-        logger.warning("password_reset_email_failed", user_id=user.id, exc_info=True)
-    return MessageResponse(message="If the account exists, a reset email was sent")
 
 
 @router.post(

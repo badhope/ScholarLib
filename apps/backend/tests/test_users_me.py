@@ -152,9 +152,7 @@ async def test_update_extended_profile_fields(client: AsyncClient, test_user: di
 
 
 @pytest.mark.asyncio
-async def test_extended_profile_rejects_non_http_url(
-    client: AsyncClient, test_user: dict
-) -> None:
+async def test_extended_profile_rejects_non_http_url(client: AsyncClient, test_user: dict) -> None:
     r = await client.patch(
         "/api/users/me",
         json={"website": "javascript:alert(1)"},
