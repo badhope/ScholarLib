@@ -83,7 +83,7 @@ test.describe('notifications + recommendations', () => {
     const rid = Number(m[1])
 
     // 2) 进入 reader 并触发 view 记录 + 进度上报
-    await page.goto(`/reader/${rid}`)
+    await page.goto(`/catalog/${rid}#article`)
     await expect(page.getByText(title).first()).toBeVisible()
     await page.getByLabel('页码').fill('1')
     await page.getByRole('button', { name: '保存进度' }).click()

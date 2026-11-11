@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, loginViaUi, nextTestUser, registerAndVerifyViaUi } from './helpers'
+import {
+  ADMIN,
+  loginViaUi,
+  nextTestUser,
+  registerAndVerifyViaUi,
+  openSubmissionForm,
+  fillSubmissionWizard,
+} from './helpers'
 
 // 1.7.0 — 个人简介（settings → 资料）与职员角色申请（L5/L6）通道。
 //
@@ -24,8 +31,8 @@ test.describe('profile bio', () => {
     await page.reload()
     await expect(textarea).toHaveValue('荒诞现象业余观测者，正经赛道在读研究生。')
 
-    await page.goto('/profile')
-    await expect(page.getByText(/「荒诞现象业余观测者/)).toBeVisible({ timeout: 10_000 })
+    await page.goto('/me')
+    await expect(page.getByText('荒诞现象业余观测者，正经赛道在读研究生。')).toBeVisible({ timeout: 10_000 })
   })
 
   test('clearing the bio removes it from the profile card', async ({ page }) => {
@@ -43,8 +50,8 @@ test.describe('profile bio', () => {
     await page.getByRole('button', { name: '保存简介' }).click()
     await expect(page.getByText('简介已清除')).toBeVisible({ timeout: 5_000 })
 
-    await page.goto('/profile')
-    await expect(page.getByText(/「先写一句。/)).toHaveCount(0)
+    await page.goto('/me')
+    await expect(page.getByText('先写一句。')).toHaveCount(0)
   })
 })
 
@@ -104,15 +111,16 @@ test.describe('1.8.0 投稿零门槛', () => {
     await loginViaUi(page, user) // loginViaUi 里的 ensureAuthorReady = 确认《投稿规范》
 
     await page.goto('/submissions')
-    await page.getByRole('button', { name: /新建提交/ }).click()
-    await expect(page.getByRole('dialog', { name: '新建提交' })).toBeVisible()
+    await openSubmissionForm(page)
     const title = `Open Call ${Date.now()}`
-    await page.getByLabel('标题').fill(title)
-    await page.getByLabel('作者（逗号分隔）').fill('Open Call Author')
-    await page.getByLabel('学科', { exact: true }).fill('computer science')
-    await page.getByLabel('摘要', { exact: true }).fill('零门槛投稿链路的 E2E 验证摘要。')
-    await page.getByRole('button', { name: '提交' }).click()
-    await expect(page.getByText('提交成功，等待审核')).toBeVisible({ timeout: 10_000 })
+    await fillSubmissionWizard(page, {
+      title,
+      discipline: 'computer science',
+      abstract: '零门槛投稿链路的 E2E 验证摘要。',
+      authors: 'Open Call Author',
+    })
+    await page.getByRole('button', { name: '确认提交' }).click()
+    await expect(page.getByText('已提交，等待编辑处理')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText(title).first()).toBeVisible()
   })
 })

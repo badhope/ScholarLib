@@ -41,7 +41,7 @@ test.describe('export citation', () => {
   for (const fmt of FORMATS) {
     test(`export selected resources as ${fmt.toUpperCase()}`, async ({ page }) => {
       await loginViaUi(page, ADMIN)
-      await page.goto('/catalog')
+      await page.goto('/papers?view=list')
       // 等表格渲染：mobile 卡片用 md:hidden 隐藏在桌面端，
       // 直接定位 desktop 表格的 cell 避免 .first() 命中被隐藏的 mobile 卡片
       await expect(
@@ -76,7 +76,7 @@ test.describe('export citation', () => {
 
   test('export without selection shows error toast', async ({ page }) => {
     await loginViaUi(page, ADMIN)
-    await page.goto('/catalog')
+    await page.goto('/papers?view=list')
     // 不勾选任何行：catalog/index.tsx 在 selectedIds.length === 0 时
     // 不渲染"导出为…" DropdownMenu。直接断言按钮不存在（toHaveCount 立即返回，
     // 不会等 timeout，因为 locator 查询不等待元素出现）。
@@ -89,8 +89,9 @@ test.describe('export citation', () => {
     await loginViaUi(page, ADMIN)
     const id = resourceIds[0]
     await page.goto(`/catalog/${id}`)
-    // CardTitle 不是 heading role，用 text 断言
-    await expect(page.getByText('操作', { exact: true }).first()).toBeVisible()
-    await expect(page.getByRole('link', { name: /在线阅读/ })).toBeVisible()
+    // 详情页右侧「引用」卡：BibTeX / RIS 直链 + 复制引用格式
+    await expect(page.getByRole('link', { name: 'BibTeX' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'RIS' })).toBeVisible()
+    await expect(page.getByRole('button', { name: '复制引用格式' })).toBeVisible()
   })
 })

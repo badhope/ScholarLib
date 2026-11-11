@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   BadgeCheck,
@@ -19,11 +19,9 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { RoleApplicationsSection } from '@/components/common/role-applications'
 
 export const Route = createFileRoute('/levels')({
-  beforeLoad: () => {
-    throw redirect({ to: '/guide', search: { tab: 'levels' } })
-  },
   component: LevelsPage,
 })
 
@@ -404,6 +402,8 @@ export function LevelsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <RoleApplicationsSection />
     </div>
   )
 }

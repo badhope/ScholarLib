@@ -427,12 +427,20 @@ function SubmissionWizardPage() {
       const raw = localStorage.getItem(DRAFT_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as WizardForm & { _savedAt?: number }
-        setForm({
-          ...EMPTY_FORM,
-          ...parsed,
-          ...(typeof search.section === 'string' && search.section
-            ? { articleSection: search.section }
-            : {}),
+        // 草稿恢复是异步的：用户在页面刚打开时就输入的内容不能被它盖掉。
+        // 只要当前表单已有任何用户输入，就保留现状，只补空缺字段。
+        setForm((prev) => {
+          const hasUserInput = Boolean(
+            prev.title || prev.abstract || prev.keywords || prev.authors || prev.body,
+          )
+          if (hasUserInput) return prev
+          return {
+            ...EMPTY_FORM,
+            ...parsed,
+            ...(typeof search.section === 'string' && search.section
+              ? { articleSection: search.section }
+              : {}),
+          }
         })
         if (parsed._savedAt) setSavedAt(new Date(parsed._savedAt))
       }

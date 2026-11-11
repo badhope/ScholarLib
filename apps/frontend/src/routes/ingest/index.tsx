@@ -99,7 +99,7 @@ function IngestPage() {
   const [id, setId] = useState('')
 
   const sendToSubmissions = (r: IngestResource) => {
-    void navigate({ to: '/submissions', state: { preset: r } })
+    void navigate({ to: '/submissions/new', state: { preset: r } })
   }
 
   const onParse = async (e: React.FormEvent) => {

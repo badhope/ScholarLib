@@ -89,12 +89,10 @@ test.describe('ingest: parse BibTeX / RIS / CSV', () => {
     await page.getByRole('button', { name: '解析' }).click()
     await expect(page.getByRole('heading', { name: 'Deep Learning for Citations' })).toBeVisible({ timeout: 5_000 })
 
-    // 点提交到目录 → 跳 /submissions + 新建提交对话框打开 + 预填数据
+    // 点提交到目录 → 跳 /submissions/new 表单页 + 预填数据
     await page.getByRole('button', { name: '提交到目录' }).click()
-    await expect(page).toHaveURL(/\/submissions/, { timeout: 10_000 })
-    // 新建提交对话框已打开。用 name 精确匹配，避开同页 CookieConsent 横幅
-    // （role 同为 dialog）在 strict mode 下的双元素命中。
-    await expect(page.getByRole('dialog', { name: '新建提交' })).toBeVisible({ timeout: 5_000 })
+    await expect(page).toHaveURL(/\/submissions\/new/, { timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: '新建投稿' })).toBeVisible({ timeout: 5_000 })
     // preset 把解析出的标题填进了 title 输入框（input value 不是 textContent，
     // 不能用 getByText，要用 toHaveValue）
     await expect(page.getByLabel('标题')).toHaveValue('Deep Learning for Citations')

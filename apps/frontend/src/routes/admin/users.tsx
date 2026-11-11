@@ -207,7 +207,7 @@ function AdminUsersPage() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" disabled={isSelf}>
+                          <Button variant="ghost" size="icon-sm" disabled={isSelf} aria-label="用户操作">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

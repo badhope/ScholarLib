@@ -27,9 +27,11 @@ test.describe('guest browse', () => {
     await page.goto('/catalog')
     await expect(page).toHaveURL(/\/catalog$/)
     // 页面 header
-    await expect(page.getByRole('heading', { name: '资源目录' })).toBeVisible()
-    // 筛选面板默认收起（1.3.0 起的「打开页面先看到一面筛选墙」治理），
-    // 点开后才出现搜索框。
+    await expect(page.getByRole('heading', { name: '目录', exact: true })).toBeVisible()
+    // /catalog 是双轨入口页；论文列表在 /papers。筛选默认收起，
+    // 点开后才出现搜索框（1.3.0 起的「先看到一面筛选墙」治理）。
+    await page.getByRole('link', { name: '进入论文区' }).click()
+    await expect(page).toHaveURL(/\/papers$/)
     await page.getByRole('button', { name: '筛选' }).click()
     await expect(page.getByPlaceholder('标题/作者/摘要')).toBeVisible()
   })
@@ -70,17 +72,20 @@ test.describe('guest browse', () => {
     await expect(
       page.getByText('这是一篇用于验证访客可以直接查看目录详情页').first(),
     ).toBeVisible()
-    // 0.6.1 起阅读无登录墙：访客直接看到「在线阅读」，不存在"登录后阅读全文"
-    await expect(page.getByRole('link', { name: '在线阅读' }).first()).toBeVisible()
+    // 0.6.1 起阅读无登录墙：没有 markdown 正文时给出原件/扫描件入口，
+    // 有正文时给「在线阅读」；两种都不得出现登录墙文案。
+    await expect(
+      page.getByText('游客模式：可阅读与下载全部已刊内容。'),
+    ).toBeVisible()
     await expect(page.getByText('登录后阅读全文')).toHaveCount(0)
     // 鉴权专属能力（关注/订阅）对访客隐藏
     await expect(page.getByText('关注', { exact: true })).toHaveCount(0)
   })
 
   test('reader is readable by guests (no login wall)', async ({ page }) => {
+    // v5 起 /reader/:id 收敛到文章页 #article 锚点，不再单独保留阅读壳。
     await page.goto('/reader/1')
-    // 路由不再重定向；页面渲染阅读进度卡或"无法阅读"状态都说明守卫已放行
-    await expect(page).toHaveURL(/\/reader\/1$/)
+    await expect(page).toHaveURL(/\/catalog\/1(?:#article)?$/)
   })
 
   test('dashboard requires login and bounces to /login', async ({ page }) => {
@@ -120,7 +125,7 @@ test.describe('guest browse', () => {
     await page.goto('/login')
     // 登录页标题是 CardTitle（非 h1/h2），用 text 断言即可
     await expect(page.getByText('登录', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('使用账号密码登录 Rubbish。')).toBeVisible()
+    await expect(page.getByText('选择一种方式登录 Rubbish。')).toBeVisible()
     await expect(page.getByLabel('用户名或邮箱')).toBeVisible()
     await expect(page.getByLabel('密码', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: '登录' })).toBeVisible()

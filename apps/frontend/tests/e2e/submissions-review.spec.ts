@@ -1,9 +1,12 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import {
   ADMIN,
   nextTestUser,
   registerAndVerifyViaUi,
   loginViaUi,
+  openSubmissionForm,
+  fillSubmissionWizard,
+  ensureReviewerRole,
 } from './helpers'
 
 // 投稿 + 审稿完整流程(模仿用户点击)。
@@ -21,6 +24,8 @@ test.describe('submissions + review flow', () => {
   const submittedTitle = `E2E Sub ${Date.now()}`
 
   test('full submission → review → accept cycle', async ({ browser }) => {
+    test.setTimeout(240_000)
+
     // --- 1) 作者注册 + 验证邮箱 + 登录 + 投稿 ---
     const authorCtx = await browser.newContext()
     const author = nextTestUser('author')
@@ -31,95 +36,97 @@ test.describe('submissions + review flow', () => {
     await authorPage.goto('/submissions')
     await expect(authorPage.getByRole('heading', { name: '我的提交' })).toBeVisible()
 
-    // 新建提交。用 name 精确匹配:页面上 CookieConsent 横幅同为 role="dialog",
-    // 裸 getByRole('dialog') 在 strict mode 下会命中两个元素直接失败。
-    await authorPage.getByRole('button', { name: /新建提交/ }).click()
-    await expect(authorPage.getByRole('dialog', { name: '新建提交' })).toBeVisible()
-    await authorPage.getByLabel('标题').fill(submittedTitle)
-    await authorPage.getByLabel('作者（逗号分隔）').fill('Auth One, Auth Two')
-    await authorPage.getByLabel('学科', { exact: true }).fill('computer science')
-    await authorPage.getByLabel('摘要', { exact: true }).fill('Submission abstract for E2E review flow.')
-    await authorPage.getByRole('button', { name: '提交' }).click({ force: true })
-    await expect(authorPage.getByText('提交成功，等待审核')).toBeVisible({ timeout: 5_000 })
-    // 列表显示新提交
-    await expect(authorPage.getByText(submittedTitle)).toBeVisible()
+    await openSubmissionForm(authorPage)
+    await fillSubmissionWizard(authorPage, {
+      title: submittedTitle,
+      discipline: 'computer science',
+      abstract: 'Submission abstract for E2E review flow.',
+      authors: 'Auth One, Auth Two',
+    })
+    await authorPage.getByRole('button', { name: '确认提交' }).click()
+    await expect(authorPage.getByText('已提交，等待编辑处理')).toBeVisible({ timeout: 5_000 })
+    await expect(authorPage.getByRole('cell', { name: submittedTitle })).toBeVisible()
 
-    // --- 2) admin 看到这条 pending 提交,分配审稿人 ---
+    // --- 2) 准备两名审稿人：admin 与独立 reviewer ---
+    const reviewerCtx = await browser.newContext()
+    const reviewer = nextTestUser('reviewer')
+    const reviewerPage = await reviewerCtx.newPage()
+    await registerAndVerifyViaUi(reviewerPage, reviewer)
+
     const adminCtx = await browser.newContext()
     const adminPage = await adminCtx.newPage()
     await loginViaUi(adminPage, ADMIN)
+    await ensureReviewerRole(adminPage)
+    await ensureReviewerRole(adminPage, reviewer.username)
+
     await adminPage.goto('/submissions/pending')
     await expect(adminPage.getByRole('heading', { name: '编辑工作台' })).toBeVisible()
     await expect(adminPage.getByText(submittedTitle)).toBeVisible({ timeout: 10_000 })
 
-    // 分配审稿人
+    // 指派审稿人：新版对话框是多选候选列表，最终录用需要两份 accept 报告。
     await adminPage.getByRole('button', { name: '分配审稿人' }).first().click()
-    await expect(adminPage.getByText(/分配审稿人/).first()).toBeVisible()
-    // 选 admin 自己作为 reviewer
-    await adminPage.locator('button[role="combobox"]').first().click()
-    // admin 用户名出现在选项里
-    await adminPage.getByRole('option', { name: /admin/ }).first().click()
-    await adminPage.getByRole('button', { name: '确认分配' }).click()
-    await expect(adminPage.getByText('已分配审稿人')).toBeVisible({ timeout: 5_000 })
+    const assignDialog = adminPage.getByRole('dialog')
+    await expect(assignDialog).toBeVisible()
+    await assignDialog.getByRole('checkbox', { name: new RegExp(ADMIN.username) }).check()
+    await assignDialog.getByRole('checkbox', { name: new RegExp(reviewer.username) }).check()
+    await assignDialog.getByRole('button', { name: /确认指派/ }).click()
+    await expect(adminPage.getByText(/已指派 2 名审稿人/)).toBeVisible({ timeout: 5_000 })
 
-    // --- 3) admin 在 /review/assignments 看到 assignment,接受 ---
-    await adminPage.goto('/review/assignments')
-    await expect(adminPage.getByRole('heading', { name: '审稿工作台' })).toBeVisible()
-    await expect(adminPage.getByText(submittedTitle)).toBeVisible({ timeout: 10_000 })
-    // 接受邀请
-    await adminPage.getByRole('button', { name: /接受邀请/ }).click()
-    await expect(adminPage.getByText('已接受审稿邀请')).toBeVisible({ timeout: 5_000 })
+    // --- 3) 两名审稿人分别接受邀请并提交 accept 报告 ---
+    const submitAcceptReport = async (page: Page) => {
+      await page.goto('/review/assignments')
+      await expect(page.getByRole('heading', { name: '审稿工作台' })).toBeVisible()
+      await expect(page.getByText(submittedTitle)).toBeVisible({ timeout: 10_000 })
+      await page.getByRole('button', { name: /接受邀请/ }).first().click()
+      await expect(page.getByText('已接受审稿邀请')).toBeVisible({ timeout: 5_000 })
 
-    // --- 4) 填审稿报告 ---
-    await adminPage.getByRole('button', { name: /填写审稿报告/ }).click()
-    // "填写审稿报告" 在 assignments.tsx 出现 3 处（PageHeader description、Button、DialogTitle）。
-    // 用 heading role 精确匹配 DialogTitle（h2），避免 strict mode violation。
-    await expect(adminPage.getByRole('heading', { name: '填写审稿报告' })).toBeVisible()
-    // 改推荐决定
-    await adminPage.locator('button[role="combobox"]').first().click()
-    await adminPage.getByRole('option', { name: '接收（Accept）' }).click()
-    // 给作者意见
-    await adminPage.getByLabel('给作者的意见').fill('Looks good. Recommend accept.')
-    // 提交
-    await adminPage.getByRole('button', { name: '提交审稿报告' }).click()
-    await expect(adminPage.getByText('审稿报告已提交')).toBeVisible({ timeout: 5_000 })
+      await page.getByRole('button', { name: /填写审稿报告/ }).first().click()
+      await expect(page.getByRole('heading', { name: '填写审稿报告' })).toBeVisible()
+      await page.locator('button[role="combobox"]').first().click()
+      await page.getByRole('option', { name: '接收（Accept）' }).click()
+      await page.getByLabel('给作者的意见').fill('Looks good. Recommend accept.')
+      await page.getByRole('button', { name: '提交审稿报告' }).click()
+      await expect(page.getByText('审稿报告已提交')).toBeVisible({ timeout: 5_000 })
+    }
 
-    // --- 5) admin 回 /submissions/pending 做决定 = accept ---
+    await submitAcceptReport(adminPage)
+    await loginViaUi(reviewerPage, reviewer)
+    await submitAcceptReport(reviewerPage)
+
+    // --- 4) 编辑核对两份 accept 报告后做最终录用决定 ---
     await adminPage.goto('/submissions/pending')
     await expect(adminPage.getByText(submittedTitle)).toBeVisible()
     await adminPage.getByRole('button', { name: /做决定/ }).first().click()
-    await expect(adminPage.getByText(/做决定/).first()).toBeVisible()
-    // 选 accept
+    await expect(adminPage.getByRole('dialog')).toBeVisible()
     await adminPage.locator('button[role="combobox"]').first().click()
     await adminPage.getByRole('option', { name: '接收（Accept）' }).click()
     await adminPage.getByLabel('编辑备注（作者可见）').fill('Accepted based on reviewer report.')
     await adminPage.getByRole('button', { name: '确认决定' }).click()
     await expect(adminPage.getByText('决定已记录')).toBeVisible({ timeout: 5_000 })
 
-    // --- 6) 作者回到 /submissions 看到状态变 accepted ---
+    // --- 5) 作者看到 accepted 状态与编辑备注 ---
     await authorPage.goto('/submissions')
-    await expect(authorPage.getByText(submittedTitle)).toBeVisible()
-    // 状态 badge 显示"已接收"
+    await expect(authorPage.getByRole('cell', { name: submittedTitle })).toBeVisible()
     await expect(authorPage.getByText('已接收').first()).toBeVisible({ timeout: 10_000 })
-
-    // --- 7) 作者点开详情,看到审核备注 ---
-    await authorPage.getByText(submittedTitle).click()
+    await authorPage.getByRole('cell', { name: submittedTitle }).click()
     await expect(authorPage.getByText('Accepted based on reviewer report.')).toBeVisible()
 
-    // --- 8) accepted 的 submission 自动入 catalog,公开可见 ---
+    // --- 6) accepted 的 submission 自动入 catalog，公开可见 ---
     const guestCtx = await browser.newContext()
     const guestPage = await guestCtx.newPage()
     await guestPage.goto('/catalog')
-    // 用 link role 精确匹配：catalog 卡片同时把 title 渲染成 link 和 description paragraph，
-    // getByText 会 strict-mode 报错（2 elements）。
-    await expect(guestPage.getByRole('link', { name: submittedTitle })).toBeVisible({ timeout: 10_000 })
+    await expect(guestPage.getByRole('link', { name: submittedTitle })).toBeVisible({
+      timeout: 10_000,
+    })
 
     await authorCtx.close()
+    await reviewerCtx.close()
     await adminCtx.close()
     await guestCtx.close()
   })
 
   test('author can cancel a pending submission', async ({ browser }) => {
+    test.setTimeout(120_000)
     const authorCtx = await browser.newContext()
     const author = nextTestUser('author2')
     const authorPage = await authorCtx.newPage()
@@ -127,14 +134,16 @@ test.describe('submissions + review flow', () => {
     await loginViaUi(authorPage, author)
 
     await authorPage.goto('/submissions')
-    await authorPage.getByRole('button', { name: /新建提交/ }).click()
+    await openSubmissionForm(authorPage)
     const title = `E2E Cancel ${Date.now()}`
-    await authorPage.getByLabel('标题').fill(title)
-    await authorPage.getByLabel('作者（逗号分隔）').fill('Cancellable Author')
-    await authorPage.getByLabel('学科', { exact: true }).fill('history')
-    await authorPage.getByLabel('摘要', { exact: true }).fill('Will be cancelled.')
-    await authorPage.getByRole('button', { name: '提交' }).click({ force: true })
-    await expect(authorPage.getByText('提交成功，等待审核')).toBeVisible({ timeout: 5_000 })
+    await fillSubmissionWizard(authorPage, {
+      title,
+      discipline: 'history',
+      abstract: 'Will be cancelled.',
+      authors: 'Cancellable Author',
+    })
+    await authorPage.getByRole('button', { name: '确认提交' }).click()
+    await expect(authorPage.getByText('已提交，等待编辑处理')).toBeVisible({ timeout: 5_000 })
 
     // 点撤销
     await authorPage.getByRole('button', { name: '撤销' }).click()
@@ -148,6 +157,7 @@ test.describe('submissions + review flow', () => {
   })
 
   test('author can upload a PDF file to pending submission', async ({ browser }) => {
+    test.setTimeout(120_000)
     const authorCtx = await browser.newContext()
     const author = nextTestUser('author3')
     const authorPage = await authorCtx.newPage()
@@ -155,14 +165,16 @@ test.describe('submissions + review flow', () => {
     await loginViaUi(authorPage, author)
 
     await authorPage.goto('/submissions')
-    await authorPage.getByRole('button', { name: /新建提交/ }).click()
+    await openSubmissionForm(authorPage)
     const title = `E2E Upload ${Date.now()}`
-    await authorPage.getByLabel('标题').fill(title)
-    await authorPage.getByLabel('作者（逗号分隔）').fill('Upload Author')
-    await authorPage.getByLabel('学科', { exact: true }).fill('linguistics')
-    await authorPage.getByLabel('摘要', { exact: true }).fill('Will get a file.')
-    await authorPage.getByRole('button', { name: '提交' }).click({ force: true })
-    await expect(authorPage.getByText('提交成功，等待审核')).toBeVisible({ timeout: 5_000 })
+    await fillSubmissionWizard(authorPage, {
+      title,
+      discipline: 'linguistics',
+      abstract: 'Will get a file.',
+      authors: 'Upload Author',
+    })
+    await authorPage.getByRole('button', { name: '确认提交' }).click()
+    await expect(authorPage.getByText('已提交，等待编辑处理')).toBeVisible({ timeout: 5_000 })
 
     // 点开详情 dialog
     await authorPage.getByText(title).click()
@@ -191,6 +203,7 @@ test.describe('submissions + review flow', () => {
   test('revision → author edits manuscript → resubmit with note → version history', async ({
     browser,
   }) => {
+    test.setTimeout(150_000)
     // Phase 2.4 全链路：大修 → 作者真正修改内容 → 带修改说明重投 →
     // 作者与编辑双方都能在版本历史里看到 v1/v2 与作者说明。
     const authorCtx = await browser.newContext()
@@ -201,14 +214,16 @@ test.describe('submissions + review flow', () => {
 
     // --- 1) 作者投稿 ---
     await authorPage.goto('/submissions')
-    await authorPage.getByRole('button', { name: /新建提交/ }).click()
+    await openSubmissionForm(authorPage)
     const title = `E2E Revise ${Date.now()}`
-    await authorPage.getByLabel('标题').fill(title)
-    await authorPage.getByLabel('作者（逗号分隔）').fill('Revision Author')
-    await authorPage.getByLabel('学科', { exact: true }).fill('economics')
-    await authorPage.getByLabel('摘要', { exact: true }).fill('Original abstract v1.')
-    await authorPage.getByRole('button', { name: '提交' }).click({ force: true })
-    await expect(authorPage.getByText('提交成功，等待审核')).toBeVisible({
+    await fillSubmissionWizard(authorPage, {
+      title,
+      discipline: 'economics',
+      abstract: 'Original abstract v1.',
+      authors: 'Revision Author',
+    })
+    await authorPage.getByRole('button', { name: '确认提交' }).click()
+    await expect(authorPage.getByText('已提交，等待编辑处理')).toBeVisible({
       timeout: 5_000,
     })
 
@@ -241,12 +256,20 @@ test.describe('submissions + review flow', () => {
     await expect(authorPage.getByRole('heading', { name: '修改稿件' })).toBeVisible()
     // 表单已回填原值；只改摘要
     await authorPage
-      .getByLabel('摘要', { exact: true })
+      .getByLabel('摘要 *')
       .fill('Revised abstract v2 with expanded methodology.')
-    await authorPage.getByRole('button', { name: '保存修改' }).click({ force: true })
+    await authorPage.getByRole('main').getByRole('button', { name: '下一步' }).click()
+    await authorPage.getByRole('main').getByRole('button', { name: '下一步' }).click()
+    await authorPage.getByRole('checkbox', { name: '原创性声明' }).check()
+    await authorPage.getByRole('checkbox', { name: '保密与合规声明' }).check()
+    await authorPage.getByRole('checkbox', { name: '版权与许可确认' }).check()
+    await authorPage.getByRole('main').getByRole('button', { name: '下一步' }).click()
+    await authorPage.getByRole('button', { name: '保存修改' }).click()
     await expect(authorPage.getByText('稿件已更新')).toBeVisible({ timeout: 5_000 })
 
-    // --- 4) 带修改说明重投 ---
+    // --- 4) 重新打开详情，带修改说明重投 ---
+    await authorPage.getByRole('cell', { name: title }).click()
+    await expect(authorPage.getByRole('dialog', { name: title })).toBeVisible()
     await authorPage.getByRole('button', { name: '重投提交' }).click()
     await authorPage.getByLabel('修改说明（可选）').fill('已按意见扩写方法论一节')
     await authorPage.getByTestId('confirm-resubmit').click()

@@ -40,6 +40,7 @@ import {
   useAnnouncementPortal,
 } from '@/components/common/announcement-dialog'
 import { BrandMark } from '@/components/common/brand-mark'
+import { HeroBackdrop } from '@/components/common/hero-backdrop'
 
 import { issueTitle } from '@/lib/issue-meta'
 import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
@@ -534,7 +535,7 @@ function DiscoverTabs({
             </div>
             {!isAuthenticated && (
               <div className="mt-6">
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="button-shine">
                   <Link to="/register">免费注册，参与社区</Link>
                 </Button>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -789,10 +790,7 @@ function HomePage() {
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_0%,rgba(22,50,79,0.08),transparent_70%)] dark:bg-[radial-gradient(60%_50%_at_50%_0%,rgba(199,162,75,0.10),transparent_70%)]"
           />
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:radial-gradient(circle,theme(colors.foreground)_0.5px,transparent_0.5px)] [background-size:22px_22px] [mask-image:radial-gradient(50%_40%_at_50%_20%,black,transparent)]"
-          />
+          <HeroBackdrop />
 
           <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-8 text-center sm:px-6 sm:pt-20">
             <motion.p
@@ -811,10 +809,11 @@ function HomePage() {
             >
               {/* 刊头回收标志：源自创刊 PDF 原图，随主题色（品牌绿） */}
               <BrandMark
+                decorative
                 className="h-11 w-11 shrink-0 text-primary sm:h-24 sm:w-24"
               />
               <span
-                className="whitespace-nowrap text-5xl leading-none tracking-tight sm:text-9xl"
+                className="hero-title whitespace-nowrap text-5xl leading-none tracking-tight sm:text-9xl"
                 style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}
               >
                 Rubbish
@@ -851,13 +850,13 @@ function HomePage() {
               className="mt-7 flex flex-wrap items-center justify-center gap-3"
             >
               {isAuthenticated ? (
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="button-shine">
                   <Link to="/submissions">
                     <PenLine className="h-4 w-4" /> 提交稿件
                   </Link>
                 </Button>
               ) : (
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="button-shine">
                   <Link to="/register">
                     <PenLine className="h-4 w-4" /> 免费注册投稿
                   </Link>
@@ -920,7 +919,7 @@ function HomePage() {
                   variants={card}
                   animate={statsReveal ? 'show' : 'hidden'}
                   whileHover={{ y: -4 }}
-                  className="rounded-lg border bg-card/80 p-3.5 text-left shadow-sm backdrop-blur transition-colors hover:border-primary/40 sm:p-5"
+                  className="glass-card rounded-lg p-3.5 text-left transition-colors hover:border-primary/40 sm:p-5"
                 >
                   <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                     {s.label}

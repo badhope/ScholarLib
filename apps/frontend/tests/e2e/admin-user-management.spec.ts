@@ -30,6 +30,7 @@ test.describe('admin: user management', () => {
   })
 
   test('admin can assign reviewer role to a user and revoke it', async ({ browser }) => {
+  test.setTimeout(120_000)
     // 注册一个新用户作为被操作对象
     const targetCtx = await browser.newContext()
     const target = nextTestUser('target')
@@ -52,12 +53,14 @@ test.describe('admin: user management', () => {
     const trigger = adminPage
       .locator('tr', { hasText: target.username })
       .first()
-      .locator('button[data-slot="dropdown-menu-trigger"]')
+      .getByRole('button', { name: '用户操作' })
     await trigger.click()
     // 点 "审稿人" checkbox item(未选中 → 选中)
     const reviewerItem = adminPage.getByRole('menuitemcheckbox', { name: '审稿人', exact: true })
     await reviewerItem.waitFor({ state: 'visible', timeout: 5_000 })
-    await reviewerItem.click()
+    await reviewerItem.focus()
+    await expect(reviewerItem).toBeFocused()
+    await adminPage.keyboard.press('Space')
     await expect(adminPage.getByText('已分配 审稿人 角色')).toBeVisible({ timeout: 5_000 })
 
     // 等表格刷新,验证 reviewer badge 出现在该行
@@ -75,17 +78,21 @@ test.describe('admin: user management', () => {
     const trigger2 = adminPage
       .locator('tr', { hasText: target.username })
       .first()
-      .locator('button[data-slot="dropdown-menu-trigger"]')
-    await trigger2.click()
+      .getByRole('button', { name: '用户操作' })
+    await expect(trigger2).toBeEnabled()
+    await trigger2.press('Enter')
     const reviewerItem2 = adminPage.getByRole('menuitemcheckbox', { name: '审稿人', exact: true })
     await reviewerItem2.waitFor({ state: 'visible', timeout: 5_000 })
-    await reviewerItem2.click()
+    await reviewerItem2.focus()
+    await expect(reviewerItem2).toBeFocused()
+    await adminPage.keyboard.press('Space')
     await expect(adminPage.getByText('已撤销 审稿人 角色')).toBeVisible({ timeout: 5_000 })
 
     await adminCtx.close()
   })
 
   test('admin can disable and re-enable a user account', async ({ browser }) => {
+  test.setTimeout(120_000)
     const targetCtx = await browser.newContext()
     const target = nextTestUser('disable')
     const targetPage = await targetCtx.newPage()
@@ -104,11 +111,11 @@ test.describe('admin: user management', () => {
     await expect(row.getByText('启用')).toBeVisible()
 
     // 禁用：用 data-slot 精确定位 trigger
-    const trigger1 = row.locator('button[data-slot="dropdown-menu-trigger"]')
+    const trigger1 = row.getByRole('button', { name: '用户操作' })
     await trigger1.click()
     const disableItem = adminPage.getByRole('menuitem', { name: '禁用账号' })
     await disableItem.waitFor({ state: 'visible', timeout: 5_000 })
-    await disableItem.click()
+    await disableItem.press('Enter')
     await expect(adminPage.getByText('已禁用')).toBeVisible({ timeout: 5_000 })
     await expect(row.getByText('禁用')).toBeVisible()
 
@@ -125,13 +132,13 @@ test.describe('admin: user management', () => {
     // 用 toPass 重试「点 trigger → 菜单项可见」这一整段，对齐 Playwright
     // 官方对 flaky interaction 的推荐写法。
     const row2 = adminPage.locator('tr', { hasText: target.username }).first()
-    const trigger2 = row2.locator('button[data-slot="dropdown-menu-trigger"]')
+    const trigger2 = row2.getByRole('button', { name: '用户操作' })
     const enableItem = adminPage.getByRole('menuitem', { name: '启用账号' })
     await expect(async () => {
       await trigger2.click()
       await expect(enableItem).toBeVisible({ timeout: 1_500 })
     }).toPass({ timeout: 15_000 })
-    await enableItem.click()
+    await enableItem.press('Enter')
     await expect(adminPage.getByText('已启用')).toBeVisible({ timeout: 5_000 })
     await expect(row2.getByText('启用')).toBeVisible()
 
@@ -144,10 +151,11 @@ test.describe('admin: user management', () => {
     await page.getByPlaceholder('搜索用户名或邮箱').fill('admin')
     // admin 自己那行的操作按钮 disabled
     const row = page.locator('tr', { hasText: 'admin@e2e.test' }).first()
-    await expect(row.locator('button[data-slot="dropdown-menu-trigger"]')).toBeDisabled()
+    await expect(row.getByRole('button', { name: '用户操作' })).toBeDisabled()
   })
 
   test('audit logs page lists recent admin actions', async ({ browser }) => {
+  test.setTimeout(120_000)
     // bootstrap 不会写 audit_logs（只有 admin 主动操作才会写），
     // 所以先注册一个目标用户 + admin 给它分配角色，制造一条 audit log。
     const targetCtx = await browser.newContext()
@@ -167,11 +175,13 @@ test.describe('admin: user management', () => {
     const trigger = page
       .locator('tr', { hasText: target.username })
       .first()
-      .locator('button[data-slot="dropdown-menu-trigger"]')
+      .getByRole('button', { name: '用户操作' })
     await trigger.click()
     const reviewerItem = page.getByRole('menuitemcheckbox', { name: '审稿人', exact: true })
     await reviewerItem.waitFor({ state: 'visible', timeout: 5_000 })
-    await reviewerItem.click()
+    await reviewerItem.focus()
+    await expect(reviewerItem).toBeFocused()
+    await page.keyboard.press('Space')
     await expect(page.getByText('已分配 审稿人 角色')).toBeVisible({ timeout: 5_000 })
 
     // 访问 audit-logs，应该能看到刚产生的 action

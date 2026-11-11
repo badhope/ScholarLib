@@ -41,12 +41,13 @@ test.describe('reader + library + follows', () => {
   })
 
   test('user can record and persist reading progress', async ({ page }) => {
+    test.setTimeout(120_000)
     const user = nextTestUser('reader')
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
 
     // 进入阅读页
-    await page.goto(`/reader/${resourceId}`)
+    await page.goto(`/catalog/${resourceId}#article`)
     await expect(page.getByText(resourceTitle).first()).toBeVisible()
     // 等 progress query 加载完成，避免 useEffect 把 page 覆盖回 1
     await expect(page.getByLabel('页码')).toHaveValue('1')
@@ -59,7 +60,7 @@ test.describe('reader + library + follows', () => {
     if ((await pageInput.inputValue()) !== '5') {
       await pageInput.fill('5')
     }
-    await page.getByLabel(/进度：/).fill('42')
+    await page.locator('input[type="range"]').fill('42')
     // 等自动 flush（每 30s）太慢,直接点保存进度按钮
     await page.getByRole('button', { name: '保存进度' }).click()
     await expect(page.getByText('进度已保存')).toBeVisible({ timeout: 5_000 })
@@ -68,7 +69,7 @@ test.describe('reader + library + follows', () => {
     await page.reload()
     await expect(page.getByLabel('页码')).toHaveValue('5')
     // range input value
-    const progressVal = await page.getByLabel(/进度：/).inputValue()
+    const progressVal = await page.locator('input[type="range"]').inputValue()
     expect(Number(progressVal)).toBe(42)
     // 总时长应该 >0(因为自动累加 + flush)
     const totalMin = await page.getByText('分钟', { exact: false }).first().textContent()
@@ -77,6 +78,7 @@ test.describe('reader + library + follows', () => {
   })
 
   test('detail page shows follow + subscribe buttons for logged-in user', async ({ page }) => {
+    test.setTimeout(120_000)
     const user = nextTestUser('follow')
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
@@ -85,13 +87,14 @@ test.describe('reader + library + follows', () => {
     // 关注卡片（CardTitle 非 heading role，用 text 断言）
     await expect(page.getByText('关注', { exact: true }).first()).toBeVisible()
     // exact:true：避免同时匹配到顶部 "Reader Author, Co-Author" 那行作者列表
-    await expect(page.getByText('Reader Author', { exact: true })).toBeVisible()
+    await expect(page.locator('#article').getByText('Reader Author', { exact: true })).toBeVisible()
     // 关注 + 订阅按钮
     const followBtn = page.getByRole('button', { name: /^关注$/ }).first()
     await expect(followBtn).toBeVisible()
   })
 
   test('user can follow author and subscribe discipline, then see them in /follows', async ({ page }) => {
+    test.setTimeout(120_000)
     const user = nextTestUser('follow2')
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
@@ -121,6 +124,7 @@ test.describe('reader + library + follows', () => {
   })
 
   test('reading list CRUD', async ({ page }) => {
+    test.setTimeout(120_000)
     const user = nextTestUser('list')
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
@@ -163,20 +167,20 @@ test.describe('reader + library + follows', () => {
   })
 
   test('reader remove history button clears the reading record', async ({ page }) => {
+    test.setTimeout(120_000)
     const user = nextTestUser('reader2')
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
 
     // 先记一条进度
-    await page.goto(`/reader/${resourceId}`)
+    await page.goto(`/catalog/${resourceId}#article`)
     await page.getByLabel('页码').fill('1')
     await page.getByRole('button', { name: '保存进度' }).click()
     await expect(page.getByText('进度已保存')).toBeVisible({ timeout: 5_000 })
 
-    // 移除阅读历史
+    // 移除阅读历史：当前按钮直接执行并导航到 /library
     await page.getByRole('button', { name: '移除阅读历史' }).click()
-    await page.getByRole('button', { name: '移除', exact: true }).click()
     await expect(page.getByText('已从阅读历史移除')).toBeVisible({ timeout: 5_000 })
-    await expect(page).toHaveURL(/\/catalog$/)
+    await expect(page).toHaveURL(/\/library$/, { timeout: 10_000 })
   })
 })

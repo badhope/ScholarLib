@@ -52,6 +52,14 @@ export async function loginViaUi(
   // 等 dashboard 出现（admin 普通用户都会跳过去）
   await page.waitForURL(/\/dashboard/, { timeout: 15_000 })
   await ensureAuthorReady(page)
+  await dismissOnboarding(page)
+}
+
+export async function dismissOnboarding(page: Page): Promise<void> {
+  const skip = page.getByRole('button', { name: '跳过引导' })
+  if (await skip.count()) {
+    await skip.click({ timeout: 3_000 })
+  }
 }
 
 /**
@@ -151,6 +159,118 @@ export async function primeCookieConsent(page: Page): Promise<void> {
 }
 
 // 通过 UI 走完整的注册→邮件→验证流程，返回已验证的用户凭据。
+/**
+ * 注册页自建算术验证码：从 label 文本解析算式并填答案。
+ * 后端在 E2E 里把 captcha_required 压成 false，但前端仍会渲染验证码，
+ * 空着会被客户端拦下，所以所有走 UI 注册的用例都要先填。
+ */
+export async function fillCaptcha(page: Page): Promise<void> {
+  const label = page.locator('label[for="captcha"]')
+  await label.waitFor({ state: 'visible', timeout: 10_000 })
+  const text = (await label.textContent()) ?? ''
+  const m = text.match(/(\d+)\s*(?:\+|加)\s*(\d+)/)
+  if (!m) throw new Error(`cannot parse captcha: ${text}`)
+  await page.getByLabel(/验证码/).fill(String(Number(m[1]) + Number(m[2])))
+}
+
+/**
+ * 给指定用户补 reviewer 角色；不传 username 时处理当前登录用户。
+ * 指派审稿人对话框只列持 reviewer 角色且启用的账号，默认 admin 不在候选中。
+ */
+export async function ensureReviewerRole(page: Page, username?: string): Promise<void> {
+  const raw = await page.evaluate(() => sessionStorage.getItem('rubbish-auth'))
+  if (!raw) throw new Error('管理员未登录，无法读取 token')
+  const token = JSON.parse(raw)?.state?.token as string
+  if (!token) throw new Error('sessionStorage 中没有 access token')
+  const headers = { Authorization: `Bearer ${token}` }
+  const apiBase = new URL('/api', page.url()).toString()
+  let userId: number
+  if (username) {
+    const usersResp = await page.request.get(
+      `${apiBase}/admin/users?limit=50&q=${encodeURIComponent(username)}`,
+      { headers },
+    )
+    if (!usersResp.ok()) throw new Error(`查询用户 ${username} 失败: ${usersResp.status()}`)
+    const users = await usersResp.json()
+    const target = users.find((u: { username: string }) => u.username === username)
+    if (!target) throw new Error(`未找到用户 ${username}`)
+    userId = target.id
+  } else {
+    const meResp = await page.request.get(`${apiBase}/users/me`, { headers })
+    if (!meResp.ok()) throw new Error(`读取当前用户失败: ${meResp.status()}`)
+    userId = (await meResp.json()).id
+  }
+  const roleResp = await page.request.post(`${apiBase}/admin/users/${userId}/roles`, {
+    headers,
+    data: { role: 'reviewer' },
+  })
+  if (!roleResp.ok()) throw new Error(`授予 reviewer 角色失败: ${roleResp.status()}`)
+}
+
+export async function ensureAdminReviewerRole(page: Page): Promise<void> {
+  await ensureReviewerRole(page)
+}
+
+/**
+ * 打开「新建投稿」四步表单。1.9.0 起它是独立页面 /submissions/new，
+ * 不再是列表页上的 dialog；旧套件的 dialog 断言全部失效。
+ */
+export async function openSubmissionForm(page: Page): Promise<void> {
+  // 每个 context 都可能是复用过的：清掉上一轮留下的投稿草稿，
+  // 否则异步草稿恢复会覆盖本用例刚填的题录字段。
+  await page.evaluate(() => localStorage.removeItem('submission-wizard-draft-v1'))
+  await page.getByRole('button', { name: /新建提交/ }).click()
+  await expect(page).toHaveURL(/\/submissions\/new/, { timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: '新建投稿' })).toBeVisible()
+}
+
+/**
+ * 按四步向导填完一条最小可提交稿件：题录 → 正文（含参考文献）→ 作者与三项承诺。
+ * 直接提交后回到调用方断言结果。
+ */
+export async function fillSubmissionWizard(
+  page: Page,
+  input: {
+    title: string
+    discipline: string
+    abstract: string
+    authors: string
+    downloadUrl?: string
+  },
+): Promise<void> {
+  await expect(page.getByRole('heading', { name: '新建投稿' })).toBeVisible()
+  await page.getByLabel(/^标题/).fill(input.title)
+  await page.getByLabel(/^学科/).fill(input.discipline)
+  await page.getByLabel(/^摘要/).fill(input.abstract)
+  await page.getByLabel(/^关键词/).fill('E2E, 测试')
+  await page.getByLabel(/^中图分类号/).fill('TP391')
+  await page.getByRole('main').getByRole('button', { name: '下一步' }).click()
+
+  if (input.downloadUrl) {
+    await page.evaluate(() => {
+      const details = Array.from(document.querySelectorAll('details')).find((node) =>
+        node.textContent?.includes('补充材料（代码 / 数据 / 外部链接，可选）'),
+      )
+      if (!details) throw new Error('未找到补充材料区域')
+      details.open = true
+    })
+    await expect(page.getByLabel('稿件直链')).toBeVisible({ timeout: 5_000 })
+    await page.getByLabel('稿件直链').fill(input.downloadUrl)
+  }
+
+  await page
+    .getByTestId('wizard-body-editor')
+    .locator('textarea')
+    .fill(`# 1 引言\n\nE2E 正文。\n\n# 参考文献\n\n[1] Rubbish E2E. 2026.`)
+  await page.getByRole('main').getByRole('button', { name: '下一步' }).click()
+
+  await page.getByLabel(/作者（逗号分隔/).fill(input.authors)
+  for (const label of ['原创性声明', '保密与合规声明', '版权与许可确认']) {
+    await page.getByLabel(label).check()
+  }
+  await page.getByRole('main').getByRole('button', { name: '下一步' }).click()
+}
+
 export async function registerAndVerifyViaUi(
   page: Page,
   user: TestUser,
@@ -162,6 +282,7 @@ export async function registerAndVerifyViaUi(
   await page.getByLabel('用户名').fill(user.username)
   await page.getByLabel('密码', { exact: true }).fill(user.password)
   await page.getByLabel('确认密码').fill(user.password)
+  await fillCaptcha(page)
   await page.getByRole('button', { name: '注册' }).click()
   // 注册成功后 toast 显示 "注册成功，请查收邮件完成验证"，跳 /verify-email?email=...
   await page.waitForURL(/\/verify-email/, { timeout: 10_000 })

@@ -48,6 +48,7 @@ import {
 } from '@/lib/resource-labels'
 import { ManuscriptView, type TocEntry } from '@/components/common/manuscript-view'
 import PdfImagePreview from '@/components/pdf-image-preview'
+import { ArticleEngagement } from '@/components/catalog/article-engagement'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -596,6 +597,14 @@ function CatalogDetailPage() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {isAuthenticated && (
+            <ArticleEngagement
+              resourceId={id}
+              authors={cleanAuthors.length > 0 ? cleanAuthors : data.authors}
+              discipline={data.discipline}
+            />
+          )}
 
           {!isEssayTrack && (
           <Card>

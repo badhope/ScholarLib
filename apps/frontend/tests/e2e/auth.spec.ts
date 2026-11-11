@@ -8,6 +8,7 @@ import {
   forceVerifyEmail,
   fetchEmailOutbox,
   resetEmailOutbox,
+  fillCaptcha,
 } from './helpers'
 
 // 鉴权全流程:注册 → 邮件验证 → 登录 → 退出。
@@ -26,6 +27,7 @@ test.describe('auth: register + verify + login + logout', () => {
     await page.getByLabel('用户名').fill(user.username)
     await page.getByLabel('密码', { exact: true }).fill(user.password)
     await page.getByLabel('确认密码').fill(user.password)
+    await fillCaptcha(page)
     await page.getByRole('button', { name: '注册' }).click()
 
     // 跳转到 verify-email
@@ -93,6 +95,7 @@ test.describe('auth: register + verify + login + logout', () => {
     await page.getByLabel('用户名').fill(user.username)
     await page.getByLabel('密码', { exact: true }).fill(user.password)
     await page.getByLabel('确认密码').fill(user.password)
+    await fillCaptcha(page)
     await page.getByRole('button', { name: '注册' }).click()
     await expect(page).toHaveURL(/\/verify-email/, { timeout: 10_000 })
 
@@ -138,6 +141,7 @@ test.describe('auth: register + verify + login + logout', () => {
     await page.getByLabel('用户名').fill(user.username)
     await page.getByLabel('密码', { exact: true }).fill(user.password)
     await page.getByLabel('确认密码').fill(user.password)
+    await fillCaptcha(page)
     await page.getByRole('button', { name: '注册' }).click()
     await expect(page).toHaveURL(/\/verify-email/, { timeout: 10_000 })
     await forceVerifyEmail(user.email)

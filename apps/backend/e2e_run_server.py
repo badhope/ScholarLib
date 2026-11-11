@@ -43,6 +43,10 @@ os.environ["RUBBISH_DEBUG"] = "true"
 os.environ["RUBBISH_LOG_LEVEL"] = "WARNING"
 os.environ["RUBBISH_JSON_LOGS"] = "false"
 os.environ["RUBBISH_EMAIL_BACKEND"] = "console"
+# outbound guard 默认关闭；E2E 用内存 sender 捕获邮件，不触网。
+# 不打开这个开关，get_email_sender() 会把 _mem_sender 换回 Console，
+# capabilities.email_delivery=false，注册页就会直接跳登录而不是验证页。
+os.environ["RUBBISH_EMAIL_OUTBOUND_ENABLED"] = "true"
 # 文件存储必须显式指到本目录：默认值 /data/uploads 在 CI runner（非 root）
 # 上不可写，权限拒绝会让上传接口 500，对应 E2E 用例等不到"文件已上传"。
 # 本地开发不炸只是因为 .env 恰好配置了可写路径。
