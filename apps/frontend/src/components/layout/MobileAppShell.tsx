@@ -322,7 +322,7 @@ export function MobileAppShell() {
         <Button
           aria-label="导入"
           onClick={() => go(MOBILE_FAB_TO)}
-          className="fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full shadow-lg sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
+          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full shadow-lg"
           size="icon"
         >
           <Plus className="h-6 w-6" />
