@@ -540,9 +540,14 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
 function CatalogHub() {
   const papers = useResources({ track: 'paper', page: 1, page_size: 30, sort: 'created_at', order: 'desc' })
   const essays = useResources({ track: 'essay', page: 1, page_size: 5, sort: 'created_at', order: 'desc' })
+  const { data: stats } = useCatalogStats()
   const paperRows = papers.data?.data ?? []
   const seriousRows = paperRows.filter((r) => (r.track ?? 'serious') === 'serious')
   const absurdRows = paperRows.filter((r) => r.track === 'absurd')
+  // 计数必须取全站聚合值：按首屏 30 条统计会在近期以荒诞稿为主时
+  // 显示成“0 篇学术论文”，与首页、论文页的口径冲突。
+  const seriousTotal = stats?.by_paper_kind?.serious ?? seriousRows.length
+  const absurdTotal = stats?.by_paper_kind?.absurd ?? absurdRows.length
   const essayRows = essays.data?.data ?? []
 
   const zoneLink = 'group flex items-start gap-3 rounded-xl border bg-card p-3 transition-colors hover:border-primary/40 hover:bg-muted/20'
@@ -559,7 +564,7 @@ function CatalogHub() {
               <p className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">Paper</p>
               <h2 className="mt-1 font-serif text-xl font-semibold">论文</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                {seriousRows.length} 篇学术论文 · {absurdRows.length} 篇荒诞论文
+                {seriousTotal} 篇学术论文 · {absurdTotal} 篇荒诞论文
               </p>
             </div>
             <Link to="/papers" className="shrink-0 rounded-full border px-3 py-1 text-xs hover:bg-background">
@@ -572,7 +577,7 @@ function CatalogHub() {
               <span className="min-w-0">
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="font-medium">学术论文</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{seriousRows.length} 篇</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{seriousTotal} 篇</span>
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">真实问题、可核查材料、正经论证</span>
               </span>
@@ -582,7 +587,7 @@ function CatalogHub() {
               <span className="min-w-0">
                 <span className="flex items-baseline justify-between gap-2">
                   <span className="font-medium">荒诞论文</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">{absurdRows.length} 篇</span>
+                  <span className="text-xs tabular-nums text-muted-foreground">{absurdTotal} 篇</span>
                 </span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">论文格式、一本正经胡说八道、有论证有依据</span>
               </span>
