@@ -27,7 +27,7 @@ function BrowsePage() {
   const disciplines = Object.entries(stats?.by_discipline ?? {}).sort((a, b) => b[1] - a[1])
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-8">
       <PageHeader
         title="浏览"
         description="按学科进入。也可以直接搜索，但先给入口比先给搜索框更友好。"

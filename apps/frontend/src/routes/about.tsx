@@ -15,18 +15,20 @@ export const Route = createFileRoute('/about')({
 
 function AboutTabs({ active }: { active: 'about' | 'metrics' }) {
   return (
-    <div className="mb-6 flex gap-2 border-b pb-3">
+    <div className="mb-6 flex flex-wrap gap-2">
       <Link
         to="/about"
         search={{ tab: 'about' }}
-        className={active === 'about' ? 'rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground' : 'rounded-lg border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted'}
+        data-active={active === 'about'}
+        className="seg-link px-3.5 py-2 text-sm font-medium"
       >
         关于本刊
       </Link>
       <Link
         to="/about"
         search={{ tab: 'metrics' }}
-        className={active === 'metrics' ? 'rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground' : 'rounded-lg border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted'}
+        data-active={active === 'metrics'}
+        className="seg-link px-3.5 py-2 text-sm font-medium"
       >
         期刊指标
       </Link>
@@ -87,14 +89,14 @@ function AboutPage() {
   const { tab } = useSearch({ from: '/about' })
   if (tab === 'metrics') {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <div className="mx-auto w-full max-w-4xl">
         <AboutTabs active="metrics" />
         <JournalMetricsPage embedded />
       </div>
     )
   }
   return (
-    <div className="mx-auto max-w-4xl py-8">
+    <div className="mx-auto w-full max-w-4xl">
       <Link
         to="/"
         className="mb-4 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-primary"

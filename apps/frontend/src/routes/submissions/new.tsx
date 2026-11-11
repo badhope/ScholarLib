@@ -655,7 +655,7 @@ function SubmissionWizardPage() {
   // 渲染
   // -----------------------------------------------------------------------
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 pb-24 sm:pb-10">
+    <div className="mx-auto w-full max-w-6xl pb-24 sm:pb-10">
       {/* 顶部：标题 + 草稿状态 */}
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>

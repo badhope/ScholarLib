@@ -52,7 +52,7 @@ function ClaimPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto max-w-[640px] py-10">
+      <div className="mx-auto max-w-[640px]">
         <Link to="/catalog/$resourceId" params={{ resourceId }} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-primary">
           <ChevronLeft className="mr-1 h-4 w-4" />
           返回文章
@@ -77,7 +77,7 @@ function ClaimPage() {
 
   if (status?.state === 'claimed' || status?.owner) {
     return (
-      <div className="mx-auto max-w-[640px] py-10">
+      <div className="mx-auto max-w-[640px]">
         <Link to="/catalog/$resourceId" params={{ resourceId }} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-primary">
           <ChevronLeft className="mr-1 h-4 w-4" />
           返回文章
@@ -107,7 +107,7 @@ function ClaimPage() {
           ? 'text-destructive'
           : 'text-amber-600'
     return (
-      <div className="mx-auto max-w-[640px] py-10">
+      <div className="mx-auto max-w-[640px]">
         <Link to="/catalog/$resourceId" params={{ resourceId }} className="mb-4 inline-flex items-center text-sm text-muted-foreground hover:text-primary">
           <ChevronLeft className="mr-1 h-4 w-4" />
           返回文章

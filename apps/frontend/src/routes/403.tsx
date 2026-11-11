@@ -9,7 +9,7 @@ export const Route = createFileRoute('/403')({
 
 function ForbiddenPage() {
   return (
-    <div className="mx-auto max-w-lg py-16">
+    <div className="mx-auto max-w-lg">
       <Card>
         <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">

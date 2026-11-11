@@ -59,11 +59,28 @@ export function EmptyState({
   title = '暂无数据',
   description,
   action,
+  compact = false,
 }: {
   title?: string
   description?: string
   action?: React.ReactNode
+  /** 卡片内嵌用：不套玻璃面板，避免出现“卡里再套一张卡”的双层阴影。 */
+  compact?: boolean
 }) {
+  if (compact) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-6 text-center">
+        <span className="icon-chip icon-chip-sm text-muted-foreground">
+          <Inbox className="h-4 w-4" strokeWidth={1.5} />
+        </span>
+        <p className="text-sm font-medium">{title}</p>
+        {description && (
+          <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{description}</p>
+        )}
+        {action ? <div className="mt-1 flex justify-center">{action}</div> : null}
+      </div>
+    )
+  }
   return (
     <div className="state-panel flex flex-col gap-4 text-center">
       <span className="state-icon">
@@ -75,7 +92,7 @@ export function EmptyState({
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
-      {action}
+      {action ? <div className="flex justify-center">{action}</div> : null}
     </div>
   )
 }

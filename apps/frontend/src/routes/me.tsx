@@ -24,16 +24,16 @@ const IDENTITY_TABS = [
 ] as const
 
 const PERMISSION_BADGE: Record<string, string> = {
-  user: 'bg-muted text-muted-foreground',
-  reviewer: 'bg-sky-500/15 text-sky-600',
-  editor: 'bg-amber-500/15 text-amber-600',
+  user: 'bg-muted text-foreground',
+  reviewer: 'bg-primary/10 text-primary',
+  editor: 'bg-primary/15 text-primary',
   editor_in_chief: 'bg-primary text-primary-foreground',
 }
 
 function LevelCard({ level }: { level: MeIdentityLevel }) {
   const pct = Math.max(0, Math.min(1, level.progress))
   return (
-    <div className="rounded-xl border bg-muted/30 p-4">
+    <div className="rounded-xl border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-8 items-center rounded-full bg-primary/15 px-3 text-sm font-semibold tabular-nums text-primary">
@@ -89,11 +89,19 @@ function ProfileSummaryCard({ user }: { user: ReturnType<typeof useMe>['data'] }
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         {!hasAny ? (
-          <div className="rounded-lg border border-dashed p-4 text-muted-foreground">
-            <p>还没有填写个人资料。</p>
-            <Button variant="outline" size="sm" className="mt-3" asChild>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="icon-chip">
+              <Pencil className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-foreground">还没有填写个人资料</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                单位、研究兴趣与主页会展示在文章署名旁，读者可据此找到你。
+              </p>
+            </div>
+            <Button variant="outline" size="sm" asChild>
               <Link to="/settings" search={{ tab: 'profile' }}>
-                去补充单位、研究兴趣与主页
+                去补充
               </Link>
             </Button>
           </div>
@@ -189,47 +197,62 @@ function MePage() {
       <ProfileSummaryCard user={account} />
 
       {/* 当前身份（权限轴） */}
-      <Card className="overflow-hidden">
-        <div className="bg-gradient-to-br from-primary/[0.08] to-transparent p-5 sm:p-6">
+      <Card>
+        <CardContent className="space-y-4 py-5">
           <div className="flex flex-wrap items-center gap-3">
+            <span className="icon-chip">
+              <Shield className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold leading-tight">{data.username}</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                已解锁 {data.permissions.length} 项权限
+              </p>
+            </div>
             <span
               className={cn(
-                'inline-flex h-9 items-center rounded-full px-3 text-sm font-semibold',
+                'inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium',
                 PERMISSION_BADGE[data.permission_role],
               )}
             >
-              <Shield className="mr-1.5 h-4 w-4" />
               {data.permission_label}
             </span>
-            <h2 className="text-xl font-semibold">{data.username}</h2>
           </div>
-          <p className="mt-3 text-sm text-muted-foreground">当前权限：</p>
-          <ul className="mt-1 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+          <ul className="grid gap-x-6 gap-y-1.5 border-t border-border pt-3 text-sm text-muted-foreground sm:grid-cols-2">
             {data.permissions.slice(0, 8).map((p) => (
-              <li key={p} className="flex items-center gap-1.5">
-                <span className="h-1 w-1 rounded-full bg-primary" />
-                {p}
+              <li key={p} className="flex items-start gap-2">
+                <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary" />
+                <span className="min-w-0">{p}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </CardContent>
       </Card>
 
       {/* 身份内等级（激励轴）：单身份直接展示，多身份用 Tab；无轨则给空态 */}
       {owned.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            {data.permission_role === 'editor_in_chief' ? (
-              <>
-                <p className="font-medium text-foreground">主编（不设等级）</p>
-                <p className="mt-1">主编为最高权限档，不参与 L/R/E 等级轨，也不与其他身份并列。</p>
-              </>
-            ) : (
-              <>
-                <p>暂无等级轨。</p>
-                <p className="mt-1">投稿或文章被认领后，作者等级轨将在此展示。</p>
-              </>
-            )}
+          <CardContent className="flex items-start gap-3 py-5 text-sm text-muted-foreground">
+            <span className="icon-chip">
+              <Award className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              {data.permission_role === 'editor_in_chief' ? (
+                <>
+                  <p className="font-medium text-foreground">主编（不设等级）</p>
+                  <p className="mt-1 leading-relaxed">
+                    主编为最高权限档，不参与 L/R/E 等级轨，也不与其他身份并列。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-foreground">暂无等级轨</p>
+                  <p className="mt-1 leading-relaxed">
+                    投稿或文章被认领后，作者等级轨将在此展示。
+                  </p>
+                </>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : multi ? (

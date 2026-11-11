@@ -23,15 +23,15 @@ function SectionsIndex() {
       {data && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {data.data.map((section) => (
-            <Link key={section.slug} to="/sections/$slug" params={{ slug: section.slug }}>
-              <Card className="h-full transition-colors hover:border-foreground/30">
+            <Link key={section.slug} to="/sections/$slug" params={{ slug: section.slug }} className="group block h-full">
+              <Card className="card-lift flex h-full flex-col gap-0">
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-lg">{section.label}</CardTitle>
+                    <CardTitle className="font-serif text-lg tracking-tight">{section.label}</CardTitle>
                     <Badge variant="secondary">{section.count} 篇</Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex flex-1 flex-col gap-2.5 pt-0">
                   <p className="text-sm text-muted-foreground">{section.description}</p>
                   {section.track_counts && (section.track_counts.paper > 0 || section.track_counts.essay > 0) ? (
                     <p className="text-xs text-muted-foreground">
@@ -46,8 +46,9 @@ function SectionsIndex() {
                       </Badge>
                     ))}
                   </div>
-                  <span className="inline-flex items-center gap-1 text-sm">
-                    进入栏目 <ArrowRight className="h-3.5 w-3.5" />
+                  <span className="mt-auto inline-flex items-center gap-1 pt-1 text-sm font-medium text-primary">
+                    进入栏目
+                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                   </span>
                 </CardContent>
               </Card>

@@ -246,7 +246,7 @@ function CurrentIssueBar() {
       <motion.div
         variants={rise}
         custom={5}
-        className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6"
+        className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3"
       >
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <CalendarDays aria-hidden className="h-4 w-4 shrink-0 text-primary" />
@@ -281,7 +281,7 @@ function ContactStrip() {
   }
   return (
     <div className="border-b bg-primary/5">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:flex-wrap sm:gap-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 py-3 sm:flex-wrap sm:gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <MessageCircle aria-hidden className="h-4 w-4 shrink-0 text-primary" />
           <div className="min-w-0">
@@ -642,7 +642,7 @@ function ForumPulse() {
   }
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+    <section className="mx-auto max-w-6xl py-12">
       <SectionHeading
         label="Community"
         title="正在讨论"
@@ -745,7 +745,7 @@ function HomePage() {
 
         {/* ── 顶部细条：身份 + 公告 + 账号入口（<header> 即 banner 地标） ── */}
         <header className="bg-muted/40">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 text-xs text-muted-foreground sm:px-6">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5 text-xs text-muted-foreground">
             <span className="tracking-wide">An Open Access Journal · 开放获取期刊</span>
             <div className="flex items-center gap-3">
               <AnnouncementChip
@@ -792,7 +792,7 @@ function HomePage() {
           />
           <HeroBackdrop />
 
-          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-8 text-center sm:px-6 sm:pt-20">
+          <div className="relative mx-auto max-w-6xl pb-12 pt-8 text-center sm:pt-20">
             <motion.p
               variants={rise}
               custom={0}
@@ -953,7 +953,7 @@ function HomePage() {
 
         {/* ── 吸顶导航 + 检索：单根发丝线，无双线 ── */}
         <div className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-2 px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6">
+          <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-2 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2">
             {/* 手机端底部已有主导航，这里不再重复一行一级入口；桌面端保留。 */}
             <nav className="hidden w-full items-center gap-x-5 overflow-x-auto whitespace-nowrap text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex sm:w-auto sm:flex-wrap sm:overflow-visible">
               <span aria-current="page" className="font-medium">
@@ -1016,7 +1016,7 @@ function HomePage() {
           initial="hidden"
           animate={revealLatest ? 'show' : 'hidden'}
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
-          className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16"
+          className="mx-auto max-w-6xl sm:py-16"
         >
           <SectionHeading
             title="按学科浏览"
@@ -1073,7 +1073,7 @@ function HomePage() {
         </motion.section>
 
         {/* ── 最新发表：紧凑列表（分类已承担导航，这里只做"随便看看"） ── */}
-        <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6">
+        <section className="mx-auto max-w-6xl pb-16">
           <SectionHeading
             title="最新发表"
             label="Latest Articles"
@@ -1133,7 +1133,7 @@ function HomePage() {
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.06 } } }}
           className="bg-muted/40 py-16"
         >
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="mx-auto max-w-6xl">
             <SectionHeading title="了解本刊" label="Explore the Journal" />
             <motion.div
               variants={card}
@@ -1154,7 +1154,7 @@ function HomePage() {
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
           className="scroll-mt-16 py-16"
         >
-          <div className="mx-auto max-w-4xl px-4 sm:px-6">
+          <div className="mx-auto max-w-4xl">
             <SectionHeading title="常见问题" label="FAQ" />
             <div className="grid gap-3">
               {FAQ.map((item) => (
@@ -1199,7 +1199,7 @@ function HomePage() {
 
         {/* ── 页脚：深色收底，替代浅灰双线 ── */}
         <footer className="bg-primary text-primary-foreground">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-4">
+          <div className="mx-auto grid max-w-6xl gap-8 py-12 md:grid-cols-4">
             <div className="md:col-span-2">
               <p className="text-3xl" style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}>
                 Rubbish
@@ -1319,7 +1319,7 @@ function HomePage() {
             </div>
           </div>
           <div className="border-t border-primary-foreground/15">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-primary-foreground/60 sm:px-6">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 text-xs text-primary-foreground/60">
               <span>
                 © {new Date().getFullYear()} Rubbish · An Open Access Journal
               </span>

@@ -156,7 +156,7 @@ function IssuePage() {
 
   return (
     <div className={cn('min-h-screen', palette.paper, palette.ink)}>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+      <div className="mx-auto max-w-6xl">
         {/* 报头 */}
         <div className="mb-8 flex flex-wrap items-end justify-between gap-3 border-b-2 border-current/20 pb-4">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:gap-4">

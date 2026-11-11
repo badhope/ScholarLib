@@ -71,48 +71,48 @@ const BOARDS = [
     label: '论文沙龙',
     desc: '逐篇聊论文：方法、结论、复现',
     icon: BookOpen,
-    style: 'bg-sky-500/10 text-sky-700 border-sky-300',
+    style: 'text-primary',
   },
   {
     value: 'method',
     label: '方法与写作',
     desc: '选题、统计、审稿意见、拒稿复盘',
     icon: PenLine,
-    style: 'bg-amber-500/10 text-amber-700 border-amber-300',
+    style: 'text-primary',
   },
   {
     value: 'life',
     label: '学术生存',
     desc: '读研、投稿、毕业与情绪',
     icon: Coffee,
-    style: 'bg-emerald-500/10 text-emerald-700 border-emerald-300',
+    style: 'text-primary',
   },
   {
     value: 'collab',
     label: '组队招募',
     desc: '找合作、找数据、找被试',
     icon: Users,
-    style: 'bg-teal-500/10 text-teal-700 border-teal-300',
+    style: 'text-primary',
   },
   {
     value: 'meta',
     label: '站务公告',
     desc: '反馈、规则、活动与官方公告',
     icon: Megaphone,
-    style: 'bg-rose-500/10 text-rose-700 border-rose-300',
+    style: 'text-primary',
   },
 ]
 
 const CATEGORY_STYLE: Record<string, string> = {
-  paper: 'bg-sky-500/10 text-sky-700 border-sky-300',
-  method: 'bg-amber-500/10 text-amber-700 border-amber-300',
-  life: 'bg-emerald-500/10 text-emerald-700 border-emerald-300',
-  collab: 'bg-teal-500/10 text-teal-700 border-teal-300',
-  meta: 'bg-rose-500/10 text-rose-700 border-rose-300',
-  notice: 'bg-rose-500/10 text-rose-700 border-rose-300',
-  discussion: 'bg-sky-500/10 text-sky-700 border-sky-300',
-  question: 'bg-amber-500/10 text-amber-700 border-amber-300',
-  suggestion: 'bg-rose-500/10 text-rose-700 border-rose-300',
+  paper: 'bg-muted text-foreground border-border',
+  method: 'bg-muted text-foreground border-border',
+  life: 'bg-muted text-foreground border-border',
+  collab: 'bg-muted text-foreground border-border',
+  meta: 'border-primary/25 bg-primary/10 text-primary',
+  notice: 'border-primary/25 bg-primary/10 text-primary',
+  discussion: 'bg-muted text-foreground border-border',
+  question: 'bg-muted text-foreground border-border',
+  suggestion: 'bg-muted text-foreground border-border',
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -209,7 +209,7 @@ function ForumListPage() {
   const meta = listQ.data?.meta
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4 px-4 py-8 sm:px-6">
+    <div className="mx-auto w-full max-w-4xl space-y-4">
       <PageHeader
         title="讨论"
         description="五个版块：论文沙龙、方法与写作、学术生存、组队招募、站务公告。发帖登录即可，不需要积分。"
@@ -258,17 +258,24 @@ function ForumListPage() {
               type="button"
               onClick={() => updateSearch({ category: b.value, page: 1 })}
               className={cn(
-                'rounded-xl border p-2.5 text-left transition-colors',
+                'group flex h-full min-h-[5.25rem] flex-col rounded-xl border p-3 text-left transition-all',
                 b.value === 'meta' ? 'col-span-2 sm:col-span-1' : '',
                 active
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-input bg-card hover:bg-muted/60',
+                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                  : 'border-input bg-card hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm',
               )}
             >
-              <span className="flex items-center justify-between gap-1.5 text-sm font-medium">
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <Icon className={cn('h-4 w-4 shrink-0', active ? '' : b.style.split(' ')[1])} />
-                  {b.label}
+              <span className="flex items-start justify-between gap-1.5 text-sm font-medium">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      'icon-chip icon-chip-sm',
+                      active && 'border-white/25 bg-white/15 text-primary-foreground',
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" />
+                  </span>
+                  <span className="min-w-0 leading-tight">{b.label}</span>
                 </span>
                 <span className={cn('shrink-0 text-[10px] tabular-nums', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                   {boardCounts[b.value] ?? 0} 帖
@@ -320,12 +327,13 @@ function ForumListPage() {
             <Card
               key={t.id}
               className={cn(
-                'transition-colors hover:bg-muted/30',
+                'group gap-0 rounded-xl p-0 transition-all',
+                'hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-sm',
                 // 编辑部公告用左侧主色条突出：公告不是普通帖子
                 t.category === 'notice' && 'border-l-4 border-l-primary',
               )}
             >
-              <CardContent className="flex items-start gap-3 py-4">
+              <CardContent className="flex items-start gap-3 px-4 py-3.5">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {t.is_pinned && (
@@ -353,18 +361,18 @@ function ForumListPage() {
                     <Link
                       to="/forum/$topicId"
                       params={{ topicId: String(t.id) }}
-                      className="text-base font-medium hover:text-primary hover:underline"
+                      className="text-[15px] font-semibold leading-6 hover:text-primary hover:underline"
                     >
                       {t.title}
                     </Link>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{t.body}</p>
+                  <p className="mt-1 line-clamp-2 text-[13px] leading-6 text-muted-foreground">{t.body}</p>
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
                     {t.author?.username ?? '已注销用户'} · 最后活跃{' '}
                     {fmtRelative(t.last_reply_at ?? t.created_at)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+                <div className="flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span className="tabular-nums">{t.reply_count}</span>
                 </div>

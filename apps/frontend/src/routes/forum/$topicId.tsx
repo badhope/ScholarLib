@@ -109,7 +109,7 @@ function ForumTopicPage() {
   const canDelete = isAuthenticated && (isAdmin || topic.author?.id === user?.id)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-3xl space-y-4">
       <Link
         to="/forum"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

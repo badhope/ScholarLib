@@ -56,7 +56,7 @@ function ArchivePage() {
   const items = data?.data ?? []
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="卷期归档"
         description="按卷期归档 · 滚动刊出：稿件完成评审即上线，不设固定刊期；卷期仅作归档组织，排期信息仅供参考、随时可能调整。"

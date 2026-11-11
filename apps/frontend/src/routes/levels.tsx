@@ -78,7 +78,7 @@ const PERMISSION_LAYERS: PermissionLayer[] = [
       '查看自己完成的审稿历史',
     ],
     granted: '编辑部审批授予',
-    tint: 'bg-sky-500/15 text-sky-600',
+    tint: 'bg-primary/10 text-primary',
   },
   {
     key: 'editor',
@@ -171,8 +171,8 @@ const POINT_RULES: PointRule[] = [
 
 const IDENTITY_BADGE: Record<string, string> = {
   author: 'bg-muted text-foreground',
-  reviewer: 'bg-sky-500/15 text-sky-600',
-  editor: 'bg-amber-500/15 text-amber-600',
+  reviewer: 'bg-primary/10 text-primary',
+  editor: 'bg-primary/15 text-primary',
 }
 
 const IDENTITY_NAME: Record<string, string> = {
@@ -183,7 +183,7 @@ const IDENTITY_NAME: Record<string, string> = {
 
 export function LevelsPage() {
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
       <PageHeader
         title="身份与等级体系"
         description="两条轴：身份决定你能做什么；等级只在你自己的身份里涨。互不混排、互不兑换。"
@@ -211,8 +211,8 @@ export function LevelsPage() {
 
       {/* 一、权限轴五层 */}
       <section>
-        <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
-          <Users className="h-4 w-4" /> 权限轴：五层身份
+        <h2 className="subhead mb-1 flex items-center gap-2">
+          <Users className="subhead-icon h-4 w-4" /> 权限轴：五层身份
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
           大身份包含小身份的全部权限。例如成为主编，就同时拥有栏目编辑、审稿人、用户的所有能力；
@@ -224,7 +224,7 @@ export function LevelsPage() {
             return (
               <div
                 key={layer.key}
-                className="relative rounded-xl border bg-card p-4 sm:p-5"
+                className="relative rounded-xl border bg-card p-4 transition-colors hover:border-foreground/20 sm:p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span
@@ -243,7 +243,12 @@ export function LevelsPage() {
                 <p className="mt-2 text-xs font-medium text-muted-foreground">
                   本层新增能力：
                 </p>
-                <ul className="mt-1 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                <ul
+                  className={cn(
+                    'mt-1 grid gap-1 text-sm text-muted-foreground',
+                    layer.adds.length > 2 && 'sm:grid-cols-2',
+                  )}
+                >
                   {layer.adds.map((c) => (
                     <li key={c} className="flex items-start gap-1.5">
                       <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
@@ -260,7 +265,7 @@ export function LevelsPage() {
       {/* 二、等级轴三套 */}
       <section>
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
-          <Crosshair className="h-4 w-4" /> 等级轴：三套独立阈值表
+          <Crosshair className="subhead-icon h-4 w-4" /> 等级轴：三套独立阈值表
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
           等级只在同一身份内累加。下表数值与后端配置一致，不同身份之间不比较、不并列、不进同一榜单。
@@ -311,7 +316,7 @@ export function LevelsPage() {
       {/* 三、积分怎么涨 */}
       <section>
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold">
-          <Coins className="h-4 w-4" /> 积分怎么涨：只服务同身份升级
+          <Coins className="subhead-icon h-4 w-4" /> 积分怎么涨：只服务同身份升级
         </h2>
         <p className="mb-4 text-sm text-muted-foreground">
           下面这些行为会计入对应身份的积分。同一篇稿件 / 同一份审稿只计一次，重复触发不重复加分。
@@ -360,7 +365,7 @@ export function LevelsPage() {
       {/* 四、三条红线 */}
       <section>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <ShieldAlert className="h-4 w-4" /> 三条硬规则
+          <ShieldAlert className="subhead-icon h-4 w-4" /> 三条硬规则
         </h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {[

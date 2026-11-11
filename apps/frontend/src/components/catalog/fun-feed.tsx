@@ -62,25 +62,25 @@ export function FunCatalog({
   return (
     <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-6">
       {/* 刊头只负责“这是副刊”。筛选、搜索、公告全部下移，首屏不再堆四层控件。 */}
-      <header className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 px-4 py-4 shadow-sm sm:px-8 sm:py-6 dark:border-amber-500/20 dark:from-amber-950/35 dark:via-orange-950/25 dark:to-rose-950/20">
+      <header className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-accent/25 px-4 py-5 shadow-sm sm:px-8 sm:py-7">
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rotate-12 rounded-full bg-amber-300/25 blur-2xl"
+          className="pointer-events-none absolute -right-12 -top-14 h-44 w-44 rotate-12 rounded-full bg-amber-300/20 blur-2xl dark:bg-amber-500/10"
         />
         <div className="relative">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-800/70 sm:text-[11px] sm:tracking-[0.24em] dark:text-amber-200/60">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/70 sm:text-[11px] sm:tracking-[0.24em]">
               Rubbish · Off the Record
             </p>
-            <div className="inline-flex shrink-0 items-center rounded-full border border-amber-300/70 bg-white/65 p-0.5 text-[11px] dark:bg-amber-950/20">
-              <Link to="/papers" className="rounded-full px-2.5 py-0.5 text-amber-900/70 hover:text-amber-900 dark:text-amber-200/70">
+            <div className="inline-flex shrink-0 items-center rounded-full border border-border bg-card p-0.5 text-[11px]">
+              <Link to="/papers" className="rounded-full px-2.5 py-0.5 text-muted-foreground hover:text-foreground">
                 论文
               </Link>
-              <span className="rounded-full bg-amber-600 px-2.5 py-0.5 font-medium text-white">副刊</span>
+              <span className="rounded-full bg-primary px-2.5 py-0.5 font-medium text-primary-foreground">副刊</span>
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-1">
-            <h1 className="font-serif text-2xl font-semibold tracking-tight sm:text-4xl">
+            <h1 className="section-title text-2xl font-semibold tracking-tight sm:text-4xl">
               副刊
             </h1>
             <span className="pb-0.5 text-xs text-muted-foreground sm:pb-1 sm:text-sm">
@@ -95,14 +95,14 @@ export function FunCatalog({
       </header>
 
       {/* 文体 + 搜索合并成一条工具栏。移动端一行下拉、一行搜索，不再在刊头里叠控件。 */}
-      <div className="mt-3 rounded-2xl border border-amber-200/70 bg-card/80 p-3 sm:p-4 dark:border-amber-500/20">
+      <div className="mt-3 rounded-2xl border border-border bg-card p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="sm:hidden">
             <select
               aria-label="选择副刊文体"
               value={search.genre ?? ''}
               onChange={(e) => go({ genre: e.target.value || undefined })}
-              className="h-10 w-full rounded-full border border-amber-200 bg-white/80 px-4 text-sm text-amber-900 outline-none dark:border-amber-500/25 dark:bg-amber-950/25 dark:text-amber-100"
+              className="h-10 w-full rounded-full border border-border bg-card px-4 text-sm text-foreground outline-none transition-colors focus:border-primary/40"
             >
               <option value="">
                 全部文体 · {totalAll}
@@ -136,7 +136,7 @@ export function FunCatalog({
             <Input
               defaultValue={search.q ?? ''}
               placeholder="搜标题、作者，或者一个梗"
-              className="h-10 rounded-full border-amber-200 bg-white/80 pl-9 text-sm dark:border-amber-500/25 dark:bg-amber-950/25"
+              className="h-10 rounded-full pl-9 text-sm"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   go({ q: (e.target as HTMLInputElement).value.trim() || undefined })
@@ -149,7 +149,7 @@ export function FunCatalog({
         <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
           <Link
             to="/policies"
-            className="inline-flex shrink-0 items-center gap-1 font-medium text-amber-900 hover:underline dark:text-amber-200"
+            className="inline-flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
           >
             格式与版式
             <ArrowRight className="h-3.5 w-3.5" />
@@ -186,15 +186,15 @@ export function FunCatalog({
         <>
           {/* 公告默认折叠：它们重要，但不该和正文抢同一屏。 */}
           {editorialNotes.length > 0 && (
-            <details className="group mt-3 rounded-xl border border-dashed border-amber-300/70 bg-amber-50/50 px-3 py-2 open:bg-amber-50/80 dark:border-amber-500/25 dark:bg-amber-950/20">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium text-amber-900 dark:text-amber-200">
+            <details className="group mt-3 rounded-xl border border-dashed border-border bg-muted/30 px-3 py-2 open:bg-muted/45">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-[11px] font-medium text-foreground/80">
                 <span>
                   公告与说明
                   <span className="ml-1 font-normal text-muted-foreground">· {editorialNotes.length} 条</span>
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
               </summary>
-              <div className="mt-2 grid gap-1.5 border-t border-amber-200/60 pt-2 sm:grid-cols-2 dark:border-amber-500/20">
+              <div className="mt-2 grid gap-1.5 border-t border-border pt-2 sm:grid-cols-2">
                 {editorialNotes.map((r) => (
                   <Link
                     key={r.id}
@@ -207,7 +207,7 @@ export function FunCatalog({
                 ))}
                 <Link
                   to="/sections"
-                  className="inline-flex items-center gap-0.5 text-[11px] text-amber-900 hover:underline dark:text-amber-200"
+                  className="inline-flex items-center gap-0.5 text-[11px] text-primary hover:underline"
                 >
                   全部栏目
                   <ArrowRight className="h-3 w-3" />
@@ -252,10 +252,10 @@ export function FunCatalog({
                         type="button"
                         onClick={() => go({ genre: active ? undefined : g.value })}
                         className={cn(
-                          'group flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-colors',
+                          'group flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition-all',
                           active
-                            ? 'border-amber-600 bg-amber-600 text-white'
-                            : 'border-amber-200/80 bg-card hover:border-amber-400 hover:bg-amber-50/50 dark:border-amber-500/20 dark:hover:bg-amber-950/20',
+                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                            : 'border-border bg-card hover:-translate-y-0.5 hover:border-primary/30 hover:bg-accent/25',
                         )}
                       >
                         <span className="text-xl leading-none">{g.emoji}</span>
@@ -285,7 +285,7 @@ export function FunCatalog({
             )}
           </div>
 
-          <div className="mt-7 flex items-center justify-between gap-3 border-t border-amber-200/60 pt-4 dark:border-amber-500/20">
+          <div className="mt-7 flex items-center justify-between gap-3 border-t border-border pt-4">
             <Link
               to={routePath === '/fun' ? '/papers' : routePath}
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -307,7 +307,7 @@ export function FunCatalog({
 
 function SectionHead({ title, note }: { title: string; note?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-amber-200/60 pb-2 dark:border-amber-500/20">
+    <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2">
       <h2 className="font-serif text-lg font-semibold tracking-tight sm:text-xl">{title}</h2>
       {note ? <span className="text-[11px] text-muted-foreground">{note}</span> : null}
     </div>
@@ -333,8 +333,8 @@ function GenrePill({
       className={cn(
         'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
         active
-          ? 'border-amber-700 bg-amber-700 text-white'
-          : 'border-amber-300/80 bg-white/70 text-amber-900 hover:bg-white dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-100',
+          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+          : 'border-border bg-card text-foreground/80 hover:border-primary/30 hover:text-foreground',
       )}
     >
       {children}
@@ -357,17 +357,17 @@ function FunCard({ resource, featured }: { resource: ResourceResponse; featured:
         to="/catalog/$resourceId"
         params={{ resourceId: String(resource.id) }}
         className={cn(
-          'group grid overflow-hidden rounded-3xl border border-amber-200/70 bg-card shadow-sm transition-shadow hover:shadow-md dark:border-amber-500/20',
+          'card-lift group grid overflow-hidden rounded-2xl border border-border bg-card',
           resource.cover_image ? 'md:grid-cols-[1.15fr_0.85fr]' : 'md:grid-cols-1',
         )}
       >
         <div className="order-1 flex flex-col justify-center gap-3 p-5 sm:p-7 md:order-1">
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="rounded-full bg-amber-600 px-2.5 py-1 font-medium text-white">
+            <span className="rounded-full bg-primary px-2.5 py-1 font-medium text-primary-foreground">
               {genre.label}
             </span>
             {resource.is_special_issue ? (
-              <span className="rounded-full border border-rose-300 px-2 py-0.5 text-rose-700">
+              <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">
                 长文
               </span>
             ) : null}
@@ -380,7 +380,7 @@ function FunCard({ resource, featured }: { resource: ResourceResponse; featured:
           <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>{formatAuthors(resource.authors) || '佚名'}</span>
             {resource.reads != null ? <span>· 阅读 {resource.reads}</span> : null}
-            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300">
+            <span className="inline-flex items-center gap-1 text-primary">
               <Sparkles className="h-3.5 w-3.5" />
               编辑推荐
             </span>
@@ -409,7 +409,7 @@ function FunCard({ resource, featured }: { resource: ResourceResponse; featured:
     <Link
       to="/catalog/$resourceId"
       params={{ resourceId: String(resource.id) }}
-      className="group grid grid-cols-[92px_1fr] gap-4 rounded-2xl border border-transparent bg-card/70 p-3 transition-colors hover:border-amber-200 hover:bg-card sm:grid-cols-[120px_1fr] sm:p-4 dark:hover:border-amber-500/25"
+      className="group grid grid-cols-[92px_1fr] gap-4 rounded-2xl border border-transparent bg-card/70 p-3 transition-all hover:-translate-y-0.5 hover:border-primary/25 hover:bg-card sm:grid-cols-[120px_1fr] sm:p-4"
     >
       <div className="relative aspect-square overflow-hidden rounded-xl">
         <ArticleCover resource={resource} showDiscipline={false} className="h-full" />
@@ -421,7 +421,7 @@ function FunCard({ resource, featured }: { resource: ResourceResponse; featured:
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="font-medium text-amber-800 dark:text-amber-300">{genre.label}</span>
+          <span className="font-medium text-primary">{genre.label}</span>
           <span>·</span>
           <span>{resource.year}</span>
           {resource.reads != null ? <span>· 阅读 {resource.reads}</span> : null}

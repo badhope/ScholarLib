@@ -3,7 +3,6 @@ import { AuthorsPage } from './authors'
 import { HelpPage } from './help'
 import { LevelsPage } from './levels'
 import { PoliciesPage } from './policies'
-import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/guide')({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -26,21 +25,17 @@ function GuidePage() {
   const { tab } = useSearch({ from: '/guide' })
   return (
     <div>
-      <div className="mx-auto mb-4 grid max-w-5xl grid-cols-2 gap-2 px-4 pt-6 sm:flex sm:flex-wrap sm:px-6">
+      <div className="mx-auto mb-5 grid w-full max-w-5xl grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {TABS.map((t) => (
           <Link
             key={t.value}
             to="/guide"
             search={{ tab: t.value }}
-            className={cn(
-              'rounded-xl border px-3 py-2 text-left transition-colors',
-              tab === t.value
-                ? 'border-emerald-600 bg-emerald-600 text-white'
-                : 'border-input bg-card hover:bg-muted/60',
-            )}
+            data-active={tab === t.value}
+            className="seg-link px-3.5 py-2 text-left"
           >
             <span className="block text-sm font-medium">{t.label}</span>
-            <span className={cn('mt-0.5 block text-[11px]', tab === t.value ? 'text-white/75' : 'text-muted-foreground')}>
+            <span className="seg-link-desc mt-0.5 block text-[11px]">
               {t.desc}
             </span>
           </Link>

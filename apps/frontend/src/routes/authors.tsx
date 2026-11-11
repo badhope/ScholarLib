@@ -74,7 +74,7 @@ export function AuthorsPage() {
   const rulesAccepted = profile.data?.rules_accepted ?? false
 
   return (
-    <div className="mx-auto max-w-4xl py-8">
+    <div className="mx-auto max-w-4xl">
       <Link
         to="/"
         className="mb-4 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-primary"

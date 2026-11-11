@@ -14,7 +14,7 @@ export function NotFoundPage() {
           <Compass className="h-8 w-8" />
         </span>
         <div className="space-y-1.5">
-          <h1 className="state-title text-3xl font-semibold tabular-nums">404</h1>
+          <h1 className="state-title text-5xl font-semibold tabular-nums sm:text-6xl">404</h1>
           <p className="text-base font-medium">页面不存在或已被移动</p>
           <p className="text-sm text-muted-foreground">
             链接可能输错了，或者这条内容已经下架。从下面的入口继续浏览吧。

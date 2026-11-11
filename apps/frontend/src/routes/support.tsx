@@ -38,7 +38,7 @@ function SupportPage() {
   const configured = Boolean(qrcode || account)
 
   return (
-    <div className="mx-auto max-w-3xl py-8">
+    <div className="mx-auto max-w-3xl">
       <Link
         to="/"
         className="mb-4 inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-primary"

@@ -1173,3 +1173,74 @@ html {
   .nav-item::before { transition: none; }
   [data-slot='button'][data-variant='default']:hover { transform: none; }
 }
+
+/* ── 2026 视觉升级 · 第四批：跨页面一致性 ── */
+
+/* 图标胶囊：社区版块、制度条目统一用同一枚小图标底座，替代各页自带的彩色圆点 */
+.icon-chip {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  border: 1px solid color-mix(in oklab, var(--color-primary) 18%, var(--color-border));
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, var(--color-card) 92%, white),
+    color-mix(in oklab, var(--color-accent) 52%, transparent)
+  );
+  color: var(--color-primary);
+}
+.icon-chip-sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+}
+
+/* 段式导航：关于本刊 / 投稿指南顶部那几个入口，统一成同一套形状与激活态 */
+.seg-link {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  background: color-mix(in oklab, var(--color-card) 94%, white);
+  color: var(--color-muted-foreground);
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+.seg-link:hover {
+  border-color: color-mix(in oklab, var(--color-primary) 28%, var(--color-border));
+  color: var(--color-foreground);
+  transform: translateY(-1px);
+}
+.seg-link[data-active='true'] {
+  border-color: color-mix(in oklab, var(--color-primary) 70%, transparent);
+  background-image: linear-gradient(140deg, color-mix(in oklab, var(--color-primary) 88%, white), var(--color-primary) 62%);
+  color: var(--color-primary-foreground);
+  box-shadow: 0 10px 22px -18px color-mix(in oklab, var(--color-primary) 75%, transparent);
+}
+.seg-link[data-active='true']:hover {
+  transform: none;
+  color: var(--color-primary-foreground);
+}
+.seg-link-desc {
+  color: var(--color-muted-foreground);
+}
+.seg-link[data-active='true'] .seg-link-desc {
+  color: color-mix(in oklab, var(--color-primary-foreground) 78%, transparent);
+}
+
+/* 小节标题：显示体只留给页面 h1，二级标题回到无衬线并统一字距 */
+.subhead {
+  font-family: var(--font-heading);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.subhead-icon {
+  color: color-mix(in oklab, var(--color-primary) 88%, var(--color-foreground));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-link { transition: none; }
+  .seg-link:hover { transform: none; }
+}

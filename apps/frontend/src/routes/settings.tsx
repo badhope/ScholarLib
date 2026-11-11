@@ -9,6 +9,7 @@ import { ProfileDetailsCard } from '@/components/settings/profile-details-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { PageHeader } from '@/components/common/page-header'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
@@ -160,8 +161,11 @@ function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 py-8">
-      <h1 className="text-2xl font-semibold">账号设置</h1>
+    <div className="w-full max-w-3xl space-y-6">
+      <PageHeader
+        title="账号设置"
+        description="账号资料、个人简介与安全项；所有字段都可以留空，留空不会覆盖已有内容。"
+      />
 
       <Tabs value={tab} onValueChange={onTabChange}>
         <TabsList>

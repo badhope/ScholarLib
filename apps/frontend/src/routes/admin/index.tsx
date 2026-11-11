@@ -63,7 +63,7 @@ function AdminDashboard() {
   const { data: commentCounts } = useAdminCommentCounts(isAuthenticated)
   const pendingComments = commentCounts?.pending ?? 0
   return (
-    <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-6xl space-y-8">
       <PageHeader title="站点总览" description={`欢迎，${user?.username ?? '管理员'}。按工作流找入口。`} />
 
       <Card>

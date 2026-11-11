@@ -397,6 +397,7 @@ function DashboardPage() {
               </ul>
             ) : (
               <EmptyState
+                compact
                 title="暂无推荐"
                 description="阅读几篇资源后即可获得个性化推荐"
               />
@@ -435,7 +436,7 @@ function DashboardPage() {
                 ))}
               </ul>
             ) : (
-              <EmptyState title="暂无通知" />
+              <EmptyState compact title="暂无通知" />
             )}
           </CardContent>
         </Card>
