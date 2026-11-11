@@ -49,8 +49,9 @@ function MobileTabButton({
       type="button"
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
+      data-active={active ? 'true' : 'false'}
       className={cn(
-        'flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-xs',
+        'mobile-tab flex min-h-[44px] flex-col items-center justify-center gap-0.5 text-xs',
         active ? 'text-primary' : 'text-muted-foreground',
       )}
     >
@@ -212,7 +213,7 @@ export function MobileAppShell() {
     <div className="flex min-h-screen flex-col bg-background">
       <AmbientBackdrop />
       {/* 紧凑头部：logo + 主题切换 + 显式「功能」入口 */}
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur relative supports-[backdrop-filter]:bg-background/60">
+      <header className="app-header-rule sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur relative supports-[backdrop-filter]:bg-background/60">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
           <BrandMark className="h-5 w-5 shrink-0" />
           <span>Rubbish</span>

@@ -254,15 +254,16 @@ export function AppShell() {
                   (collapsed ? (
                     <div className="my-2 border-t border-sidebar-foreground/15" aria-hidden />
                   ) : (
-                    <p className="mb-1 mt-3 px-3 text-[10px] font-medium uppercase tracking-widest text-sidebar-foreground/45 first:mt-1">
+                    <p className="nav-group-label mb-1 mt-3 px-3 text-[10px] font-medium uppercase tracking-widest text-sidebar-foreground/45 first:mt-1">
                       {item.group}
                     </p>
                   ))}
                 <Link
                 key={item.to}
                 to={item.to}
+                data-active={active ? 'true' : 'false'}
                 className={cn(
-                  'mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                  'nav-item mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
                   active
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                     : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
@@ -315,7 +316,7 @@ export function AppShell() {
       </aside>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <header className="app-header-rule sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           {/* 左侧：移动端汉堡 + 折叠状态下的页面标识 */}
           <div className="flex items-center gap-2">
             <Button
