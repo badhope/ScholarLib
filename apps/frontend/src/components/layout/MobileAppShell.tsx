@@ -167,7 +167,7 @@ export function MobileAppShell() {
 
   // 底部 4 Tab 栏：首页与所有非认证页都渲染
   // z-50 确保压在首页自己的 sticky header(z-40) 与 back-to-top 按钮之上
-  const bottomTab = showChrome && (
+  const bottomTab = showChrome && !hasOwnBottomBar && (
     <nav
       className={cn(
         'fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-5 items-stretch border-t bg-background backdrop-blur pb-[env(safe-area-inset-bottom)]',
@@ -318,7 +318,7 @@ export function MobileAppShell() {
         <Button
           aria-label="导入"
           onClick={() => go(MOBILE_FAB_TO)}
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full shadow-lg"
+          className="fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom))] right-4 z-40 h-14 w-14 rounded-full shadow-lg sm:bottom-[calc(5rem+env(safe-area-inset-bottom))]"
           size="icon"
         >
           <Plus className="h-6 w-6" />

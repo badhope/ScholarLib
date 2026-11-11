@@ -118,7 +118,7 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
     page_size: 10,
   }
 
-  const { data, isLoading, isError, refetch } = useResources(params)
+  const { data, isLoading, isFetching, isError, refetch } = useResources(params)
   const { data: stats } = useCatalogStats(statsTrack)
 
   // `/papers` 顶部随机推荐：单独拉论文池，用于抽取推荐卡片；
@@ -410,14 +410,17 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
       ) : viewMode === 'grid' ? (
         // 手机端单列：390px 下两列会把中文标题压成半行，读者必须先猜标题；
         // 平板 2 列、桌面 4 列。九宫格留给桌面，手机优先可读性。
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          data-testid="catalog-resource-list"
+        >
           {data.data.map((r) => (
             <CatalogGridCard key={r.id} resource={r} />
           ))}
         </div>
       ) : isMobile ? (
         // 移动端：卡片列表（独立设计，无批量勾选）
-        <div className="space-y-3">
+        <div className="space-y-3" data-testid="catalog-resource-list">
           {data.data.map((r) => (
             <ResourceCard key={r.id} resource={r} />
           ))}
@@ -437,6 +440,7 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleAll}
+                        disabled={isFetching}
                         aria-label="全选"
                       />
                     </TableHead>
@@ -464,6 +468,7 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
                             type="checkbox"
                             checked={selectedIds.includes(r.id)}
                             onChange={() => toggleOne(r.id)}
+                            disabled={isFetching}
                             aria-label={`选择 ${r.title}`}
                           />
                         </TableCell>

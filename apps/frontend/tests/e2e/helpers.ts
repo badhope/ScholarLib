@@ -167,6 +167,15 @@ export async function primeCookieConsent(page: Page): Promise<void> {
 export async function fillCaptcha(page: Page): Promise<void> {
   const label = page.locator('label[for="captcha"]')
   await label.waitFor({ state: 'visible', timeout: 10_000 })
+  await expect
+    .poll(
+      async () => {
+        const text = (await label.textContent()) ?? ''
+        return /\d+\s*(?:\+|加)\s*\d+/.test(text) ? text : null
+      },
+      { timeout: 10_000 },
+    )
+    .toBeTruthy()
   const text = (await label.textContent()) ?? ''
   const m = text.match(/(\d+)\s*(?:\+|加)\s*(\d+)/)
   if (!m) throw new Error(`cannot parse captcha: ${text}`)

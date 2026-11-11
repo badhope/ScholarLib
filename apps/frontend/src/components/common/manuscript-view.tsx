@@ -942,6 +942,10 @@ export function ManuscriptView({
  onTocReady?.(entries)
  }, [data, refs])
 
+  useEffect(() => {
+    if (isError) onFatalError?.(queryError)
+  }, [isError, queryError, onFatalError])
+
   // 超宽条图适配：宽高比 ≥ 4 的图（常见于从 PDF 里裁出来的一行公式截图），
   // 按 100% 宽度等比缩放后在 390px 的手机上只剩十几像素高，字迹完全糊掉。
   // 这里把这类图包进可横向滚动的容器，按可读宽度展示。
@@ -1041,7 +1045,6 @@ export function ManuscriptView({
   }
 
   if (isError || !data) {
-    onFatalError?.(queryError)
     return (
       <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
         <EmptyState

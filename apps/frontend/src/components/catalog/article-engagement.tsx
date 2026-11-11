@@ -122,10 +122,20 @@ function ReadingProgressBlock({ resourceId }: { resourceId: number }) {
   const [page, setPage] = useState('1')
   const [percent, setPercent] = useState(0)
   const loadedResourceRef = useRef<number | null>(null)
+  const dirtyRef = useRef(false)
+
+  useEffect(() => {
+    if (loadedResourceRef.current === resourceId) {
+      dirtyRef.current = false
+      return
+    }
+    dirtyRef.current = false
+  }, [resourceId])
 
   useEffect(() => {
     if (isProgressLoading || loadedResourceRef.current === resourceId) return
     loadedResourceRef.current = resourceId
+    if (dirtyRef.current) return
     setPage(String(progress?.page ?? 1))
     setPercent(Math.round(progress?.progress_percent ?? 0))
   }, [isProgressLoading, progress, resourceId])
@@ -174,7 +184,10 @@ function ReadingProgressBlock({ resourceId }: { resourceId: number }) {
             className="mt-1 h-8"
             inputMode="numeric"
             value={page}
-            onChange={(e) => setPage(e.target.value.replace(/[^\d]/g, ''))}
+            onChange={(e) => {
+              dirtyRef.current = true
+              setPage(e.target.value.replace(/[^\d]/g, ''))
+            }}
           />
         </label>
         <label className="text-[11px] text-muted-foreground">
@@ -185,7 +198,10 @@ function ReadingProgressBlock({ resourceId }: { resourceId: number }) {
             min={0}
             max={100}
             value={percent}
-            onChange={(e) => setPercent(Number(e.target.value))}
+            onChange={(e) => {
+              dirtyRef.current = true
+              setPercent(Number(e.target.value))
+            }}
             className="mt-3 h-2 w-full accent-primary"
           />
         </label>

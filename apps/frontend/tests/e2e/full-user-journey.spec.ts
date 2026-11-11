@@ -65,7 +65,6 @@ test.describe('全流程用户旅程', () => {
       await guest.goto(path)
       await expect(guest).toHaveURL(/login/, { timeout: 10_000 })
     }
-    await guestCtx.close()
 
     // --- 2) 注册 → 验证邮箱 → 登录 ---
     const ctx = await browser.newContext()
@@ -107,7 +106,6 @@ test.describe('全流程用户旅程', () => {
       .fill('Seed record for the full journey spec.')
     await adminPage.getByRole('button', { name: '创建' }).click()
     await expect(adminPage).toHaveURL(/\/catalog\/\d+/, { timeout: 10_000 })
-    await adminCtx.close()
 
     await page.goto('/papers?view=list')
     await expect(page.getByRole('heading', { name: '学术论文', exact: true })).toBeVisible()
@@ -131,7 +129,6 @@ test.describe('全流程用户旅程', () => {
     await expect(page.getByText(/已选 \d+ 项/)).toBeHidden({ timeout: 5_000 })
     await expect(seedRow).toBeVisible()
 
-    await ctx.close()
   })
 
   test('Journey 2: 作者投稿 → 编辑分配 → 审稿 → 接收 → 读者阅读', async ({
@@ -254,10 +251,6 @@ test.describe('全流程用户旅程', () => {
     await expect(readerPage.getByLabel('页码')).toHaveValue('4', { timeout: 10_000 })
     expect(Number(await readerPage.getByLabel('进度').inputValue())).toBe(30)
 
-    await authorCtx.close()
-    await reviewerCtx.close()
-    await adminCtx.close()
-    await readerCtx.close()
   })
 
 })
