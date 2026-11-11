@@ -20,8 +20,18 @@ import {
 // 多标签 storage 同步 + class 属性切换（对应 index.css 的 .dark 自定义变体）。
 
 export type Theme = 'light' | 'dark' | 'system'
+/** 配色方案：同一套语义 token，换的是品牌色相与纸面底色。 */
+export type Palette = 'jade' | 'ink' | 'clay' | 'celadon'
 
 const STORAGE_KEY = 'theme'
+const PALETTE_KEY = 'palette'
+
+export const PALETTES: { key: Palette; label: string; hint: string; swatch: string }[] = [
+  { key: 'jade', label: '苔绿', hint: '刊物的身份色', swatch: '#2f5d46' },
+  { key: 'ink', label: '墨蓝', hint: '学术、克制', swatch: '#2b3f63' },
+  { key: 'clay', label: '赭石', hint: '纸感、人文', swatch: '#8a4b32' },
+  { key: 'celadon', label: '青瓷', hint: '冷灰、安静', swatch: '#33585a' },
+]
 
 interface ThemeContextValue {
   /** 用户选择的主题（含 'system'） */
@@ -32,12 +42,28 @@ interface ThemeContextValue {
   systemTheme: 'light' | 'dark'
   setTheme: (theme: Theme) => void
   themes: Theme[]
+  /** 当前配色方案 */
+  palette: Palette
+  setPalette: (palette: Palette) => void
+  palettes: typeof PALETTES
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 function getSystemTheme(): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function readStoredPalette(): Palette {
+  try {
+    const stored = localStorage.getItem(PALETTE_KEY)
+    if (stored === 'jade' || stored === 'ink' || stored === 'clay' || stored === 'celadon') {
+      return stored
+    }
+  } catch {
+    // 隐私模式：用默认配色
+  }
+  return 'jade'
 }
 
 function readStoredTheme(): Theme {
@@ -60,6 +86,10 @@ function applyTheme(resolved: 'light' | 'dark'): void {
   root.style.colorScheme = resolved
 }
 
+function applyPalette(palette: Palette): void {
+  document.documentElement.setAttribute('data-palette', palette)
+}
+
 // disableTransitionOnChange：切换瞬间全局禁用过渡，避免深浅色交叉淡化闪烁
 function disableTransitionsOnce(): void {
   const style = document.createElement('style')
@@ -78,6 +108,7 @@ function disableTransitionsOnce(): void {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readStoredTheme)
+  const [palette, setPaletteState] = useState<Palette>(readStoredPalette)
   const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(getSystemTheme)
   const resolvedTheme = theme === 'system' ? systemTheme : theme
 
@@ -85,6 +116,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState(next)
     try {
       localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      // 隐私模式：仅内存生效
+    }
+    disableTransitionsOnce()
+  }, [])
+
+  const setPalette = useCallback((next: Palette) => {
+    setPaletteState(next)
+    try {
+      localStorage.setItem(PALETTE_KEY, next)
     } catch {
       // 隐私模式：仅内存生效
     }
@@ -103,12 +144,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(resolvedTheme)
   }, [resolvedTheme])
 
+  useEffect(() => {
+    applyPalette(palette)
+  }, [palette])
+
   // 多标签同步：其他标签改主题后本标签跟随
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== STORAGE_KEY) return
-      const next = e.newValue
-      setThemeState(next === 'light' || next === 'dark' ? next : 'system')
+      if (e.key === STORAGE_KEY) {
+        const next = e.newValue
+        setThemeState(next === 'light' || next === 'dark' ? next : 'system')
+      } else if (e.key === PALETTE_KEY) {
+        const next = e.newValue
+        setPaletteState(
+          next === 'ink' || next === 'clay' || next === 'celadon' ? next : 'jade',
+        )
+      }
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -121,8 +172,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       systemTheme,
       setTheme,
       themes: ['light', 'dark', 'system'],
+      palette,
+      setPalette,
+      palettes: PALETTES,
     }),
-    [theme, resolvedTheme, systemTheme, setTheme],
+    [theme, resolvedTheme, systemTheme, setTheme, palette, setPalette],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

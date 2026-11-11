@@ -51,7 +51,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AppearanceMenu } from '@/components/appearance-menu'
 import { CookieBanner } from '@/components/common/cookie-banner'
 import { PageViewTracker } from '@/components/common/page-view-tracker'
 
@@ -336,7 +336,7 @@ export function AppShell() {
               搜索
               <kbd className="rounded border bg-muted px-1 font-mono text-[10px] text-muted-foreground">⌘K</kbd>
             </Button>
-            <ThemeToggle />
+            <AppearanceMenu />
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

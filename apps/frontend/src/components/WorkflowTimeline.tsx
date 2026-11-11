@@ -80,7 +80,7 @@ export default function WorkflowTimeline({
           const isFuture = idx > current
 
           const iconColor = isCompleted
-            ? 'text-white bg-emerald-500'
+            ? 'bg-primary text-primary-foreground'
             : isCurrent
               ? 'text-primary-foreground bg-primary'
               : 'text-muted-foreground bg-muted'
@@ -92,7 +92,7 @@ export default function WorkflowTimeline({
           const lineColor =
             idx < visibleSteps.length - 1
               ? isCompleted
-                ? 'bg-emerald-500'
+                ? 'bg-primary'
                 : 'bg-muted'
               : ''
 
@@ -101,7 +101,7 @@ export default function WorkflowTimeline({
               <div className="flex w-full items-center">
                 {/* Connector line left (except first) */}
                 {idx > 0 && (
-                  <div className={`h-0.5 flex-1 ${isCompleted || isCurrent ? 'bg-emerald-500' : 'bg-muted'}`} />
+                  <div className={`h-0.5 flex-1 ${isCompleted || isCurrent ? 'bg-primary' : 'bg-muted'}`} />
                 )}
                 {/* Icon circle */}
                 <div
@@ -146,7 +146,7 @@ export default function WorkflowTimeline({
           const isFuture = idx > current
 
           const iconColor = isCompleted
-            ? 'text-white bg-emerald-500'
+            ? 'bg-primary text-primary-foreground'
             : isCurrent
               ? 'text-primary-foreground bg-primary'
               : 'text-muted-foreground bg-muted'
@@ -171,7 +171,7 @@ export default function WorkflowTimeline({
                 {idx < visibleSteps.length - 1 && (
                   <div
                     className={`mt-1 w-0.5 flex-1 ${
-                      isCompleted ? 'bg-emerald-500' : 'bg-muted'
+                      isCompleted ? 'bg-primary' : 'bg-muted'
                     }`}
                     style={{ minHeight: 24 }}
                   />

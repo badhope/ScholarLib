@@ -275,6 +275,14 @@ function SubmissionsPage() {
         <EmptyState
           title="暂无提交"
           description="新建一条提交，等待管理员审核。"
+          action={
+            <Button asChild size="sm">
+              <Link to="/submissions/new">
+                <Plus className="mr-1 h-4 w-4" />
+                创建第一条提交
+              </Link>
+            </Button>
+          }
         />
       ) : (
         isMobile ? (

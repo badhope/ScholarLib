@@ -288,7 +288,7 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
         <section className="mb-5 rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50/80 via-card to-card p-3 sm:p-4 dark:border-amber-500/20 dark:from-amber-950/20">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
-              <Sparkles className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-300" />
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
               <h2 className="font-serif text-base font-semibold tracking-tight sm:text-lg">
                 随机推荐
               </h2>
@@ -313,15 +313,15 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
                 key={r.id}
                 to="/catalog/$resourceId"
                 params={{ resourceId: String(r.id) }}
-                className="group flex min-h-24 flex-col rounded-xl border border-border/70 bg-background/80 p-3 transition-colors hover:border-amber-300 hover:bg-card dark:hover:border-amber-500/30"
+                className="group flex min-h-24 flex-col rounded-xl border border-border/70 bg-background/80 p-3 transition-colors hover:border-primary/40 hover:bg-card"
               >
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-medium text-primary dark:bg-primary/15">
                     {r.track === 'absurd' ? '荒诞论文' : '学术论文'}
                   </span>
                   <span>{r.year}</span>
                 </div>
-                <h3 className="mt-1.5 line-clamp-2 font-serif text-sm font-semibold leading-snug tracking-tight group-hover:text-amber-900 dark:group-hover:text-amber-200">
+                <h3 className="mt-1.5 line-clamp-2 font-serif text-sm font-semibold leading-snug tracking-tight group-hover:text-primary">
                   {r.title}
                 </h3>
                 <p className="mt-auto truncate pt-2 text-[11px] text-muted-foreground">

@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AppearanceMenu } from '@/components/appearance-menu'
 import { BrandMark } from '@/components/common/brand-mark'
 import { AmbientBackdrop } from '@/components/common/ambient-backdrop'
 import { ModuleErrorBoundary } from '@/components/common/error-boundary'
@@ -219,7 +219,7 @@ export function MobileAppShell() {
           <span>Rubbish</span>
         </Link>
         <div className="flex items-center gap-1.5">
-          <ThemeToggle />
+          <AppearanceMenu />
           {/* 次级入口不再藏在「⋯」里：用带文字的胶囊按钮，第一眼就知道能展开 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

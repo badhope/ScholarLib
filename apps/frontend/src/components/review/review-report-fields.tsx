@@ -292,7 +292,7 @@ export function ReviewReportFields({
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-sky-200/70 bg-sky-50/60 p-3 text-xs leading-5 text-sky-950 dark:border-sky-500/20 dark:bg-sky-950/20 dark:text-sky-100">
+      <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-3 text-xs leading-5 text-foreground dark:border-primary/25 dark:bg-primary/10">
         <p className="flex items-center gap-1.5 font-medium">
           <Info className="h-3.5 w-3.5" /> 填写前先过一遍这四问
         </p>

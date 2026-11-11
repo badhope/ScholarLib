@@ -90,6 +90,19 @@ export function HeroBackdrop() {
 
     const isDark = () => document.documentElement.classList.contains('dark')
 
+    // 粒子色跟随配色方案：直接读 data-palette，避免与 CSS token 两套色。
+    const paletteInk = () => {
+      const palette = document.documentElement.getAttribute('data-palette') || 'jade'
+      const dark = isDark()
+      const map: Record<string, { particle: string; line: string }> = {
+        jade: { particle: dark ? '210, 238, 220' : '32, 84, 62', line: dark ? '180, 225, 198' : '36, 92, 66' },
+        ink: { particle: dark ? '196, 214, 244' : '36, 55, 88', line: dark ? '176, 198, 236' : '40, 62, 100' },
+        clay: { particle: dark ? '240, 214, 196' : '122, 66, 44', line: dark ? '232, 200, 178' : '130, 72, 48' },
+        celadon: { particle: dark ? '200, 228, 228' : '45, 82, 84', line: dark ? '186, 216, 216' : '50, 88, 90' },
+      }
+      return map[palette] ?? map.jade
+    }
+
     const resize = () => {
       const rect = canvas.getBoundingClientRect()
       width = rect.width
@@ -104,9 +117,7 @@ export function HeroBackdrop() {
     }
 
     const render = (time: number) => {
-      const dark = isDark()
-      const particleColor = dark ? '210, 238, 220' : '32, 84, 62'
-      const lineColor = dark ? '180, 225, 198' : '36, 92, 66'
+      const { particle: particleColor, line: lineColor } = paletteInk()
       ctx.clearRect(0, 0, width, height)
 
       if (!reducedMotion.matches && time > 0) {

@@ -32,7 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AppearanceMenu } from '@/components/appearance-menu'
 import { EmptyState, ErrorState } from '@/components/common/state'
 import {
   AnnouncementChip,
@@ -773,7 +773,7 @@ function HomePage() {
                   </Link>
                 </>
               )}
-              <ThemeToggle />
+              <AppearanceMenu />
             </div>
           </div>
         </header>
