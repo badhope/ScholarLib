@@ -1157,7 +1157,7 @@ export function ManuscriptView({
             一条常驻工具条会压住摘要开头，读者第一眼先看到一排图标而不是正文。
             容器用正常流占位（不再用负 margin 上提）：上提会让圆钮压在
             摘要卡右上角的边框上，看着像脱层。 */}
-        <div className="sticky top-2 z-10 mb-2 flex justify-end">
+        <div className="sticky top-2 z-10 mb-1 flex justify-end">
           <button
             type="button"
             aria-label="阅读设置"

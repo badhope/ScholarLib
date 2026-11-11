@@ -287,20 +287,20 @@ function CatalogDetailPage() {
                否则手机上根本进不去两个预览（只剩底栏直接下载 Word）。 */}
             <div className="mt-3 flex flex-wrap gap-2">
               {data.has_file && isPaperTrack && (
-                <>
-                  <Button variant="outline" size="sm" className="min-w-0 flex-1" onClick={() => setPdfPreviewOpen(true)}>
+                <div className="flex flex-wrap gap-2 xl:hidden">
+                  <Button variant="outline" size="sm" className="min-w-0" onClick={() => setPdfPreviewOpen(true)}>
                     <FileText className="h-4 w-4 shrink-0" />
                     <span className="truncate">PDF 版式预览</span>
                   </Button>
-                  <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+                  <Button asChild variant="outline" size="sm" className="min-w-0">
                     <a href={`/api/catalog/${id}/export?format=pdf&v=20`} download>
                       <FileDown className="h-4 w-4 shrink-0" />
                       <span className="truncate">下载 PDF</span>
                     </a>
                   </Button>
-                </>
+                </div>
               )}
-              <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+              <Button asChild variant="outline" size="sm" className="min-w-0">
                 <Link
                   to="/forum"
                   search={{ category: 'paper', paperId: id, paperTitle: data.title }}
@@ -992,11 +992,13 @@ function AbstractCard({ text, collapsible, label = '摘要' }: { text: string; c
   }, [text])
 
   return (
-    <Card className="mb-4">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">{label}</CardTitle>
+    <Card className="mb-4 gap-2 py-4">
+      <CardHeader className="px-5 pb-1 pt-0">
+        <CardTitle className="text-sm font-semibold tracking-wide text-muted-foreground">
+          {label}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-5 pt-0">
         <p
           ref={ref}
           className={
