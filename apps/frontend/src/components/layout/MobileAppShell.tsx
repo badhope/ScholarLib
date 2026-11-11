@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { BrandMark } from '@/components/common/brand-mark'
+import { AmbientBackdrop } from '@/components/common/ambient-backdrop'
 import { ModuleErrorBoundary } from '@/components/common/error-boundary'
 import { PageTransition } from '@/components/common/page-transition'
 import { CookieBanner } from '@/components/common/cookie-banner'
@@ -192,7 +193,8 @@ export function MobileAppShell() {
   if (isHome) {
     return (
       <div className="flex min-h-screen flex-col bg-background">
-        <main className="flex-1 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+        <AmbientBackdrop />
+        <main className="relative z-10 flex-1 pb-[calc(8rem+env(safe-area-inset-bottom))]">
           <CookieBanner />
           <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
             <PageTransition>
@@ -208,8 +210,9 @@ export function MobileAppShell() {
   // 普通内页：header + 内容 + 底部 Tab
   return (
     <div className="flex min-h-screen flex-col bg-background">
+      <AmbientBackdrop />
       {/* 紧凑头部：logo + 主题切换 + 显式「功能」入口 */}
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur relative supports-[backdrop-filter]:bg-background/60">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
           <BrandMark className="h-5 w-5 shrink-0" />
           <span>Rubbish</span>
@@ -293,7 +296,7 @@ export function MobileAppShell() {
       {/* 内容区：底部留白避开固定 Tab 栏 */}
       <main
         className={cn(
-          'flex-1 overflow-y-auto',
+          'relative z-10 flex-1 overflow-y-auto',
           hasOwnBottomBar
             ? 'pb-[calc(8.5rem+env(safe-area-inset-bottom))]'
             : immersive

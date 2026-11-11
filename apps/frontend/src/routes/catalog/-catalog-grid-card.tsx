@@ -30,7 +30,7 @@ export function CatalogGridCard({ resource }: CatalogGridCardProps) {
     <Link
       to="/catalog/$resourceId"
       params={{ resourceId: String(resource.id) }}
-      className="group flex flex-row overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md sm:flex-col"
+      className="card-lift group flex flex-row overflow-hidden rounded-xl border bg-card shadow-sm sm:flex-col"
     >
       {/* 封面区：封面图在上层，学科色块在底层兜底 */}
       <div className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden sm:w-full">

@@ -850,3 +850,136 @@ html {
     transition: none;
   }
 }
+
+/* ── 内页轻量环境背景：CSS 几何图形，不启用持续 Canvas ── */
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ambient-shape {
+  position: absolute;
+  display: block;
+  opacity: 0.11;
+  border-color: color-mix(in oklab, var(--color-primary) 72%, transparent);
+}
+.ambient-circle {
+  top: 7%;
+  left: -5rem;
+  width: 14rem;
+  height: 14rem;
+  border: 1px solid currentColor;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, color-mix(in oklab, var(--color-primary) 18%, transparent), transparent 68%);
+  animation: ambient-drift 19s ease-in-out infinite;
+}
+.ambient-triangle {
+  top: 24%;
+  right: 8%;
+  width: 0;
+  height: 0;
+  border-top: 4.5rem solid transparent;
+  border-bottom: 4.5rem solid transparent;
+  border-left: 7.5rem solid color-mix(in oklab, var(--color-primary) 20%, transparent);
+  animation: ambient-float 23s ease-in-out infinite;
+}
+.ambient-square {
+  top: 48%;
+  left: -2.5rem;
+  width: 8.5rem;
+  height: 8.5rem;
+  border: 1px solid currentColor;
+  border-radius: 1.4rem;
+  background: color-mix(in oklab, var(--color-accent) 38%, transparent);
+  animation: ambient-drift 24s ease-in-out infinite reverse;
+}
+.ambient-ring {
+  right: -6rem;
+  bottom: 8%;
+  width: 17rem;
+  height: 17rem;
+  border: 2px dashed currentColor;
+  border-radius: 9999px;
+  animation: ambient-spin 30s linear infinite;
+}
+@keyframes ambient-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(2.2rem, 1.4rem, 0) rotate(9deg); }
+}
+@keyframes ambient-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(-1.8rem, 2rem, 0) rotate(-10deg); }
+}
+@keyframes ambient-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.dark .ambient-shape { opacity: 0.16; }
+
+/* 状态面板：空态/错误态不再是裸图标，玻璃卡与柔和几何光斑保持同一视觉语言 */
+.state-panel {
+  position: relative;
+  overflow: hidden;
+  max-width: 34rem;
+  margin-inline: auto;
+  padding: 2.4rem 1.5rem;
+  border: 1px solid color-mix(in oklab, var(--color-border) 82%, white);
+  border-radius: 1.25rem;
+  background: color-mix(in oklab, var(--color-card) 86%, transparent);
+  box-shadow: 0 18px 48px -28px rgb(24 62 48 / 0.35);
+  backdrop-filter: blur(14px);
+}
+.state-panel::before {
+  content: '';
+  position: absolute;
+  top: -3.5rem;
+  right: -3.5rem;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, color-mix(in oklab, var(--color-primary) 22%, transparent), transparent 68%);
+}
+.state-icon {
+  position: relative;
+  display: flex;
+  width: 3.75rem;
+  height: 3.75rem;
+  align-items: center;
+  justify-content: center;
+  margin-inline: auto;
+  border: 1px solid color-mix(in oklab, var(--color-primary) 24%, var(--color-border));
+  border-radius: 9999px;
+  color: var(--color-primary);
+  background: linear-gradient(145deg, color-mix(in oklab, var(--color-card) 88%, white), color-mix(in oklab, var(--color-accent) 58%, transparent));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 12px 30px -18px rgb(24 62 48 / 0.45);
+}
+.state-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.015em;
+}
+.loading-orb {
+  position: relative;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in oklab, var(--color-primary) 25%, var(--color-border));
+  color: var(--color-primary);
+  background: color-mix(in oklab, var(--color-accent) 48%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.section-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient-circle,
+  .ambient-triangle,
+  .ambient-square,
+  .ambient-ring {
+    animation: none;
+  }
+}

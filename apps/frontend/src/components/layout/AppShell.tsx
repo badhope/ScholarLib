@@ -37,6 +37,7 @@ import { useLogout } from '@/hooks/api/use-auth'
 import { useUnreadCount } from '@/hooks/api/use-modules'
 import { cn } from '@/lib/utils'
 import { BrandMark } from '@/components/common/brand-mark'
+import { AmbientBackdrop } from '@/components/common/ambient-backdrop'
 import { filterNav, resolveActiveNavPath, type NavItem } from '@/lib/nav'
 import { ModuleErrorBoundary } from '@/components/common/error-boundary'
 import { PageTransition } from '@/components/common/page-transition'
@@ -124,7 +125,6 @@ export function AppShell() {
 
   // 路由变化时关闭移动端抽屉，避免点击导航后抽屉仍挡住内容
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMobileOpen(false)
   }, [location.pathname])
 
@@ -203,6 +203,7 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-background">
+      <AmbientBackdrop />
       {/* 移动端遮罩：<md 抽屉打开时显示 */}
       {mobileOpen && (
         <div
@@ -214,7 +215,7 @@ export function AppShell() {
 
       <aside
         className={cn(
-          'sticky top-0 z-40 flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all',
+          'sticky top-0 z-40 flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all relative',
           // 桌面端：根据 collapsed 切换宽窄；移动端：固定窄宽 + translate 控制显隐
           'md:sticky md:translate-x-0',
           collapsed ? 'md:w-14' : 'md:w-[220px]',
@@ -313,7 +314,7 @@ export function AppShell() {
         </button>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           {/* 左侧：移动端汉堡 + 折叠状态下的页面标识 */}
           <div className="flex items-center gap-2">

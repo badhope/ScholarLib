@@ -18,8 +18,10 @@ export function LoadingSkeleton({ rows = 3, className }: { rows?: number; classN
 
 export function Loading({ className }: { className?: string }) {
   return (
-    <div className={cn('flex items-center justify-center py-12 text-muted-foreground', className)}>
-      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+    <div className={cn('flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground', className)}>
+      <span className="loading-orb">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </span>
       <span className="text-sm">加载中…</span>
     </div>
   )
@@ -33,9 +35,13 @@ export function ErrorState({
   onRetry?: () => void
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-      <AlertCircle className="h-9 w-9 text-destructive/80" strokeWidth={1.5} />
-      <p className="text-sm text-muted-foreground">{message}</p>
+    <div className="state-panel flex flex-col items-center gap-3 text-center">
+      <span className="state-icon">
+        <AlertCircle className="h-7 w-7 text-destructive/80" strokeWidth={1.5} />
+      </span>
+      <div>
+        <p className="state-title text-base font-medium">{message}</p>
+      </div>
       {onRetry && (
         <button
           type="button"
@@ -59,12 +65,14 @@ export function EmptyState({
   action?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-      <Inbox className="h-9 w-9 text-muted-foreground/70" strokeWidth={1.5} />
+    <div className="state-panel flex flex-col gap-4 text-center">
+      <span className="state-icon">
+        <Inbox className="h-8 w-8" strokeWidth={1.5} />
+      </span>
       <div>
-        <p className="text-sm font-medium">{title}</p>
+        <p className="state-title text-base font-medium">{title}</p>
         {description && (
-          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
       {action}

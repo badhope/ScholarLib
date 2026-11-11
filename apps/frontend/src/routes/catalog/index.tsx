@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { ResourceCard } from '@/components/mobile/ResourceCard'
-import { CatalogGridCard } from './catalog-grid-card'
+import { CatalogGridCard } from './-catalog-grid-card'
 import { FunCatalog } from '@/components/catalog/fun-feed'
 import {
   Select,

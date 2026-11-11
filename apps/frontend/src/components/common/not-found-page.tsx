@@ -8,30 +8,32 @@ import { Button } from '@/components/ui/button'
  */
 export function NotFoundPage() {
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center gap-4 px-4 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <Compass className="h-8 w-8 text-muted-foreground" />
-      </div>
-      <div className="space-y-1.5">
-        <h1 className="text-3xl font-semibold tabular-nums">404</h1>
-        <p className="text-base font-medium">页面不存在或已被移动</p>
-        <p className="text-sm text-muted-foreground">
-          链接可能输错了，或者这条内容已经下架。从下面的入口继续浏览吧。
-        </p>
-      </div>
-      <div className="flex flex-wrap justify-center gap-2">
-        <Button asChild>
-          <Link to="/">
-            <Home className="h-4 w-4" />
-            返回首页
-          </Link>
-        </Button>
-        <Button asChild variant="outline">
-          <Link to="/catalog">
-            <BookOpen className="h-4 w-4" />
-            浏览资源目录
-          </Link>
-        </Button>
+    <div className="mx-auto flex min-h-[60vh] max-w-lg items-center justify-center px-4">
+      <div className="state-panel flex flex-col items-center gap-4 text-center">
+        <span className="state-icon">
+          <Compass className="h-8 w-8" />
+        </span>
+        <div className="space-y-1.5">
+          <h1 className="state-title text-3xl font-semibold tabular-nums">404</h1>
+          <p className="text-base font-medium">页面不存在或已被移动</p>
+          <p className="text-sm text-muted-foreground">
+            链接可能输错了，或者这条内容已经下架。从下面的入口继续浏览吧。
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link to="/">
+              <Home className="h-4 w-4" />
+              返回首页
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/catalog">
+              <BookOpen className="h-4 w-4" />
+              浏览资源目录
+            </Link>
+          </Button>
+        </div>
       </div>
     </div>
   )

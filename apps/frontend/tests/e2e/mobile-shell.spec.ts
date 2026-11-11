@@ -3,7 +3,7 @@ import { ADMIN, loginViaUi } from './helpers'
 
 // 移动端专用 E2E（390×844）：验证移动端外壳与五入口信息架构。
 const test = base.extend<{ consoleErrors: string[] }>({
-  consoleErrors: async ({ page }, use) => {
+  consoleErrors: async ({ page }, run) => {
     const errors: string[] = []
     const onConsole = (msg: ConsoleMessage) => {
       if (msg.type() === 'error') errors.push(msg.text())
@@ -11,7 +11,7 @@ const test = base.extend<{ consoleErrors: string[] }>({
     const onPageError = (err: Error) => errors.push(`pageerror: ${err.message}`)
     page.on('console', onConsole)
     page.on('pageerror', onPageError)
-    await use(errors)
+    await run(errors)
     const meaningful = errors.filter(
       (e) => !/favicon|Failed to load resource|net::ERR|404 \(Not Found\)/i.test(e),
     )
