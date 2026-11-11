@@ -63,7 +63,7 @@ function ArchivePage() {
       />
 
       {/* 出版日历：横向滚动，不撑破视口 */}
-      <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div className={cn('-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0', entries.length === 0 && 'hidden')}>
         <div className="flex min-w-max gap-2 pb-1">
           {entries.map((entry) => {
             const isLive = entry.state === 'live'
@@ -168,7 +168,15 @@ function ArchivePage() {
             </div>
           ) : items.length === 0 ? (
             <div className="p-8">
-              <EmptyState title="本期暂无文章" description="切换其他已上线期次，或浏览全部目录。" />
+              <EmptyState
+                title="本期暂无文章"
+                description="切换其他已上线期次，或浏览全部目录。"
+                action={
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/catalog">浏览全部目录</Link>
+                  </Button>
+                }
+              />
             </div>
           ) : (
             <ol className="divide-y">
@@ -226,6 +234,18 @@ function ArchivePage() {
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <Clock3 className="h-4 w-4 text-primary" /> 刊出排期（仅供参考）
         </h2>
+        {entries.length === 0 ? (
+          <EmptyState
+            compact
+            title="还没有可归档的期次"
+            description="第一期上线后会在这里出现排期与内容。"
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/catalog">先去浏览目录</Link>
+              </Button>
+            }
+          />
+        ) : (
         <div className="overflow-hidden rounded-xl border">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
@@ -256,6 +276,7 @@ function ArchivePage() {
             </tbody>
           </table>
         </div>
+        )}
       </section>
 
       <div className="flex flex-wrap gap-3 text-sm">

@@ -117,7 +117,7 @@ function LibraryPage() {
   }
 
   return (
-    <div>
+    <div className="w-full max-w-5xl space-y-6">
       <PageHeader
         title="我的阅读列表"
         description="管理你的私人收藏与阅读清单。"

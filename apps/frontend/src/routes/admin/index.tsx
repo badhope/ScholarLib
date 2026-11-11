@@ -63,7 +63,7 @@ function AdminDashboard() {
   const { data: commentCounts } = useAdminCommentCounts(isAuthenticated)
   const pendingComments = commentCounts?.pending ?? 0
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="w-full max-w-6xl space-y-8">
       <PageHeader title="站点总览" description={`欢迎，${user?.username ?? '管理员'}。按工作流找入口。`} />
 
       <Card>
@@ -72,7 +72,7 @@ function AdminDashboard() {
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-4">
           {CHAIN.map((c, i) => (
-            <div key={c.role} className="rounded-lg border bg-muted/30 p-3">
+            <div key={c.role} className="rounded-lg bg-muted/40 p-3">
               <div className="mb-1 flex items-center gap-2">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
                   {i + 1}

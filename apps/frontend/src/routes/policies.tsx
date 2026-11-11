@@ -146,12 +146,12 @@ export function PoliciesPage() {
         {SECTIONS.map(({ icon: Icon, title, body }) => (
           <RevealSection key={title}>
             <Card>
-              <CardContent className="p-6">
-                <h2 className="flex items-center gap-2 text-lg font-medium">
+              <CardContent className="p-5">
+                <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
                   <Icon className="h-5 w-5 text-primary" />
                   {title}
                 </h2>
-                <ul className="mt-3 space-y-2.5">
+                <ul className="mt-2.5 space-y-2">
                   {body.map((para) => (
                     <li key={para} className="flex gap-2.5 text-sm leading-relaxed text-muted-foreground">
                       <span aria-hidden className="mt-2 h-1 w-1 shrink-0 rounded-full bg-primary/50" />
