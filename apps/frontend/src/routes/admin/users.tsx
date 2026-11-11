@@ -68,6 +68,11 @@ export const Route = createFileRoute('/admin/users')({
 function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [query, setQuery] = useState('')
+  // 受控的「当前展开的那行菜单」。Radix 默认在 onSelect 时立即卸载菜单，
+  // 而列表 mutation 又会 invalidate 重拉数据；键盘 Enter/Space 的 keyup
+  // 常落在菜单卸载之后，Playwright 判定元素 detached 反复重试（E2E 稳定
+  // 复现）。菜单改为动作完成后再关，键盘用户也不会在请求途中失去焦点。
+  const [openUserId, setOpenUserId] = useState<number | null>(null)
   // 300ms 防抖：输入每个字母都打一次 /admin/users 会造成请求风暴，
   // 且乱序返回可能让列表"倒退"。防抖后 keystroke 只更新输入框值。
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -205,7 +210,10 @@ function AdminUsersPage() {
                       {new Date(u.created_at).toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
+                      <DropdownMenu
+                        open={openUserId === u.id}
+                        onOpenChange={(open) => setOpenUserId(open ? u.id : null)}
+                      >
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon-sm" disabled={isSelf} aria-label="用户操作">
                             <MoreHorizontal className="h-4 w-4" />
@@ -214,19 +222,25 @@ function AdminUsersPage() {
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuLabel>用户操作</DropdownMenuLabel>
                           <DropdownMenuItem
-                            onClick={() => onToggleActive(u)}
+                            onSelect={(e) => {
+                              e.preventDefault()
+                              void onToggleActive(u).finally(() => setOpenUserId(null))
+                            }}
                             disabled={setActiveMut.isPending}
                           >
                             {u.is_active ? '禁用账号' : '启用账号'}
                           </DropdownMenuItem>
                           {/* 平台管理员提权：此前只能改数据库，界面上无路可走 */}
                           <DropdownMenuItem
-                            onClick={async () => {
+                            onSelect={async (e) => {
+                              e.preventDefault()
                               try {
                                 await setAdminMut.mutateAsync({ userId: u.id, isAdmin: !u.is_admin })
                                 toast.success(u.is_admin ? '已取消管理员' : '已设为平台管理员')
                               } catch (err) {
                                 toast.error(extractError(err, '操作失败'))
+                              } finally {
+                                setOpenUserId(null)
                               }
                             }}
                             disabled={setAdminMut.isPending}
@@ -248,7 +262,7 @@ function AdminUsersPage() {
                                 disabled={pending}
                                 onSelect={(e) => {
                                   e.preventDefault()
-                                  void onToggleRole(u, role)
+                                  void onToggleRole(u, role).finally(() => setOpenUserId(null))
                                 }}
                               >
                                 {ROLE_LABELS[role]}

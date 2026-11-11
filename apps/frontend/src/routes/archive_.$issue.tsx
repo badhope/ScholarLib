@@ -29,46 +29,46 @@ const ISSUE_PALETTE: Record<
   { paper: string; ink: string; accent: string; rule: string; motif: string }
 > = {
   '01': {
-    paper: 'bg-[#f4efe4]',
-    ink: 'text-[#1f2a24]',
-    accent: 'text-[#2f5d46]',
-    rule: 'border-[#2f5d46]/30',
-    motif: 'from-[#2f5d46]/12',
+    paper: 'bg-[#f4efe4] dark:bg-[#191f1b]',
+    ink: 'text-[#1f2a24] dark:text-[#e7e3d7]',
+    accent: 'text-[#2f5d46] dark:text-[#a8cdb6]',
+    rule: 'border-[#2f5d46]/30 dark:border-[#a8cdb6]/30',
+    motif: 'from-[#2f5d46]/12 dark:from-[#a8cdb6]/12',
   },
   '02': {
-    paper: 'bg-[#efe9dc]',
-    ink: 'text-[#2a2118]',
-    accent: 'text-[#8a4b2f]',
-    rule: 'border-[#8a4b2f]/30',
-    motif: 'from-[#8a4b2f]/12',
+    paper: 'bg-[#efe9dc] dark:bg-[#201a15]',
+    ink: 'text-[#2a2118] dark:text-[#eadfd0]',
+    accent: 'text-[#8a4b2f] dark:text-[#d19a72]',
+    rule: 'border-[#8a4b2f]/30 dark:border-[#d19a72]/30',
+    motif: 'from-[#8a4b2f]/12 dark:from-[#d19a72]/12',
   },
   '03': {
-    paper: 'bg-[#e8eff1]',
-    ink: 'text-[#152a33]',
-    accent: 'text-[#1f5f73]',
-    rule: 'border-[#1f5f73]/30',
-    motif: 'from-[#1f5f73]/12',
+    paper: 'bg-[#e8eff1] dark:bg-[#131d22]',
+    ink: 'text-[#152a33] dark:text-[#dbe8ec]',
+    accent: 'text-[#1f5f73] dark:text-[#8ec6d6]',
+    rule: 'border-[#1f5f73]/30 dark:border-[#8ec6d6]/30',
+    motif: 'from-[#1f5f73]/12 dark:from-[#8ec6d6]/12',
   },
   '04': {
-    paper: 'bg-[#f2eadf]',
-    ink: 'text-[#2b2019]',
-    accent: 'text-[#6b3f5e]',
-    rule: 'border-[#6b3f5e]/30',
-    motif: 'from-[#6b3f5e]/12',
+    paper: 'bg-[#f2eadf] dark:bg-[#1e1720]',
+    ink: 'text-[#2b2019] dark:text-[#e9dce6]',
+    accent: 'text-[#6b3f5e] dark:text-[#c99bc0]',
+    rule: 'border-[#6b3f5e]/30 dark:border-[#c99bc0]/30',
+    motif: 'from-[#6b3f5e]/12 dark:from-[#c99bc0]/12',
   },
   '05': {
-    paper: 'bg-[#ecece3]',
-    ink: 'text-[#1e241c]',
-    accent: 'text-[#4a5d23]',
-    rule: 'border-[#4a5d23]/30',
-    motif: 'from-[#4a5d23]/12',
+    paper: 'bg-[#ecece3] dark:bg-[#1b1e16]',
+    ink: 'text-[#1e241c] dark:text-[#e5e6d3]',
+    accent: 'text-[#4a5d23] dark:text-[#b6c887]',
+    rule: 'border-[#4a5d23]/30 dark:border-[#b6c887]/30',
+    motif: 'from-[#4a5d23]/12 dark:from-[#b6c887]/12',
   },
   '06': {
-    paper: 'bg-[#eceef4]',
-    ink: 'text-[#1c2333]',
-    accent: 'text-[#33456b]',
-    rule: 'border-[#33456b]/30',
-    motif: 'from-[#33456b]/12',
+    paper: 'bg-[#eceef4] dark:bg-[#161b24]',
+    ink: 'text-[#1c2333] dark:text-[#e2e7f0]',
+    accent: 'text-[#33456b] dark:text-[#a9b9dd]',
+    rule: 'border-[#33456b]/30 dark:border-[#a9b9dd]/30',
+    motif: 'from-[#33456b]/12 dark:from-[#a9b9dd]/12',
   },
 }
 
@@ -177,7 +177,7 @@ function IssuePage() {
 
         {/* 封面 + 本期信息 */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-          <article className="relative overflow-hidden rounded-sm border border-current/15 bg-white/40 p-6 shadow-[0_18px_50px_-30px_rgba(0,0,0,0.45)] sm:p-8">
+          <article className="relative overflow-hidden rounded-sm border border-current/15 bg-white/40 dark:bg-white/[0.05] p-6 shadow-[0_18px_50px_-30px_rgba(0,0,0,0.45)] sm:p-8">
             <div aria-hidden className={cn('pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent', palette.motif)} />
             <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full border border-current/10" />
             <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full border border-current/10" />
@@ -223,7 +223,7 @@ function IssuePage() {
             </div>
 
             {/* 本期编后记 */}
-            <div className="rounded-sm border border-current/15 bg-white/35 p-5">
+            <div className="rounded-sm border border-current/15 bg-white/35 dark:bg-white/[0.04] p-5">
               <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] opacity-55">
                 <Quote className="h-3.5 w-3.5" /> 本期编后记
               </p>

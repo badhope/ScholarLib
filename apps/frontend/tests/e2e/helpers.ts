@@ -91,11 +91,12 @@ export async function ensureAuthorReady(page: Page): Promise<void> {
 }
 
 export async function logoutViaUi(page: Page): Promise<void> {
-  // AppShell header 右侧的用户菜单触发按钮：唯一一个 aria-haspopup="menu" 的 button
-  // （ThemeToggle 是普通 button，hamburger 是普通 button，登录/注册是 asChild 渲染成 <a>）。
+  // AppShell header 右侧的用户菜单触发按钮：按 aria-label 精确定位。
+  // 不能再用「header 里第一个 aria-haspopup=menu」——外观菜单（配色/明暗）
+  // 也满足该选择器且排在前面，点开的是调色盘而不是账号菜单。
   // 不用 force:true：Radix DropdownMenuTrigger 依赖 pointerdown 事件，actionability
   // 检查通过才能正确触发打开；force 会绕过部分事件派发。
-  const trigger = page.locator('header button[aria-haspopup="menu"]').first()
+  const trigger = page.getByRole('button', { name: '账号菜单' })
   await trigger.waitFor({ state: 'visible', timeout: 10_000 })
   await trigger.click()
   // DropdownMenu 是 Radix，渲染 portal 后 menuitem 才出现；

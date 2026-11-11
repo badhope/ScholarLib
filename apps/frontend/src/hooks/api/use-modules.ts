@@ -1092,6 +1092,11 @@ export function useAdminUsers(limit = 50, offset = 0, query = '') {
   return useQuery<UserResponse[]>({
     // query 进 key：搜索词变化要重新请求，而不是复用上一页的缓存
     queryKey: keys.admin.usersSearch(limit, offset, query),
+    // 后台列表不跟随窗口焦点重拉：E2E / 多标签切换时回到窗口会触发
+    // refetch，数据一换行就重渲染，正在展开的 Radix 下拉会被卸载，
+    // 键盘焦点落空（admin-user-management 的 Space/Enter 用例因此抖动）。
+    // 写操作本身已 invalidate 该 key，不靠 focus 刷新取新数据。
+    refetchOnWindowFocus: false,
     queryFn: async () =>
       (
         await api.get<UserResponse[]>('/admin/users', {
@@ -1268,6 +1273,7 @@ export function useSetReviewMode() {
 export function useAdminAuditLogs(limit = 50, offset = 0) {
   return useQuery<AuditLogEntry[]>({
     queryKey: keys.admin.audit(limit, offset),
+    refetchOnWindowFocus: false,
     queryFn: async () =>
       (await api.get<AuditLogEntry[]>('/admin/audit-logs', { params: { limit, offset } })).data,
   })

@@ -340,7 +340,7 @@ export function AppShell() {
             {isAuthenticated && user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
+                  <Button variant="ghost" size="sm" className="gap-2" aria-label="账号菜单">
                     <Avatar className="h-7 w-7">
                       <AvatarFallback>{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
