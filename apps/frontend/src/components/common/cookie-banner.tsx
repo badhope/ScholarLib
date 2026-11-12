@@ -88,7 +88,7 @@ export function CookieBanner() {
       aria-live="polite"
       aria-label="Cookie 使用同意"
       data-testid="cookie-banner"
-      className="relative z-[60] mx-3 mt-2 max-h-[26vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:fixed sm:inset-x-0 sm:bottom-0 sm:mx-0 sm:mt-0 sm:max-h-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-6 sm:py-2 sm:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+      className="fixed left-3 right-16 bottom-20 z-[80] max-h-[24vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:left-0 sm:right-0 sm:bottom-0 sm:max-h-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-6 sm:py-2 sm:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
     >
       <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90">

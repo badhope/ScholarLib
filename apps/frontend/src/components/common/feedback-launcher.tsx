@@ -71,6 +71,7 @@ export function FeedbackLauncher() {
         <button
           type="button"
           aria-label="给编辑部提问题"
+          data-testid="feedback-launcher"
           className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-3 z-40 inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-full border bg-card/95 text-xs font-medium text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/50 hover:text-primary sm:right-4 sm:h-10 sm:w-auto sm:px-3 md:bottom-6 md:h-11 md:px-4 md:text-sm"
         >
           <MessageSquareText className="h-4 w-4" />

@@ -745,7 +745,7 @@ function HomePage() {
 
         {/* ── 顶部细条：身份 + 公告 + 账号入口（<header> 即 banner 地标） ── */}
         <header className="bg-muted/40">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 py-1.5 text-xs text-muted-foreground">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 text-xs text-muted-foreground sm:px-6">
             <span className="tracking-wide">An Open Access Journal · 开放获取期刊</span>
             <div className="flex items-center gap-3">
               <AnnouncementChip
@@ -792,7 +792,7 @@ function HomePage() {
           />
           <HeroBackdrop />
 
-          <div className="relative mx-auto max-w-6xl pb-12 pt-8 text-center sm:pt-20">
+          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-8 text-center sm:px-6 sm:pt-20">
             <motion.p
               variants={rise}
               custom={0}

@@ -59,6 +59,11 @@ class SecurityHeadersMiddleware:
                 # a stale permission or submission list is worse than a refetch.
                 if scope["path"].startswith("/api/"):
                     headers.append((b"cache-control", b"no-store"))
+                elif not scope["path"].startswith(("/assets/", "/covers/")):
+                    # HTML 壳、sitemap、RSS 都是动态生成的：没有显式指令时
+                    # 浏览器会启发式缓存，发版后手机端仍可能拿旧壳。静态资源
+                    # 走内容哈希长缓存，不在这里覆盖。
+                    headers.append((b"cache-control", b"no-cache, must-revalidate"))
                 if settings.is_production:
                     headers.append(
                         (
