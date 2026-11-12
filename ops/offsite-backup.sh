@@ -3,6 +3,9 @@
 set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 LOG="${LOG:-/home/ubuntu/rubbish-offsite.log}"
+ENV_FILE="$(dirname "$0")/offsite.env"
+# shellcheck disable=SC1090
+[ -f "$ENV_FILE" ] && . "$ENV_FILE"
 REMOTE="${RCLONE_REMOTE:-}"
 note(){ printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 if [ -z "$REMOTE" ]; then note "SKIP rclone remote not configured"; exit 0; fi
