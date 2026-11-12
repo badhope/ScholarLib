@@ -1054,6 +1054,7 @@ async def download_resource_file(
             md_data = None
         if md_data is not None:
             md_text = _redact_essay_sensitive(md_data.decode("utf-8", errors="replace"), resource)
+            md_text = _localize_catalog_images(md_text, resource_id, submission)
             meta = _docx_meta_for_resource(resource, md_text)
             try:
                 blob = build_docx(md_text, meta)
@@ -1932,6 +1933,42 @@ def _strip_export_abstract_prefix(text: str) -> str:
             raw = tail[cut + 1 :].strip()
     raw = re.sub(r"^[†*\s]+", "", raw)
     return raw
+
+
+def _localize_catalog_images(md_text: str, resource_id: int, submission) -> str:
+    """把正文里的 /api/catalog/{id}/img/{n} 换成本地缓存绝对路径。
+
+    下载件由同步的 python-docx 在请求线程里生成；若让它再 HTTP 请求
+    同站 /img/{n}，单 worker 会被自己阻塞，4 张图就把下载拖过 30 秒，
+    反向代理直接断开（线上 118 实测 SSL EOF）。图片缓存本来就在
+    storage 的 `<markdown_stem>.img/` 下，直接读本地文件即可。
+    """
+    from app.core.config import get_settings
+    from app.core.storage import get_storage
+
+    if not submission or not submission.markdown_path:
+        return md_text
+    try:
+        if get_storage().backend != "local":
+            return md_text
+        storage_root = Path(get_settings().storage_path)
+        md_path = storage_root / submission.markdown_path
+        img_dir = md_path.parent / f"{md_path.stem}.img"
+        if not img_dir.is_dir():
+            return md_text
+    except Exception:
+        return md_text
+
+    pattern = re.compile(
+        rf"(?:https://rubbish\.argjiemi\.cn)?/api/catalog/{resource_id}/img/(\d+)"
+    )
+
+    def _replace(match: re.Match) -> str:
+        n = match.group(1)
+        candidates = sorted(img_dir.glob(f"{n}.*"))
+        return str(candidates[0]) if candidates else match.group(0)
+
+    return pattern.sub(_replace, md_text)
 
 
 def _docx_meta_for_resource(resource, md_text: str):
