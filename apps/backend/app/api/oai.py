@@ -45,7 +45,14 @@ SCHEMA_LOCATION = (
     "http://www.openarchives.org/OAI/PMH/2.0/ http://www.openarchives.org/OAI/PMH/2.0/OAI-PMH.xsd"
 )
 
-_VALID_VERBS = {"Identify", "ListMetadataFormats", "ListRecords", "GetRecord"}
+_VALID_VERBS = {
+    "Identify",
+    "ListMetadataFormats",
+    "ListSets",
+    "ListIdentifiers",
+    "ListRecords",
+    "GetRecord",
+}
 
 
 def _scholarly_conditions() -> list[Any]:
@@ -133,7 +140,7 @@ async def oai_endpoint(
         )
 
     # 参数白名单校验：不认识的参数 → badArgument（fail-closed）
-    allowed_params = {"verb", "metadataPrefix", "identifier", "from", "until"}
+    allowed_params = {"verb", "metadataPrefix", "identifier", "from", "until", "set"}
     extra = set(request.query_params.keys()) - allowed_params
     if extra:
         return _xml_response(
@@ -163,6 +170,17 @@ async def oai_endpoint(
             f"    <metadataNamespace>{OAIDC_NS}</metadataNamespace>\n"
             "  </metadataFormat>\n"
             "</ListMetadataFormats>"
+        )
+        return _xml_response(_envelope(request, body))
+
+    if verb == "ListSets":
+        body = (
+            "<ListSets>\n"
+            "  <set>\n"
+            "    <setSpec>all</setSpec>\n"
+            "    <setName>Rubbish 全部学术论文</setName>\n"
+            "  </set>\n"
+            "</ListSets>"
         )
         return _xml_response(_envelope(request, body))
 
@@ -199,7 +217,7 @@ async def oai_endpoint(
         body = f"<GetRecord>\n  <record>\n{record}\n  </record>\n</GetRecord>"
         return _xml_response(_envelope(request, body))
 
-    # verb == ListRecords（前面 badVerb 分支已保证到此处的 verb 取值）
+    # verb == ListRecords / ListIdentifiers（前面 badVerb 分支已保证 verb 取值）
     if metadataPrefix != "oai_dc":
         return _xml_response(
             _envelope(request, _error("badArgument", "metadataPrefix must be oai_dc"))
@@ -213,6 +231,11 @@ async def oai_endpoint(
     if date_from and date_until and date_from > date_until:
         return _xml_response(
             _envelope(request, _error("badArgument", "from must not be later than until"))
+        )
+    set_spec = request.query_params.get("set", "")
+    if set_spec and set_spec != "all":
+        return _xml_response(
+            _envelope(request, _error("noRecordsMatch", f"Unknown set: {set_spec}"))
         )
 
     tenant_id = require_tenant_id()
@@ -230,21 +253,37 @@ async def oai_endpoint(
     if date_until:
         stmt = stmt.where(catalog_models.Resource.created_at <= date_until)
     rows = (await db.execute(stmt)).scalars().all()
-    records = "\n".join(f"  {_record_xml(r, request, indent=2)}" for r in rows)
-    body = f"<ListRecords>\n{records}\n</ListRecords>"
+    if not rows:
+        return _xml_response(_envelope(request, _error("noRecordsMatch", "No matching records")))
+    if verb == "ListIdentifiers":
+        headers = "\n".join(f"  {_header_xml(r, indent=2)}" for r in rows)
+        body = f"<ListIdentifiers>\n{headers}\n</ListIdentifiers>"
+    else:
+        records = "\n".join(f"  {_record_xml(r, request, indent=2)}" for r in rows)
+        body = f"<ListRecords>\n{records}\n</ListRecords>"
     return _xml_response(_envelope(request, body))
+
+
+def _header_xml(r: catalog_models.Resource, indent: int = 4) -> str:
+    pad = " " * indent
+    identifier = f"{BASE_IDENTIFIER_PREFIX}:resource/{r.id}"
+    return "\n".join(
+        [
+            f"{pad}<header>",
+            f"{pad}  <identifier>{escape(identifier)}</identifier>",
+            f"{pad}  <datestamp>{r.created_at.strftime('%Y-%m-%dT%H:%M:%SZ')}</datestamp>",
+            f"{pad}  <setSpec>all</setSpec>",
+            f"{pad}</header>",
+        ]
+    )
 
 
 def _record_xml(r: catalog_models.Resource, request: Request, indent: int = 4) -> str:
     """单条 oai_dc 记录（Dublin Core 元数据）。"""
     pad = " " * indent
-    identifier = f"{BASE_IDENTIFIER_PREFIX}:resource/{r.id}"
     lines = [
         f"{pad}<record>",
-        f"{pad}  <header>",
-        f"{pad}    <identifier>{escape(identifier)}</identifier>",
-        f"{pad}    <datestamp>{r.created_at.strftime('%Y-%m-%dT%H:%M:%SZ')}</datestamp>",
-        f"{pad}  </header>",
+        _header_xml(r, indent + 2),
         f"{pad}  <metadata>",
         f'{pad}    <oai_dc:dc xmlns:oai_dc="{OAIDC_NS}" xmlns:dc="{DC_NS}" '
         f'xsi:schemaLocation="{OAIDC_NS} {OAIDC_NS}oai_dc.xsd">',

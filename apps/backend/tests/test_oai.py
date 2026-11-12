@@ -249,3 +249,36 @@ async def test_rss_excludes_drafts(client: AsyncClient, admin_user: dict) -> Non
         headers=auth_headers(admin_user),
     )
     assert "RSS 草稿不应出现" not in (await client.get("/feed.xml")).text
+
+
+async def test_list_sets(client: AsyncClient):
+    r = await client.get("/oai", params={"verb": "ListSets"})
+    assert r.status_code == 200
+    root = ET.fromstring(r.text)
+    specs = [e.text for e in root.iter(f"{OAI_NS}setSpec")]
+    assert specs == ["all"]
+
+
+async def test_list_identifiers_returns_headers_without_metadata(
+    client: AsyncClient, admin_user: dict
+):
+    rid = await _seed_resource_via_api(client, admin_user)
+    r = await client.get("/oai", params={"verb": "ListIdentifiers", "metadataPrefix": "oai_dc"})
+    assert r.status_code == 200
+    root = ET.fromstring(r.text)
+    identifiers = [e.text for e in root.iter(f"{OAI_NS}identifier")]
+    assert f"oai:rubbish.argjiemi.cn:resource/{rid}" in identifiers
+    assert root.find(f"{OAI_NS}ListIdentifiers") is not None
+    assert not list(root.iter(f"{DC_NS}title"))
+
+
+async def test_list_records_no_match_returns_error(client: AsyncClient):
+    r = await client.get(
+        "/oai",
+        params={
+            "verb": "ListRecords",
+            "metadataPrefix": "oai_dc",
+            "from": "2099-01-01",
+        },
+    )
+    assert _error_codes(r.text) == ["noRecordsMatch"]

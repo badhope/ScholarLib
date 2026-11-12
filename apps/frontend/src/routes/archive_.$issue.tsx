@@ -122,7 +122,7 @@ function IssuePage() {
     Boolean(issueVolume),
   )
 
-  const items = data?.data ?? []
+  const items = useMemo(() => data?.data ?? [], [data])
   const palette = ISSUE_PALETTE[issue] ?? ISSUE_PALETTE['01']
   const papers = useMemo(() => items.filter((r) => r.content_track === 'paper'), [items])
   const essays = useMemo(() => items.filter((r) => r.content_track !== 'paper'), [items])

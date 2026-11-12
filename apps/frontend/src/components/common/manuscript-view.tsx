@@ -924,6 +924,10 @@ export function ManuscriptView({
   const refCount = refEntries.length
  const [toc, setToc] = useState<TocEntry[]>([])
  const articleRef = useRef<HTMLElement>(null)
+ const onTocReadyRef = useRef(onTocReady)
+ useEffect(() => {
+   onTocReadyRef.current = onTocReady
+ }, [onTocReady])
  useEffect(() => {
  if (!data || !articleRef.current) return
  const seen = new Set<string>()
@@ -939,7 +943,7 @@ export function ManuscriptView({
  })
  if (refs) entries.push({ id: 'refs', level:2, text: '参考文献' })
  setToc(entries)
- onTocReady?.(entries)
+ onTocReadyRef.current?.(entries)
  }, [data, refs])
 
   useEffect(() => {

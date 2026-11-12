@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.models import Tenant
 from app.modules.catalog.models import Resource
+from app.modules.catalog.sections import SECTION_LABELS, SECTIONS
 from app.modules.catalog.visibility import public_conditions
 
 router = APIRouter(tags=["seo"])
@@ -40,6 +41,12 @@ DEFAULT_DESCRIPTION = (
 
 # 每个公开入口都应有自己的标题与描述；共用默认 title 会让 12 个页面在
 # 搜索结果里看起来像同一个页面，也无法告诉读者这一页具体能做什么。
+SECTION_PAGE_LABELS: dict[str, str] = {
+    **{s["slug"]: s["label"] for s in SECTIONS},
+    **SECTION_LABELS,
+}
+SECTION_PAGE_SLUGS = set(SECTION_PAGE_LABELS)
+
 PAGE_META: dict[str, tuple[str, str]] = {
     "": ("Rubbish — 开放获取期刊", DEFAULT_DESCRIPTION),
     "papers": (
@@ -160,15 +167,21 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)) -> Respo
         (f"{root}/policies", "monthly", "0.4"),
         (f"{root}/privacy", "yearly", "0.3"),
     ]
+    for slug in sorted(SECTION_PAGE_SLUGS):
+        urls.append((f"{root}/sections/{slug}", "weekly", "0.6"))
     rows = await _published_resources(db)
+    for issue in sorted({int(str(r.issue)) for r in rows if str(r.issue).isdigit()}):
+        urls.append((f"{root}/archive/{issue:02d}", "monthly", "0.5"))
     for r in rows:
-        lastmod = (r.publish_at or r.updated_at or r.created_at)
-        urls.append((
-            f"{root}/catalog/{r.id}",
-            "monthly",
-            "0.8",
-            lastmod.date().isoformat() if lastmod else None,
-        ))
+        lastmod = r.publish_at or r.updated_at or r.created_at
+        urls.append(
+            (
+                f"{root}/catalog/{r.id}",
+                "monthly",
+                "0.8",
+                lastmod.date().isoformat() if lastmod else None,
+            )
+        )
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -216,6 +229,12 @@ async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
         f"- [期刊指标]({root}/journal-metrics)",
         f"- [RSS]({root}/rss.xml)",
         "",
+        "## 栏目",
+        *[
+            f"- [{SECTION_PAGE_LABELS[slug]}]({root}/sections/{slug})"
+            for slug in sorted(SECTION_PAGE_SLUGS)
+        ],
+        "",
         "## 最新文章",
     ]
     for r in rows[:50]:
@@ -226,14 +245,16 @@ async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
         if abstract:
             line += f"：{abstract}"
         lines.append(line)
-    lines.extend([
-        "",
-        "## 引用与抓取",
-        "- 文章页含 citation_* 与 ScholarlyArticle JSON-LD。",
-        "- 允许检索与 AI 爬虫抓取公开页面；/admin、/review、/submissions 等私有路径禁止。",
-        f"- Sitemap: {root}/sitemap.xml",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## 引用与抓取",
+            "- 文章页含 citation_* 与 ScholarlyArticle JSON-LD。",
+            "- 允许检索与 AI 爬虫抓取公开页面；/admin、/review、/submissions 等私有路径禁止。",
+            f"- Sitemap: {root}/sitemap.xml",
+            "",
+        ]
+    )
     return Response(
         content="\n".join(lines).encode("utf-8"),
         media_type="text/plain; charset=utf-8",
@@ -308,7 +329,9 @@ def _meta_tags(
     return (
         f'<meta name="description" content="{d}" />\n'
         f'<link rel="canonical" href="{c}" />\n'
+        f'<link rel="alternate" type="application/rss+xml" title="{SITE_NAME} RSS" href="{root.rstrip("/")}/rss.xml" />\n'
         f'<meta property="og:type" content="{og_type}" />\n'
+        '<meta property="og:locale" content="zh_CN" />\n'
         f'<meta property="og:site_name" content="{SITE_NAME}" />\n'
         f'<meta property="og:title" content="{t}" />\n'
         f'<meta property="og:description" content="{d}" />\n'
@@ -317,6 +340,8 @@ def _meta_tags(
         '<meta property="og:image:width" content="1200" />\n'
         '<meta property="og:image:height" content="630" />\n'
         '<meta name="twitter:card" content="summary_large_image" />\n'
+        f'<meta name="twitter:title" content="{t}" />\n'
+        f'<meta name="twitter:description" content="{d}" />\n'
         f'<meta name="twitter:image" content="{image}" />\n'
         f"{extra}"
     )
@@ -359,6 +384,9 @@ def _citation_tags(r: Resource, root: str) -> str:
             f'<meta name="citation_abstract" content="{html.escape(r.abstract[:2000], quote=True)}" />'
         )
     parts.append(
+        f'<meta name="citation_abstract_html_url" content="{html.escape(root, quote=True)}/catalog/{r.id}" />'
+    )
+    parts.append(
         f'<meta name="citation_pdf_url" content="{html.escape(root, quote=True)}/api/catalog/{r.id}/export?format=pdf" />'
     )
     parts.append(
@@ -385,6 +413,17 @@ async def build_index_html(
     extra = ""
     status = "200"
     og_type = "website"
+    if path.startswith("sections/"):
+        slug = path.split("/", 1)[1]
+        label = SECTION_PAGE_LABELS.get(slug)
+        if label:
+            title = f"{label} — 栏目 — {SITE_NAME}"
+            description = f"Rubbish 的 {label} 栏目：按栏目浏览已刊论文、评论与副刊内容。"
+    if path.startswith("archive/"):
+        issue = path.split("/", 1)[1]
+        if issue.isdigit():
+            title = f"第 {int(issue)} 期 — {SITE_NAME}"
+            description = f"Rubbish 第 {int(issue)} 期目录：本期论文、评论与副刊内容。"
     if path.startswith("catalog/") and path.split("/", 1)[1].isdigit():
         tenant = (
             await db.execute(select(Tenant).where(Tenant.slug == settings.bootstrap_tenant_slug))
@@ -418,14 +457,55 @@ async def build_index_html(
                 "headline": resource.title,
                 "author": [{"@type": "Person", "name": str(a)} for a in resource.authors or []],
                 "datePublished": _publication_date(resource),
+                "dateModified": (resource.updated_at or resource.created_at or resource.publish_at)
+                .date()
+                .isoformat()
+                if (resource.updated_at or resource.created_at or resource.publish_at)
+                else _publication_date(resource),
                 "abstract": (resource.abstract or "")[:2000],
                 "url": f"{root}/catalog/{resource.id}",
-                "isPartOf": {"@type": "Periodical", "name": JOURNAL_TITLE},
+                "mainEntityOfPage": {"@type": "WebPage", "@id": f"{root}/catalog/{resource.id}"},
+                "isPartOf": {"@type": "Periodical", "name": JOURNAL_TITLE, "url": f"{root}/"},
+                "publisher": {"@type": "Organization", "name": SITE_NAME, "url": f"{root}/"},
+                "isAccessibleForFree": True,
+                "license": "https://creativecommons.org/licenses/by/4.0/",
+                "inLanguage": resource.language or "zh",
+                "image": f"{root}/og-cover.png",
             }
+            if resource.keywords:
+                payload["keywords"] = ", ".join(str(k) for k in resource.keywords)
+            published = _publication_date(resource)
+            extra += (
+                f'\n<meta property="article:published_time" content="{html.escape(published, quote=True)}" />'
+                f'\n<meta property="article:section" content="{html.escape(resource.discipline or "论文", quote=True)}" />'
+            )
             if resource.doi:
                 payload["identifier"] = f"https://doi.org/{resource.doi}"
+            breadcrumb = {
+                "@context": "https://schema.org",
+                "@type": "BreadcrumbList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "首页", "item": f"{root}/"},
+                    {
+                        "@type": "ListItem",
+                        "position": 2,
+                        "name": "全部目录",
+                        "item": f"{root}/catalog",
+                    },
+                    {
+                        "@type": "ListItem",
+                        "position": 3,
+                        "name": resource.title,
+                        "item": f"{root}/catalog/{resource.id}",
+                    },
+                ],
+            }
             json_ld = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
-            extra += f'\n<script type="application/ld+json">{json_ld}</script>'
+            crumb_ld = json.dumps(breadcrumb, ensure_ascii=False).replace("</", "<\\/")
+            extra += (
+                f'\n<script type="application/ld+json">{json_ld}</script>'
+                f'\n<script type="application/ld+json">{crumb_ld}</script>'
+            )
 
     if not path:
         website = {

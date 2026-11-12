@@ -448,7 +448,7 @@ function SubmissionWizardPage() {
       // 草稿损坏时静默忽略，不阻塞投稿
     }
     setDraftLoaded(true)
-  }, [editId, draftLoaded])
+  }, [editId, draftLoaded, search.section])
 
   // --- 草稿自动保存（防抖 600ms）；编辑模式不写草稿 ---
   useEffect(() => {

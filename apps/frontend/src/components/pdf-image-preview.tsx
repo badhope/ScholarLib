@@ -44,7 +44,7 @@ export default function PdfImagePreview({
         /* 页数失败不影响 <img> 显示，错误由 onError 兜底 */
       })
     return () => controller.abort()
-  }, [imageUrl])
+  }, [imageUrl, resourceId, version])
 
   // 图片命中浏览器缓存时，部分浏览器不会再触发 onLoad，加载遮罩会
   // 一直停在页面正中；渲染后检查 complete/naturalWidth 兜底关掉。

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from conftest import auth_headers, review_scores
+from conftest import auth_headers, register_reviewer, review_scores
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,6 +164,43 @@ async def test_assign_reviewer_unique_constraint(
         headers=auth_headers(admin_user),
     )
     assert second.status_code == 409
+
+
+async def test_second_reviewer_gets_next_slot_after_completed_review(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """补派审稿人不能复用已完成审稿人的 slot。"""
+    submission = await _create_submission(client, test_user)
+    first = await client.post(
+        f"/api/submissions/{submission['id']}/assignments",
+        json={"reviewer_id": admin_user["user_id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert first.status_code == 201
+    assert first.json()["slot"] == 1
+    assignment_id = first.json()["id"]
+    await client.post(
+        f"/api/review/assignments/{assignment_id}/accept", headers=auth_headers(admin_user)
+    )
+    report = await client.post(
+        f"/api/review/assignments/{assignment_id}/submit",
+        json={
+            "recommendation": "minor_revision",
+            "scores": review_scores(72),
+            "comments_to_author": "Please clarify.",
+        },
+        headers=auth_headers(admin_user),
+    )
+    assert report.status_code == 201
+
+    second_user = await register_reviewer(client, admin_user, "slot_two", "slot_two@example.com")
+    second = await client.post(
+        f"/api/submissions/{submission['id']}/assignments",
+        json={"reviewer_id": second_user["user_id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert second.status_code == 201
+    assert second.json()["slot"] == 2
 
 
 async def test_assign_reviewer_to_nonexistent_user_400(

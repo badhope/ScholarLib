@@ -42,6 +42,7 @@ from app.core.time import utcnow
 from app.models import User
 from app.modules.catalog.models import Resource
 from app.modules.notifications import services as notifications
+from app.modules.quality.rubric import RUBRIC_VERSION, DimensionScore, dimensions_for, evaluate
 from app.modules.review.blinding import get_review_mode, reviewer_facing_payload
 from app.modules.review.models import ReviewAssignment, ReviewReport
 from app.modules.review.schemas import (
@@ -50,7 +51,6 @@ from app.modules.review.schemas import (
     ReviewReportResponse,
     ReviewSubmit,
 )
-from app.modules.quality.rubric import RUBRIC_VERSION, DimensionScore, evaluate, dimensions_for
 from app.modules.submission.models import Submission
 from app.modules.submission.schemas import SubmissionResponse
 
@@ -753,12 +753,9 @@ async def assign_reviewers(
         round_no = _last_round + 1
     else:
         round_no = _last_round
-    existing = [
-        a
-        for a in existing_all
-        if (a.round or 1) == round_no and a.status in ("pending", "accepted")
-    ]
-    used_slots = {a.slot for a in existing}
+    # Slot 代表“本轮第几位审稿人”，completed/declined 也占用过编号。
+    # 只看 pending/accepted 会让补派审稿人与已完成审稿人撞到同一个 slot。
+    used_slots = {a.slot for a in existing_all if (a.round or 1) == round_no and a.slot}
     next_slot = 1
     created = []
     for rid in body.reviewer_ids:

@@ -148,3 +148,24 @@ async def test_llms_txt_lists_public_entries(client: AsyncClient, admin_user: di
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/plain")
     assert f"/catalog/{rid}" in r.text
+
+
+async def test_sitemap_lists_sections_and_issue_archives(
+    client: AsyncClient, admin_user: dict
+) -> None:
+    await _create(client, admin_user, issue="03")
+    root = ET.fromstring((await client.get("/sitemap.xml")).text)
+    locs = [e.text or "" for e in root.iter() if e.tag.endswith("loc")]
+    assert any("/sections/research" in loc for loc in locs)
+    assert any("/archive/03" in loc for loc in locs)
+
+
+async def test_article_schema_has_license_and_breadcrumb(
+    client: AsyncClient, admin_user: dict, db_session
+) -> None:
+    rid = await _create(client, admin_user)
+    index_html = "<html><head><title>Rubbish — 开放获取期刊</title></head><body></body></html>"
+    body, _ = await build_index_html(index_html, f"catalog/{rid}", _FakeRequest(), db_session)
+    assert '"@type": "BreadcrumbList"' in body
+    assert '"isAccessibleForFree": true' in body
+    assert "creativecommons.org/licenses/by/4.0" in body

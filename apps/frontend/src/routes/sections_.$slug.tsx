@@ -16,7 +16,9 @@ function SectionPage() {
   const { slug } = Route.useParams()
   const nav = useNavigate()
   const sections = useArticleSections()
-  const section = sections.data?.data.find((s) => s.slug === slug)
+  const section = sections.data?.data.find(
+    (s) => s.slug === slug || s.parts.some((p) => p.slug === slug),
+  )
   const part = section?.parts.find((p) => p.slug === slug)
   const activePart = part ? slug : undefined
   const { data, isLoading, isError, refetch } = useResources({

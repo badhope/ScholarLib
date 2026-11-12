@@ -272,6 +272,30 @@ async def assign_reviewer(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Assigned user is not a reviewer",
         )
+    existing_all = (
+        (
+            await db.execute(
+                select(ReviewAssignment).where(
+                    ReviewAssignment.submission_id == entry.id,
+                    ReviewAssignment.tenant_id == entry.tenant_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    _rounds = [a.round or 1 for a in existing_all]
+    _last_round = max(_rounds) if _rounds else 1
+    _last_rows = [a for a in existing_all if (a.round or 1) == _last_round]
+    if _last_rows and all(a.status in ("cancelled", "declined") for a in _last_rows):
+        round_no = _last_round + 1
+    else:
+        round_no = _last_round
+    used_slots = {a.slot for a in existing_all if (a.round or 1) == round_no and a.slot}
+    next_slot = 1
+    while next_slot in used_slots:
+        next_slot += 1
+
     assignment = ReviewAssignment(
         tenant_id=entry.tenant_id,
         submission_id=entry.id,
@@ -279,6 +303,8 @@ async def assign_reviewer(
         assigned_by=current_user.id,
         status="pending",
         due_date=body.due_date,
+        round=round_no,
+        slot=next_slot,
     )
     try:
         db.add(assignment)
