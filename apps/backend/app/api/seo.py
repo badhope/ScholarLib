@@ -97,26 +97,42 @@ async def _published_resources(db: AsyncSession, limit: int = 5000) -> list[Reso
     return list(rows)
 
 
+CRAWLER_RULES = [
+    "Allow: /",
+    "Allow: /api/catalog/*/export",
+    "Allow: /api/catalog/*/img/",
+    "Disallow: /api/",
+    "Disallow: /admin",
+    "Disallow: /dashboard",
+    "Disallow: /submissions",
+    "Disallow: /review",
+    "Disallow: /settings",
+    "Disallow: /notifications",
+    "Disallow: /library",
+]
+
+# 明确允许主流检索与 AI 爬虫抓公开内容；管理端仍统一禁止。
+AI_CRAWLERS = [
+    "GPTBot",
+    "ChatGPT-User",
+    "ClaudeBot",
+    "Claude-Web",
+    "PerplexityBot",
+    "Google-Extended",
+    "Applebot-Extended",
+    "CCBot",
+    "Bytespider",
+]
+
+
 @router.get("/robots.txt", response_class=Response, include_in_schema=False)
 async def robots(request: Request) -> Response:
-    body = "\n".join(
-        [
-            "User-agent: *",
-            "Allow: /",
-            "Allow: /api/catalog/*/export",
-            "Allow: /api/catalog/*/img/",
-            "Disallow: /api/",
-            "Disallow: /admin",
-            "Disallow: /dashboard",
-            "Disallow: /submissions",
-            "Disallow: /review",
-            "Disallow: /settings",
-            "Disallow: /notifications",
-            "Disallow: /library",
-            f"Sitemap: {_root(request)}/sitemap.xml",
-            "",
-        ]
-    )
+    lines = ["User-agent: *", *CRAWLER_RULES, ""]
+    for bot in AI_CRAWLERS:
+        lines.extend([f"User-agent: {bot}", *CRAWLER_RULES, ""])
+    lines.append(f"Sitemap: {_root(request)}/sitemap.xml")
+    lines.append(f"# LLM guide: {_root(request)}/llms.txt")
+    body = "\n".join(lines) + "\n"
     return Response(
         content=body.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
@@ -146,22 +162,83 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)) -> Respo
     ]
     rows = await _published_resources(db)
     for r in rows:
-        urls.append((f"{root}/catalog/{r.id}", "monthly", "0.8"))
+        lastmod = (r.publish_at or r.updated_at or r.created_at)
+        urls.append((
+            f"{root}/catalog/{r.id}",
+            "monthly",
+            "0.8",
+            lastmod.date().isoformat() if lastmod else None,
+        ))
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
-    for loc, changefreq, priority in urls:
+    for loc, changefreq, priority, *rest in urls:
+        lastmod = rest[0] if rest else None
         lines.append(
             "  <url>"
             f"<loc>{html.escape(loc)}</loc>"
-            f"<changefreq>{changefreq}</changefreq>"
+            + (f"<lastmod>{html.escape(str(lastmod))}</lastmod>" if lastmod else "")
+            + f"<changefreq>{changefreq}</changefreq>"
             f"<priority>{priority}</priority>"
             "</url>"
         )
     lines.append("</urlset>")
     return Response(content="\n".join(lines), media_type="application/xml")
+
+
+@router.get("/llms.txt", response_class=Response, include_in_schema=False)
+async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+    """Machine-readable guide for LLM crawlers and answer engines.
+
+    Plain text, no auth, only published records. Keeps the site's public
+    scope obvious without requiring an agent to parse the SPA.
+    """
+    root = _root(request)
+    rows = await _published_resources(db, limit=200)
+    lines = [
+        "# Rubbish",
+        "",
+        "> Rubbish 是一份开放获取学术期刊，收录论文、荒诞论文、副刊与讨论。",
+        "> 所有已刊文章全文免费开放；审稿与编辑流程公开在 /policies 与 /guide。",
+        "",
+        "## 核心入口",
+        f"- [首页]({root}/)",
+        f"- [论文]({root}/papers)",
+        f"- [副刊]({root}/fun)",
+        f"- [全部目录]({root}/catalog)",
+        f"- [栏目]({root}/sections)",
+        f"- [往期目录]({root}/archive)",
+        f"- [讨论区]({root}/forum)",
+        f"- [作者指南]({root}/guide)",
+        f"- [期刊政策]({root}/policies)",
+        f"- [期刊指标]({root}/journal-metrics)",
+        f"- [RSS]({root}/rss.xml)",
+        "",
+        "## 最新文章",
+    ]
+    for r in rows[:50]:
+        abstract = " ".join((r.abstract or "").split())[:180]
+        line = f"- [{r.title}]({root}/catalog/{r.id})"
+        if r.authors:
+            line += f" — {', '.join(str(a) for a in r.authors)}"
+        if abstract:
+            line += f"：{abstract}"
+        lines.append(line)
+    lines.extend([
+        "",
+        "## 引用与抓取",
+        "- 文章页含 citation_* 与 ScholarlyArticle JSON-LD。",
+        "- 允许检索与 AI 爬虫抓取公开页面；/admin、/review、/submissions 等私有路径禁止。",
+        f"- Sitemap: {root}/sitemap.xml",
+        "",
+    ])
+    return Response(
+        content="\n".join(lines).encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+    )
 
 
 @router.get("/feed.xml", response_class=Response, include_in_schema=False)
@@ -349,6 +426,32 @@ async def build_index_html(
                 payload["identifier"] = f"https://doi.org/{resource.doi}"
             json_ld = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
             extra += f'\n<script type="application/ld+json">{json_ld}</script>'
+
+    if not path:
+        website = {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": SITE_NAME,
+            "alternateName": "Rubbish Journal",
+            "url": f"{root}/",
+            "description": DEFAULT_DESCRIPTION,
+            "potentialAction": {
+                "@type": "SearchAction",
+                "target": f"{root}/catalog?q={{search_term_string}}",
+                "query-input": "required name=search_term_string",
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": SITE_NAME,
+                "url": f"{root}/",
+                "logo": f"{root}/og-cover.png",
+            },
+        }
+        extra += (
+            '<script type="application/ld+json">'
+            + json.dumps(website, ensure_ascii=False).replace("</", "<\\/")
+            + "</script>\n"
+        )
 
     block = _meta_tags(
         title,

@@ -126,3 +126,25 @@ class _FakeRequest:
             query = ""
 
         return _Url()
+
+
+async def test_robots_allows_ai_crawlers(client: AsyncClient) -> None:
+    r = await client.get("/robots.txt")
+    assert r.status_code == 200
+    for bot in ("GPTBot", "ClaudeBot", "PerplexityBot", "Google-Extended"):
+        assert f"User-agent: {bot}" in r.text
+    assert "/llms.txt" in r.text
+
+
+async def test_sitemap_has_lastmod(client: AsyncClient, admin_user: dict) -> None:
+    await _create(client, admin_user)
+    root = ET.fromstring((await client.get("/sitemap.xml")).text)
+    assert any(e.tag.endswith("lastmod") for e in root.iter())
+
+
+async def test_llms_txt_lists_public_entries(client: AsyncClient, admin_user: dict) -> None:
+    rid = await _create(client, admin_user)
+    r = await client.get("/llms.txt")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    assert f"/catalog/{rid}" in r.text
