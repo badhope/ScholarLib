@@ -13,10 +13,12 @@ import {
 import { toast } from 'sonner'
 import { waitingChip } from '@/components/common/waiting-chip'
 import { getAuthState } from '@/lib/auth'
+import { normalizeAbstract } from '@/lib/abstract'
 import { useAuth } from '@/hooks/use-auth'
 import {
   downloadSubmissionFile,
   useAllSubmissions,
+  useAssignAdjudicator,
   useAssignReviewersBulk,
   useCancelAssignment,
   useEditorDecision,
@@ -24,6 +26,7 @@ import {
   useSubmissionAssignments,
   useSubmissionReports,
   useSubmissionVersions,
+  useReviewMatrix,
   useReviewerCandidates,
   usePutAuthors,
 } from '@/hooks/api/use-modules'
@@ -31,6 +34,7 @@ import type {
   AssignmentResponse,
   AuthorEditInput,
   EditorDecision,
+  ReviewMatrixResponse,
   ReviewReportResponse,
   SubmissionResponse,
   SubmissionStatus,
@@ -46,6 +50,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AuthorEditor } from '@/components/common/author-editor'
+import { ReviewAttachmentLinks } from '@/components/common/review-attachments'
 import {
   Dialog,
   DialogContent,
@@ -90,7 +95,7 @@ const DECISION_OPTIONS: { value: EditorDecision; label: string; hint?: string }[
   { value: 'reject', label: '拒稿（Reject）' },
 ]
 
-// 审稿评分维度显示用中文（与 RQS v3.0 七维口径一致，见 quality/rubric.py；
+// 审稿评分维度显示用中文（与 评审质量分 七维口径一致，见 quality/rubric.py；
 // 旧四维 originality/methodology/clarity/significance 已废弃，编辑在新维度
 // key 上不再回退显示英文原文）
 const SCORE_LABELS: Record<string, string> = {
@@ -193,18 +198,15 @@ const EMPTY_DECISION: DecisionFormState = {
   arbitration_note: '',
 }
 
-// 做决定前置条件：reports_completed >= 2，或后端显式 can_decide=true
+// 决策按钮只按稿件状态开关；真正的“≥2 位审稿人录用”闸门由矩阵弹窗
+// 展示、由后端裁决端点强制。此前用列表里的 reports_completed 判断，
+// 但该字段后端从未返回，按钮永远是灰的——编辑根本点不开决定。
 function canOpenDecision(s: SubmissionResponse): boolean {
-  if (s.can_decide === true) return true
-  const completed = s.reports_completed ?? 0
-  return completed >= 2
+  return ['pending', 'under_review', 'resubmitted'].includes(s.status)
 }
 
 function decisionDisabledReason(s: SubmissionResponse): string | undefined {
-  if (s.can_decide === true) return undefined
-  const completed = s.reports_completed ?? 0
-  if (completed < 2) return `还差 ${2 - completed} 份审稿报告（${completed}/2）`
-  return undefined
+  return canOpenDecision(s) ? undefined : '当前状态不可裁决'
 }
 
 function PendingSubmissionsPage() {
@@ -245,6 +247,7 @@ function PendingSubmissionsPage() {
   const [decisionForm, setDecisionForm] = useState<DecisionFormState>(EMPTY_DECISION)
   // 做决定时内嵌审稿报告摘要：推荐 + 评分 + 编辑保密意见，编辑不必另开弹窗
   const decisionReportsQ = useSubmissionReports(decisionTarget?.id ?? 0)
+  const decisionMatrixQ = useReviewMatrix(decisionTarget?.id ?? 0)
 
   const updateSearch = (patch: Partial<PendingSearch>) => {
     void navigate({
@@ -266,8 +269,25 @@ function PendingSubmissionsPage() {
   }
 
   const doDecision = async (target: SubmissionResponse) => {
+    const matrix = decisionMatrixQ.data
+    if (decisionForm.decision === 'accept') {
+      if (!matrix) {
+        toast.error('正在读取审稿进度，请稍后再试')
+        return
+      }
+      if (matrix.accept_count < 2) {
+        toast.error(
+          `发表需要至少 2 名审稿人给出录用推荐，当前 ${matrix.accept_count}/2。`,
+        )
+        return
+      }
+      if (matrix.conflict && !matrix.adjudicator_accepted) {
+        toast.error('审稿意见冲突：请先指定第三方裁决人并等待其录用意见。')
+        return
+      }
+    }
     // 冲突时必须填裁决理由
-    if (target.conflict && !decisionForm.arbitration_note.trim()) {
+    if (matrix?.conflict && !decisionForm.arbitration_note.trim()) {
       toast.error('审稿意见冲突：请填写裁决理由')
       return
     }
@@ -500,7 +520,7 @@ function PendingSubmissionsPage() {
                             key={k}
                             className="rounded bg-muted px-2 py-0.5 text-xs"
                           >
-                            {SCORE_LABELS[k] ?? k} {v}/5
+                            {SCORE_LABELS[k] ?? k} {v}/100
                           </span>
                         ))}
                       </div>
@@ -512,6 +532,42 @@ function PendingSubmissionsPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+            {decisionMatrixQ.data && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">
+                    已完成 {decisionMatrixQ.data.reports_completed} 份
+                  </Badge>
+                  <Badge variant="outline">
+                    审稿人 {decisionMatrixQ.data.distinct_reviewers} 人
+                  </Badge>
+                  <Badge
+                    className={
+                      decisionMatrixQ.data.accept_count >= 2
+                        ? 'bg-emerald-500/15 text-emerald-700'
+                        : 'bg-amber-500/15 text-amber-700'
+                    }
+                  >
+                    录用推荐 {decisionMatrixQ.data.accept_count}/2
+                  </Badge>
+                  {decisionMatrixQ.data.conflict && (
+                    <Badge className="bg-amber-500/15 text-amber-700">
+                      意见冲突
+                    </Badge>
+                  )}
+                  {decisionMatrixQ.data.adjudicator_accepted && (
+                    <Badge className="bg-emerald-500/15 text-emerald-700">
+                      第三方已裁决
+                    </Badge>
+                  )}
+                </div>
+                {decisionMatrixQ.data.accept_count < 2 && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    发表前需要至少 2 名不同审稿人给出录用推荐。可继续送审，或在意见冲突时指定第三方裁决人。
+                  </p>
+                )}
               </div>
             )}
             <div className="space-y-2">
@@ -557,7 +613,7 @@ function PendingSubmissionsPage() {
                 rows={4}
               />
             </div>
-            {decisionTarget?.conflict && (
+            {decisionMatrixQ.data?.conflict && (
               <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
                 <Label htmlFor="arbitration_note" className="text-amber-800 dark:text-amber-200">
                   审稿意见冲突，需填写裁决理由（必填）
@@ -773,7 +829,7 @@ function SubmissionDetailBody({ sub }: { sub: SubmissionResponse }) {
       )}
       <div>
         <span className="text-muted-foreground">摘要</span>
-        <p className="mt-1 whitespace-pre-wrap">{sub.abstract}</p>
+        <p className="mt-1 whitespace-pre-wrap">{normalizeAbstract(sub.abstract)}</p>
       </div>
       <div>
         <span className="text-muted-foreground">预览</span>
@@ -804,10 +860,18 @@ function SubmissionDetailBody({ sub }: { sub: SubmissionResponse }) {
           <button
             type="button"
             className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
-            onClick={() => void downloadSubmissionFile(sub.id)}
+            onClick={() => void downloadSubmissionFile(sub.id, 'docx')}
           >
             <Download className="h-3.5 w-3.5" />
-            下载
+            Word
+          </button>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
+            onClick={() => void downloadSubmissionFile(sub.id, 'pdf')}
+          >
+            <Download className="h-3.5 w-3.5" />
+            PDF
           </button>
         </div>
       )}
@@ -859,6 +923,8 @@ function AssignReviewerDialog({
   const assignMut = useAssignReviewersBulk()
   const [selected, setSelected] = useState<number[]>([])
   const [dueDays, setDueDays] = useState('14')
+  const [isExternal, setIsExternal] = useState(false)
+  const [externalAffiliation, setExternalAffiliation] = useState('')
 
   const toggle = (id: number) => {
     setSelected((prev) =>
@@ -877,6 +943,8 @@ function AssignReviewerDialog({
         body: {
           reviewer_ids: selected,
           due_days: Math.max(1, Math.min(90, Number(dueDays) || 14)),
+          is_external: isExternal,
+          external_affiliation: isExternal ? externalAffiliation.trim() || undefined : undefined,
         },
       })
       toast.success(`已指派 ${res.assigned} 名审稿人`)
@@ -933,6 +1001,30 @@ function AssignReviewerDialog({
               「用户管理」确认其角色。
             </p>
           )}
+          <div className="space-y-2 rounded-md border p-3">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isExternal}
+                onChange={(e) => setIsExternal(e.target.checked)}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="font-medium">外审专家（外省/外单位）</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  由主编/编辑指定，标记会写入审稿矩阵与审计；审稿人仍需用站内账号登录。
+                </span>
+              </span>
+            </label>
+            {isExternal && (
+              <Input
+                placeholder="外审单位 / 省份，例如：中山大学（广东）"
+                value={externalAffiliation}
+                onChange={(e) => setExternalAffiliation(e.target.value)}
+                maxLength={120}
+              />
+            )}
+          </div>
           <div className="space-y-2">
             <Label htmlFor="due_days">审稿截止天数（1–90）</Label>
             <Input
@@ -969,6 +1061,8 @@ function AssignmentsDialog({
   const { data, isLoading, isError, refetch } = useSubmissionAssignments(
     submission.id,
   )
+  const matrixQ = useReviewMatrix(submission.id)
+  const [adjOpen, setAdjOpen] = useState(false)
   const cancelMut = useCancelAssignment()
 
   const onCancel = async (assignmentId: number) => {
@@ -996,7 +1090,55 @@ function AssignmentsDialog({
         ) : !data || data.data.length === 0 ? (
           <EmptyState title="暂无审稿分配" />
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
+            {matrixQ.data && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">
+                    报告 {matrixQ.data.reports_completed} 份
+                  </Badge>
+                  <Badge variant="outline">
+                    审稿人 {matrixQ.data.distinct_reviewers} 人
+                  </Badge>
+                  <Badge
+                    className={
+                      matrixQ.data.accept_count >= 2
+                        ? 'bg-emerald-500/15 text-emerald-700'
+                        : 'bg-amber-500/15 text-amber-700'
+                    }
+                  >
+                    录用推荐 {matrixQ.data.accept_count}/2
+                  </Badge>
+                  {matrixQ.data.conflict && (
+                    <Badge className="bg-amber-500/15 text-amber-700">意见冲突</Badge>
+                  )}
+                  {matrixQ.data.adjudicator_assigned && (
+                    <Badge variant="outline">
+                      第三方裁决人
+                    </Badge>
+                  )}
+                </div>
+                {(matrixQ.data.need_adjudication || matrixQ.data.adjudicator_assigned) && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-amber-700">
+                      {matrixQ.data.need_adjudication
+                        ? '审稿意见冲突，需要第三方裁决人给出独立意见后才能录用。'
+                        : '已指定第三方裁决人，等待其提交意见。'}
+                    </p>
+                    {matrixQ.data.need_adjudication && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAdjOpen(true)}
+                      >
+                        <Gavel className="mr-1 h-4 w-4" /> 指定第三方裁决人
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="space-y-2">
             {data.data.map((a: AssignmentResponse) => (
               <div
                 key={a.id}
@@ -1034,11 +1176,127 @@ function AssignmentsDialog({
                 </div>
               </div>
             ))}
+            </div>
           </div>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             关闭
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+      {adjOpen && matrixQ.data && (
+        <AdjudicateDialog
+          submission={submission}
+          matrix={matrixQ.data}
+          onClose={() => setAdjOpen(false)}
+        />
+      )}
+    </Dialog>
+  )
+}
+
+// 第三方裁决人：只在意见冲突/需要独立裁决时由主编或编辑指定。
+function AdjudicateDialog({
+  submission,
+  matrix,
+  onClose,
+}: {
+  submission: SubmissionResponse
+  matrix: ReviewMatrixResponse
+  onClose: () => void
+}) {
+  const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT)
+  const candidates = (candidateData ?? []).filter(
+    (u) => !matrix.assignments.some((a) => a.reviewer_id === u.id),
+  )
+  const mut = useAssignAdjudicator()
+  const [selected, setSelected] = useState<number | null>(null)
+  const [dueDays, setDueDays] = useState('14')
+  const [reason, setReason] = useState('')
+
+  const onConfirm = async () => {
+    if (!selected) {
+      toast.error('请选择一位第三方裁决人')
+      return
+    }
+    try {
+      await mut.mutateAsync({
+        id: submission.id,
+        reviewer_id: selected,
+        due_days: Math.max(1, Math.min(90, Number(dueDays) || 14)),
+        reason: reason.trim() || undefined,
+      })
+      toast.success('已指定第三方裁决人，并已发送站内通知')
+      onClose()
+    } catch (err) {
+      toast.error(extractError(err, '指定裁决人失败'))
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>指定第三方裁决人 — {submission.title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            当前已有 {matrix.distinct_reviewers} 位审稿人提交意见，录用推荐 {matrix.accept_count}/2。
+            裁决人不能是本稿已参与评审的审稿人，也不能是作者。
+          </p>
+          <div className="max-h-[35vh] space-y-1 overflow-y-auto">
+            {isLoading ? (
+              <Loading />
+            ) : candidates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                没有可用的第三方裁决人：请确认审稿人账号已授予 reviewer 角色，且未参与本稿。
+              </p>
+            ) : (
+              candidates.map((u) => (
+                <label
+                  key={u.id}
+                  className="flex cursor-pointer items-center gap-2 rounded border px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <input
+                    type="radio"
+                    name="adjudicator"
+                    checked={selected === u.id}
+                    onChange={() => setSelected(u.id)}
+                    className="h-4 w-4"
+                  />
+                  <span className="font-medium">{u.username}</span>
+                  <span className="text-xs text-muted-foreground">{u.email}</span>
+                </label>
+              ))
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adj_due">裁决截止天数（1–90）</Label>
+            <Input
+              id="adj_due"
+              type="number"
+              min={1}
+              max={90}
+              value={dueDays}
+              onChange={(e) => setDueDays(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="adj_reason">裁决说明（发给裁决人）</Label>
+            <Textarea
+              id="adj_reason"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="说明分歧点与需要独立判断的问题"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={onConfirm} disabled={mut.isPending}>
+            {mut.isPending ? '处理中…' : '确认指定'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1092,7 +1350,7 @@ function ReportsDialog({
                       <div className="font-medium">
                         {SCORE_LABELS[k] ?? k}
                       </div>
-                      <div className="text-muted-foreground">{v}/5</div>
+                      <div className="text-muted-foreground">{v}/100</div>
                     </div>
                   ))}
                 </div>
@@ -1114,6 +1372,15 @@ function ReportsDialog({
                     <p className="mt-1 whitespace-pre-wrap">
                       {r.comments_to_editor}
                     </p>
+                  </div>
+                )}
+                {r.attachments && r.attachments.length > 0 && (
+                  <div className="mt-2">
+                    <div className="text-xs text-muted-foreground">审稿附件</div>
+                    <ReviewAttachmentLinks
+                      reportId={r.id}
+                      attachments={r.attachments}
+                    />
                   </div>
                 )}
               </div>

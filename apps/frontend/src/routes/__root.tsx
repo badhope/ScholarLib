@@ -8,6 +8,7 @@ import { useAuthStore, type AuthUser } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { Toaster } from '@/components/ui/sonner'
 import { NotFoundPage } from '@/components/common/not-found-page'
+import { FeedbackLauncher } from '@/components/common/feedback-launcher'
 import type { UserResponse } from '@/lib/types'
 
 interface RouterContext {
@@ -57,6 +58,7 @@ function RootLayout() {
   return (
     <>
       {isMobile ? <MobileAppShell /> : <AppShell />}
+      <FeedbackLauncher />
       <Toaster position="top-right" richColors closeButton />
       {showDevtools && <TanStackRouterDevtools />}
     </>

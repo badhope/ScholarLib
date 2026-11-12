@@ -35,8 +35,12 @@ class ForumTopic(Base, TenantScopedMixin):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    # 分类：讨论 / 建议 / 求助 / 公告（编辑部可发）
-    category: Mapped[str] = mapped_column(String(20), nullable=False, default="discussion")
+    # 版块：论文沙龙 / 方法与写作 / 学术生存 / 组队招募 / 站务公告。
+    # notice 是「站务公告」下的官方公告子类，只有编辑与管理员能发。
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default="paper")
+    # 关联论文（可选）：从论文详情页发起的讨论带上资源 id，
+    # 论文页据此显示"讨论 N"；普通帖子保持 NULL。
+    paper_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     # 置顶与锁定：版主/管理员操作
     is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

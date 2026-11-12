@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useState, type FormEvent } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import {
   Bell,
@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ClipboardCheck,
+  Coffee,
   Gavel,
   Heart,
   Home,
@@ -16,21 +17,23 @@ import {
   Menu,
   PenLine,
   Upload,
+  Scale,
   Scroll,
   ScrollText,
+  Search,
   Settings,
   ShieldCheck,
   TrendingUp,
   User,
   Users,
   Award,
-  Compass,
   FileSignature,
   Megaphone,
   MessagesSquare,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { OnboardingTour } from '@/components/common/onboarding-tour'
 import { useAuth } from '@/hooks/use-auth'
 import { useLogout } from '@/hooks/api/use-auth'
 import { useUnreadCount } from '@/hooks/api/use-modules'
@@ -53,40 +56,40 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { CookieBanner } from '@/components/common/cookie-banner'
 
 const NAV: NavItem[] = [
-  { to: '/dashboard', label: '概览', icon: Home, auth: true, group: '总览' },
-  { to: '/authors', label: '作者指南', icon: PenLine, group: '期刊' },
-  { to: '/policies', label: '政策规范', icon: Scroll, group: '期刊' },
-  { to: '/about', label: '关于本刊', icon: Building2, group: '期刊' },
-  { to: '/journal-metrics', label: '期刊指标', icon: TrendingUp, group: '期刊' },
-  { to: '/archive', label: '卷期归档', icon: CalendarDays, group: '期刊' },
-  { to: '/levels', label: '等级与规范', icon: Compass, group: '期刊' },
-  { to: '/browse', label: '浏览', icon: Compass, group: '内容' },
-  { to: '/catalog', label: '资源目录', icon: BookOpen, group: '内容' },
-  { to: '/profile', label: '个人中心', icon: Award, auth: true, group: '我的工作' },
-  { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '内容' },
-  { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '内容' },
-  { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '内容' },
+  // 一级入口固定五项：首页 / 论文 / 副刊 / 讨论 / 我的。
+  // 栏目、卷期、指标等期刊门面退到「期刊」二级组，不再和社区抢一级入口。
+  { to: '/', label: '首页', icon: Home, group: '一级入口' },
+  { to: '/papers', label: '论文', icon: BookOpen, group: '一级入口' },
+  { to: '/fun', label: '副刊', icon: Coffee, group: '一级入口' },
+  { to: '/forum', label: '讨论', icon: MessagesSquare, group: '一级入口' },
+  { to: '/me', label: '我的', icon: User, group: '一级入口' },
+
+  // 我的工作：只放需要登录的个人链路。
+  { to: '/dashboard', label: '我的概览', icon: Home, auth: true, group: '我的工作' },
   { to: '/submissions', label: '我的提交', icon: ScrollText, auth: true, group: '我的工作' },
+  { to: '/appeals', label: '作者申诉', icon: Scale, auth: true, group: '我的工作' },
+  { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '我的工作' },
+  { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '我的工作' },
+  { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '我的工作' },
   {
-    to: '/review/workbench',
+    to: '/review/assignments',
     label: '审稿工作台',
     icon: ClipboardCheck,
     auth: true,
     roles: ['reviewer'],
     group: '我的工作',
   },
-  // 主编/栏目编辑工作台（四栏流水线 + 批量指派 + 裁决）
-  {
-    to: '/editor/workbench',
-    label: '主编工作台',
-    icon: Gavel,
-    auth: true,
-    roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'],
-    group: '我的工作',
-  },
   { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'], group: '我的工作' },
-  { to: '/forum', label: '讨论区', icon: MessagesSquare, group: '社区' },
-  { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '消息' },
+  { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '我的工作' },
+
+  // 期刊门面：栏目降级为二级入口（专题索引），卷期/指标/规范都在这里。
+  { to: '/sections', label: '专题栏目', icon: Layers, group: '期刊' },
+  { to: '/guide', label: '投稿指南', icon: PenLine, group: '期刊' },
+  { to: '/rules', label: '规则与等级', icon: Scroll, group: '期刊' },
+  { to: '/archive', label: '卷期归档', icon: CalendarDays, group: '期刊' },
+  { to: '/journal-metrics', label: '期刊指标', icon: TrendingUp, group: '期刊' },
+  { to: '/about', label: '关于本刊', icon: Building2, group: '期刊' },
+
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin', label: '站点总览', icon: Gavel, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
@@ -105,6 +108,8 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   // mobileOpen 控制 <md 抽屉开合；路由切换后自动关闭
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [cmdOpen, setCmdOpen] = useState(false)
+  const [cmdQ, setCmdQ] = useState('')
   const { isAuthenticated, isAdmin, user, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -144,6 +149,26 @@ export function AppShell() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [mobileOpen])
+
+  // ⌘K / Ctrl+K 全局搜索：任何页面都能唤起，回车跳目录。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCmdOpen((v) => !v)
+      }
+      if (e.key === 'Escape') setCmdOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const submitCmd = (e: FormEvent) => {
+    e.preventDefault()
+    const q = cmdQ.trim()
+    setCmdOpen(false)
+    void navigate({ to: '/catalog', search: q ? { q } : {} })
+  }
 
   const onLogout = async () => {
     try {
@@ -193,8 +218,8 @@ export function AppShell() {
           'sticky top-0 z-40 flex h-screen flex-col border-r bg-sidebar text-sidebar-foreground transition-all',
           // 桌面端：根据 collapsed 切换宽窄；移动端：固定窄宽 + translate 控制显隐
           'md:sticky md:translate-x-0',
-          collapsed ? 'md:w-14' : 'md:w-60',
-          'w-60 max-md:fixed max-md:transition-transform',
+          collapsed ? 'md:w-14' : 'md:w-[220px]',
+          'w-[220px] max-md:fixed max-md:transition-transform',
           mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
         )}
       >
@@ -255,6 +280,29 @@ export function AppShell() {
             )
           })}
         </nav>
+        {/* 身份卡：始终在左栏底部，回答“我是谁、能做什么” */}
+        {!collapsed && (
+          <div className="mx-3 mb-2 rounded-lg border border-sidebar-foreground/15 bg-sidebar-accent/30 p-3">
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-2.5">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback>{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium">{user.username}</p>
+                  <p className="truncate text-[10px] text-sidebar-foreground/55">
+                    {user.roles?.includes('chief_editor') ? '主编' : user.roles?.includes('reviewer') ? '审稿人' : '作者 / 读者'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] leading-relaxed text-sidebar-foreground/70">登录后可投稿、认领与跟踪审稿。</p>
+                <Button asChild size="sm" className="h-8 w-full text-xs"><Link to="/login">登录 / 注册</Link></Button>
+              </div>
+            )}
+          </div>
+        )}
         {/* 折叠按钮仅桌面端可见 */}
         <button
           type="button"
@@ -282,6 +330,11 @@ export function AppShell() {
           </div>
           {/* 右侧：主题切换 + 用户菜单/登录注册 */}
           <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="outline" size="sm" className="hidden h-8 gap-2 px-2.5 text-xs sm:inline-flex" onClick={() => setCmdOpen(true)}>
+              <Search className="h-3.5 w-3.5" />
+              搜索
+              <kbd className="rounded border bg-muted px-1 font-mono text-[10px] text-muted-foreground">⌘K</kbd>
+            </Button>
             <ThemeToggle />
             {isAuthenticated && user ? (
               <DropdownMenu>
@@ -297,7 +350,7 @@ export function AppShell() {
                   <DropdownMenuLabel>{user.username}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/profile">
+                    <Link to="/me">
                       <Award className="h-4 w-4" />
                       个人中心
                     </Link>
@@ -308,12 +361,22 @@ export function AppShell() {
                       账号设置
                     </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings">
-                      <ShieldCheck className="h-4 w-4" />
-                      账号安全
-                    </Link>
-                  </DropdownMenuItem>
+                  {(user.roles?.includes('reviewer') || isAdmin) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/review/assignments">
+                        <ClipboardCheck className="h-4 w-4" />
+                        审稿工作台
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {(user.roles?.some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'].includes(r)) || isAdmin) && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/editor/workbench">
+                        <Gavel className="h-4 w-4" />
+                        主编工作台
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={onLogout} className="text-destructive">
                     退出登录
@@ -346,6 +409,19 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      {cmdOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-[18vh]" onClick={() => setCmdOpen(false)}>
+          <form onSubmit={submitCmd} className="w-full max-w-xl overflow-hidden rounded-xl border bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 border-b px-4 py-3">
+              <Search className="h-4 w-4 text-muted-foreground" />
+              <input autoFocus value={cmdQ} onChange={(e) => setCmdQ(e.target.value)} placeholder="搜索论文、副刊、作者、关键词…" className="h-9 flex-1 bg-transparent text-sm outline-none" />
+              <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Enter</kbd>
+            </div>
+            <div className="px-4 py-2 text-[11px] text-muted-foreground">回车进入目录；Esc 关闭。论文与副刊分轨展示。</div>
+          </form>
+        </div>
+      )}
+      <OnboardingTour />
       <CookieBanner />
     </div>
   )

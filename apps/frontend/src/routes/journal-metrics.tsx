@@ -68,16 +68,16 @@ function JournalMetricsPage() {
                 <CardContent className="flex flex-col items-center gap-2 py-10 text-center sm:flex-row sm:justify-between sm:text-left">
                   <div>
                     <p className="text-sm font-medium tracking-wide text-muted-foreground">
-                      R 因子（全刊）
+                      R 因子（学术轨）
                     </p>
                     <p className="mt-1 font-serif text-5xl font-bold tabular-nums text-primary">
                       {data.r_factor.toFixed(2)}
                     </p>
                     <p className="mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
-                      本刊旗舰指标，衡量全刊已发表内容的综合热度与编辑质量。口径与权重属编辑部内部标准。
+                      本刊旗舰指标，只衡量学术轨已发表内容的综合热度与编辑质量。荒诞稿与副刊不计分、不进 R 因子；口径与权重属编辑部内部标准。
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-6 text-center sm:text-right">
+                  <div className="grid grid-cols-3 gap-4 text-center sm:text-right">
                     <div>
                       <p className="font-serif text-2xl font-semibold tabular-nums">
                         {data.self_citation_rate.toFixed(1)}%
@@ -86,9 +86,15 @@ function JournalMetricsPage() {
                     </div>
                     <div>
                       <p className="font-serif text-2xl font-semibold tabular-nums">
-                        {data.published_total}
+                        {data.serious_total ?? 0}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">已发表论文</p>
+                      <p className="mt-1 text-xs text-muted-foreground">学术论文</p>
+                    </div>
+                    <div>
+                      <p className="font-serif text-2xl font-semibold tabular-nums">
+                        {data.absurd_total ?? 0}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">荒诞论文</p>
                     </div>
                   </div>
                 </CardContent>
@@ -97,7 +103,7 @@ function JournalMetricsPage() {
           ) : null}
 
           <RevealSection>
-            <h2 className="text-lg font-medium">一眼看全刊</h2>
+            <h2 className="text-lg font-medium">一眼看学术轨</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               同样的数字，换一种看法。雷达看读者行为分布，条形看学科构成。
             </p>
@@ -121,7 +127,8 @@ function JournalMetricsPage() {
             <h2 className="text-lg font-medium">指标一览</h2>
             <dl className="mt-3 grid gap-4 sm:grid-cols-2">
               {[
-                ['已发表论文', `${data.published_total} 篇`],
+                ['学术论文（论文轨）', `${data.serious_total ?? 0} 篇`],
+                ['荒诞论文（论文轨）', `${data.absurd_total ?? 0} 篇`],
                 ['覆盖学科', `${data.discipline_count} 个`],
                 [
                   '开放获取率',
@@ -133,11 +140,18 @@ function JournalMetricsPage() {
                 ],
                 ['总阅读次数', String(data.reads_total)],
                 ['总下载次数', String(data.downloads_total)],
-                ['总收藏次数', String(data.saves_total)],
+                [
+                  '总收藏次数',
+                  data.saves_total < 10
+                    ? `${data.saves_total} 次（样本不足，不作趋势解读）`
+                    : `${data.saves_total} 次`,
+                ],
                 [
                   '录用率',
-                  data.acceptance_rate == null || data.decided_submissions < MIN_STAT_SAMPLE
-                    ? '暂无数据（样本不足）'
+                  data.acceptance_rate == null ||
+                  data.decided_submissions < MIN_STAT_SAMPLE ||
+                  data.acceptance_rate >= 99
+                    ? '暂不公开（评审样本不足）'
                     : `${data.acceptance_rate}%（${data.accepted_submissions}/${data.decided_submissions}）`,
                 ],
                 [
@@ -168,8 +182,8 @@ function JournalMetricsPage() {
                 },
                 {
                   icon: Quote,
-                  title: '自引率 0.0%',
-                  body: '本刊没有引文系统，也不鼓励自引表演。该栏位诚实保留为 0，而不是编一个好看的小数字。',
+                  title: '自引率（不适用）',
+                  body: '本刊没有引文系统，也不鼓励自引表演。该栏位明确标注为不适用，而不是编一个好看的小数字。',
                 },
                 {
                   icon: BookOpen,
@@ -251,7 +265,7 @@ function JournalMetricsPage() {
             </p>
             <p className="mt-2">
               口径说明：R 因子、篇均下载/阅读等学术指标仅统计学术稿
-              （content_category=academic）；娱乐稿（fun/rant）的阅读、收藏、评论、点赞
+              （content_category=academic）；副刊稿（fun/rant）的阅读、收藏、评论、点赞
               等内容侧数据不计入学术指标，但仍在各文章页展示。
             </p>
             <p className="mt-2">

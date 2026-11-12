@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
@@ -202,6 +203,16 @@ class UserResponse(BaseModel):
     orcid: str | None = None
     # 用户自定义一句话简介（个人中心/评论区展示；迁移 012）。
     bio: str | None = None
+    # 可扩展资料（迁移 026）；全部可空，旧客户端不受影响。
+    display_name: str | None = None
+    real_name: str | None = None
+    affiliation: str | None = None
+    department: str | None = None
+    academic_title: str | None = None
+    research_interests: str | None = None
+    website: str | None = None
+    google_scholar: str | None = None
+    location: str | None = None
     # 当前用户在本租户内被授予的角色名列表（如 ["reviewer", "editor"]）
     # 默认空列表：未填充时视为"无角色"，向后兼容旧调用点
     roles: list[str] = Field(default_factory=list)
@@ -232,6 +243,15 @@ class UserResponse(BaseModel):
                 "created_at": data.created_at,
                 "orcid": data.orcid,
                 "bio": data.bio,
+                "display_name": data.display_name,
+                "real_name": data.real_name,
+                "affiliation": data.affiliation,
+                "department": data.department,
+                "academic_title": data.academic_title,
+                "research_interests": data.research_interests,
+                "website": data.website,
+                "google_scholar": data.google_scholar,
+                "location": data.location,
                 "xp": int(getattr(data, "xp", 0) or 0),
                 # roles 不在此填：让默认空列表生效；admin 路径用 _user_with_roles 显式覆盖
             }
@@ -277,6 +297,45 @@ class UserUpdate(BaseModel):
     orcid: str | None = None
     # 一句话简介：≤200 字；空串按清除处理，None 保持不变。
     bio: str | None = Field(default=None, max_length=200)
+    # 可扩展资料（迁移 026）。空串统一按清除处理；缺键不触碰。
+    display_name: str | None = Field(default=None, max_length=100)
+    real_name: str | None = Field(default=None, max_length=100)
+    affiliation: str | None = Field(default=None, max_length=300)
+    department: str | None = Field(default=None, max_length=200)
+    academic_title: str | None = Field(default=None, max_length=100)
+    research_interests: str | None = Field(default=None, max_length=500)
+    website: str | None = Field(default=None, max_length=300)
+    google_scholar: str | None = Field(default=None, max_length=300)
+    location: str | None = Field(default=None, max_length=100)
+
+    @field_validator(
+        "display_name",
+        "real_name",
+        "affiliation",
+        "department",
+        "academic_title",
+        "research_interests",
+        "location",
+    )
+    @classmethod
+    def _clean_profile_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("website", "google_scholar")
+    @classmethod
+    def _clean_profile_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        parsed = urlparse(cleaned)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("个人主页必须是 http(s) 链接")
+        return cleaned
 
     @field_validator("bio")
     @classmethod
@@ -343,6 +402,9 @@ class ModuleInfo(BaseModel):
 # --- Health ---
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+    # 前端/部署脚本用 version 做“这次到底部署成功没有”的指纹；
+    # 之前只有 status，测试和发布核对都拿不到版本。
+    version: str = ""
 
 
 class HealthReadyResponse(BaseModel):

@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  */
 export function useInViewReveal(options?: { rootMargin?: string; threshold?: number }) {
   const [node, setNode] = useState<Element | null>(null)
-  const [revealed, setRevealed] = useState(false)
+  const [revealed, setRevealed] = useState(true) // 首屏即可见：滚动入场在移动端/截图下会把整块停在 opacity 0
   const observerRef = useRef<IntersectionObserver | null>(null)
 
   const rootMargin = options?.rootMargin ?? '0px 0px 200px 0px'

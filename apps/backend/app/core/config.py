@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     # When True, /api/auth/register demands a captcha_token field and
     # runs it through the verifier at ``captcha_verifier``. Default
     # off so dev / CI / unit tests do not need an external provider.
-    captcha_required_for_registration: bool = False
+    captcha_required_for_registration: bool = True
     # Dotted path to a verifier. Empty -> a dev passthrough that
     # accepts everything (with a single warning log).
     captcha_verifier: str = ""
@@ -255,6 +255,11 @@ class Settings(BaseSettings):
     # the DataCite MDS API. Generate with:
     #   echo -n "username:password" | base64
     datacite_api_key: str = ""
+
+    # --- 本站刊号 ---
+    # 六位刊物代码：站内编号 R-<code>-<YYYYMMDD>-<四位流水>。
+    # 这不是 DOI；官方 DOI 仍由作者决定是否另行注册。
+    publication_code: str = "000001"
 
     # --- CORS / Trusted hosts ---
     cors_origins: str = "http://localhost:5173,http://localhost"

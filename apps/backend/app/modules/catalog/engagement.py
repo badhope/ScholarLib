@@ -246,7 +246,8 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
     from app.modules.reader.models import ReadingHistory
     from app.modules.submission.models import Submission
 
-    published_filter = (Resource.tenant_id == tenant_id, *public_conditions())
+    # 指标页只对论文轨负责：娱乐轨不计分、不进 R 因子，也不应计入“已发表论文/覆盖学科”。
+    published_filter = (Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
     total = (
         await db.execute(select(func.count(Resource.id)).where(*published_filter))
     ).scalar_one()
@@ -282,7 +283,7 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             select(func.coalesce(func.sum(ReadingHistory.visit_count), 0)).where(
                 ReadingHistory.tenant_id == tenant_id,
                 ReadingHistory.resource_id.in_(
-                    select(Resource.id).where(Resource.tenant_id == tenant_id, *public_conditions())
+                    select(Resource.id).where(Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
                 ),
             )
         )
@@ -292,7 +293,7 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             select(func.count(ReadingListItem.id)).where(
                 ReadingListItem.tenant_id == tenant_id,
                 ReadingListItem.resource_id.in_(
-                    select(Resource.id).where(Resource.tenant_id == tenant_id, *public_conditions())
+                    select(Resource.id).where(Resource.tenant_id == tenant_id, Resource.content_track == "paper", *public_conditions())
                 ),
             )
         )
@@ -303,6 +304,7 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
             await db.execute(
                 select(Submission).where(
                     Submission.tenant_id == tenant_id,
+                    Submission.content_track == "paper",
                     Submission.reviewed_at.is_not(None),
                 )
             )
@@ -313,7 +315,7 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
     review_days = sorted(
         (s.reviewed_at - s.submitted_at).total_seconds() / 86400
         for s in submissions
-        if s.reviewed_at and s.submitted_at
+        if s.reviewed_at and s.submitted_at and s.reviewed_at > s.submitted_at
     )
     accepted = sum(1 for s in submissions if s.status in ("accepted", "approved"))
     decided = len(submissions)
@@ -329,15 +331,18 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
         (await db.execute(select(Resource).where(*published_filter))).scalars().all()
     )
     paper_rows = [r for r in published_rows if is_paper_track(r.content_category, r.content_track)]
+    serious_rows = [r for r in paper_rows if (r.track or "serious") != "absurd"]
+    absurd_rows = [r for r in paper_rows if (r.track or "serious") == "absurd"]
     r_factor: float | None = None
-    if paper_rows:
-        raw = await load_raw_engagement(db, [r.id for r in paper_rows], tenant_id)
-        total_events = sum(sum(raw.get(r.id, (0, 0, 0))) for r in paper_rows)
+    # R 因子只算学术轨：荒诞论文是讽刺内容，不能拿来给“期刊指标”抬轿子。
+    if serious_rows:
+        raw = await load_raw_engagement(db, [r.id for r in serious_rows], tenant_id)
+        total_events = sum(sum(raw.get(r.id, (0, 0, 0))) for r in serious_rows)
         if total_events >= MIN_R_FACTOR_SAMPLE:
-            maxima = _discipline_maxima(paper_rows, raw)
+            maxima = _discipline_maxima(serious_rows, raw)
             scores = [
                 _score(*raw.get(r.id, (0, 0, 0)), maxima.get(r.discipline, (0, 0, 0)))
-                for r in paper_rows
+                for r in serious_rows
             ]
             r_factor = round(sum(scores) / len(scores), 2)
 
@@ -346,6 +351,8 @@ async def journal_metrics(db: AsyncSession, tenant_id: Any) -> dict[str, Any]:
 
     return {
         "published_total": total,
+        "serious_total": len(serious_rows),
+        "absurd_total": len(absurd_rows),
         "by_type": by_type,
         "by_discipline": by_discipline,
         "discipline_count": len([d for d in by_discipline if d]),

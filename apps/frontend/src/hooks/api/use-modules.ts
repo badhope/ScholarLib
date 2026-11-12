@@ -42,6 +42,7 @@ import type {
   ResourceResponse,
   ResourceStats,
   ResourceUpdate,
+  ReviewMatrixResponse,
   ReviewMode,
   ReviewModeResponse,
   ReviewReportResponse,
@@ -151,13 +152,17 @@ export const keys = {
 } as const
 
 // --- Catalog ---
-export function useResources(params: ResourceListParams = {}) {
+export function useResources(params: ResourceListParams = {}, enabled = true) {
   return useQuery<ResourceListResponse>({
     queryKey: keys.catalog.list(params),
     queryFn: async () => (await api.get<ResourceListResponse>('/catalog', { params })).data,
+    enabled,
     placeholderData: (prev) => prev,
     // 目录会随刊出变化：30 秒内视为新鲜，切回页面时自动刷新。
     staleTime: 30_000,
+    // 公开目录里的阅读数、下载数、篇数都是库里的实时值；列表页停留时
+    // 每分钟静默重取一次，避免数字停在打开页面那一刻。
+    refetchInterval: 60_000,
   })
 }
 
@@ -167,6 +172,9 @@ export function useResource(id: number) {
     queryFn: async () => (await api.get<ResourceResponse>(`/catalog/${id}`)).data,
     enabled: id > 0,
     staleTime: 30_000,
+    // 阅读/下载/收藏计数由服务端实时累计：文章页停留时每 60 秒轻量刷新，
+    // 不要求用户手动刷新页面才能看到最新数字。
+    refetchInterval: 60_000,
   })
 }
 
@@ -175,14 +183,18 @@ export function useJournalMetrics() {
     queryKey: ['catalog', 'journal-metrics'],
     queryFn: async () => (await api.get<JournalMetrics>('/catalog/journal-metrics')).data,
     staleTime: 60_000,
+    refetchInterval: 60_000,
   })
 }
 
-export function useCatalogStats() {
+export function useCatalogStats(track?: 'paper' | 'essay') {
   return useQuery<ResourceStats>({
-    queryKey: keys.catalog.stats(),
-    queryFn: async () => (await api.get<ResourceStats>('/catalog/stats')).data,
-    staleTime: 60_000,
+    queryKey: [...keys.catalog.stats(), track ?? 'all'],
+    queryFn: async () => (await api.get<ResourceStats>('/catalog/stats', { params: track ? { track } : undefined })).data,
+    staleTime: 30_000,
+    // 首页、/papers、/fun 的计数都从这个接口来；30 秒轮询保证不写死、
+    // 也不会因为缓存把「刚刊出」的文章数压住。
+    refetchInterval: 30_000,
   })
 }
 
@@ -420,6 +432,7 @@ export function useAssignReviewer() {
       (await api.post<AssignmentResponse>(`/submissions/${id}/assignments`, body)).data,
     onSuccess: (_, { id }) => {
       void qc.invalidateQueries({ queryKey: keys.submission.assignments(id) })
+      void qc.invalidateQueries({ queryKey: ['submissions', id, 'matrix'] })
       void qc.invalidateQueries({ queryKey: ['submissions'] })
     },
   })
@@ -431,7 +444,15 @@ export function useAssignReviewersBulk() {
   return useMutation<
     { assigned: number; submission_id: number },
     Error,
-    { id: number; body: { reviewer_ids: number[]; due_days?: number } }
+    {
+      id: number
+      body: {
+        reviewer_ids: number[]
+        due_days?: number
+        is_external?: boolean
+        external_affiliation?: string
+      }
+    }
   >({
     mutationFn: async ({ id, body }) =>
       (await api.post<{ assigned: number; submission_id: number }>(
@@ -440,7 +461,34 @@ export function useAssignReviewersBulk() {
       )).data,
     onSuccess: (_, { id }) => {
       void qc.invalidateQueries({ queryKey: keys.submission.assignments(id) })
+      void qc.invalidateQueries({ queryKey: ['submissions', id, 'matrix'] })
       void qc.invalidateQueries({ queryKey: ['submissions'] })
+    },
+  })
+}
+
+export function useReviewMatrix(id: number) {
+  return useQuery({
+    queryKey: ['submissions', id, 'matrix'],
+    queryFn: async () =>
+      (await api.get<ReviewMatrixResponse>(`/review/submissions/${id}/matrix`)).data,
+    enabled: id > 0,
+  })
+}
+
+export function useAssignAdjudicator() {
+  const qc = useQueryClient()
+  return useMutation<
+    { submission_id: number; assignment_id: number; reviewer_id: number },
+    Error,
+    { id: number; reviewer_id: number; due_days?: number; reason?: string }
+  >({
+    mutationFn: async ({ id, ...body }) =>
+      (await api.post(`/review/submissions/${id}/adjudicate`, body)).data,
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ['submissions', v.id, 'matrix'] })
+      void qc.invalidateQueries({ queryKey: ['submissions', v.id, 'assignments'] })
+      void qc.invalidateQueries({ queryKey: ['review', 'my-assignments'] })
     },
   })
 }
@@ -581,7 +629,7 @@ export function useUploadSubmissionFile() {  const qc = useQueryClient()
       const { data } = await api.post<SubmissionResponse>(
         `/submissions/${id}/files`,
         form,
-        { headers: { 'Content-Type': 'multipart/form-data' } },
+        { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000 },
       )
       return data
     },
@@ -592,16 +640,91 @@ export function useUploadSubmissionFile() {  const qc = useQueryClient()
   })
 }
 
+export interface ConvertSubmissionPreviewResult {
+  markdown: string
+  warnings: string[]
+  actual_format: string
+  extension_mismatch: boolean
+  needs_docx: boolean
+  reason: string | null
+}
+
+// 提交前识别 Word/PDF：选文件当下就返回 Markdown，填进编辑器。
+export function useConvertSubmissionPreview() {
+  return useMutation<ConvertSubmissionPreviewResult, Error, File>({
+    mutationFn: async (file) => {
+      const form = new FormData()
+      form.append('file', file)
+      const { data } = await api.post<ConvertSubmissionPreviewResult>(
+        '/submissions/convert-preview',
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      )
+      return data
+    },
+  })
+}
+
+// 原件预览：后端把原件按页渲染成 PNG，前端逐页加载，不再引入 pdf.js。
+export async function previewUploadedSource(file: File): Promise<Blob> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await api.post<Blob>('/submissions/source-preview', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    responseType: 'blob',
+    timeout: 180_000,
+  })
+  return data
+}
+
+// 原件预览（分页 PNG）：后端落一份 PDF 并返回 token/页数，图片按页取。
+export async function previewUploadedSourcePages(
+  file: File,
+): Promise<{ token: string; pages: number }> {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await api.post<{ token: string; pages: number }>(
+    '/submissions/source-preview/pages',
+    form,
+    {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 180_000,
+    },
+  )
+  return data
+}
+
 // 下载稿件文件（作者/编辑/被指派审稿人）。用 blob + programmatic <a>
 // 而不是裸 <a href>：请求必须带 Authorization 头，纯链接带不上。
-export async function downloadSubmissionFile(id: number): Promise<void> {
+export async function downloadSubmissionFile(
+  id: number,
+  format: 'docx' | 'pdf' = 'docx',
+): Promise<void> {
   const { data, headers } = await api.get<Blob>(`/submissions/${id}/files`, {
+    params: { format },
     responseType: 'blob',
   })
   downloadBlob(
     data,
     (headers['content-disposition'] as string | undefined) ?? '',
-    `submission-${id}.pdf`,
+    `submission-${id}.${format}`,
+  )
+}
+
+
+/** 下载某一历史版本的原件（v1 = 初次提交，之后为重投版本）。 */
+export async function downloadSubmissionVersion(
+  id: number,
+  version: number,
+): Promise<void> {
+  const { data, headers } = await api.get<Blob>(
+    `/submissions/${id}/versions/${version}/file`,
+    { responseType: 'blob', timeout: 120_000 },
+  )
+  downloadBlob(
+    data,
+    (headers['content-disposition'] as string | undefined) ?? '',
+    `submission-${id}-v${version}`,
   )
 }
 
@@ -668,6 +791,26 @@ export function useDeclineAssignment() {
     onSuccess: (data, id) => {
       qc.setQueryData(keys.review.assignment(id), data)
       void qc.invalidateQueries({ queryKey: ['review', 'my-assignments'] })
+    },
+  })
+}
+
+export function useUploadReviewAttachment() {
+  const qc = useQueryClient()
+  return useMutation<ReviewReportResponse, Error, { reportId: number; file: File }>({
+    mutationFn: async ({ reportId, file }) => {
+      const form = new FormData()
+      form.append('file', file)
+      return (
+        await api.post<ReviewReportResponse>(
+          `/review/reports/${reportId}/attachments`,
+          form,
+          { timeout: 120_000 },
+        )
+      ).data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['submission', 'reports'] })
     },
   })
 }
@@ -771,10 +914,11 @@ export function useRemoveReadingListItem() {
 
 // --- Notifications ---
 export type NotificationCategory =
-  | 'assigned'
-  | 'reminder'
-  | 'decision'
+  | 'review'
+  | 'submission'
   | 'claim'
+  | 'feedback'
+  | 'system'
 
 export function useNotifications(
   page = 1,
@@ -1158,6 +1302,7 @@ function useVolumeStats() {
     queryFn: async () =>
       (await api.get<{ data: VolumeStatsRow[] }>('/catalog/volumes/stats')).data.data,
     staleTime: 2 * 60_000,
+    refetchInterval: 2 * 60_000,
   })
 }
 
@@ -1382,7 +1527,9 @@ export function useIssuePlan() {
   return useQuery<IssuePlanResponse>({
     queryKey: keys.issuePlan(),
     queryFn: async () => (await api.get<IssuePlanResponse>('/catalog/issue-plan')).data,
-    staleTime: 5 * 60_000,
+    staleTime: 60_000,
+    // 当期条/归档页的「已上线篇数」随刊出实时变化，每分钟重取一次。
+    refetchInterval: 60_000,
   })
 }
 
@@ -1515,6 +1662,8 @@ export interface ReviewerWorkbenchRow {
   completed_at: string | null
   reminder_count: number
   recommendation?: string | null
+  report_id?: number | null
+  attachments?: import('@/lib/types').ReviewAttachment[]
 }
 
 export interface ReviewerWorkbenchResponse {
@@ -1680,5 +1829,55 @@ export function useRemindReviewers() {
       void qc.invalidateQueries({ queryKey: ['workbench'] })
       void qc.invalidateQueries({ queryKey: ['notifications'] })
     },
+  })
+}
+
+
+export interface SectionPart { slug: string; label: string; count: number; track_counts?: { paper: number; essay: number } }
+export interface ArticleSection { slug: string; label: string; description: string; count: number; track_counts?: { paper: number; essay: number }; parts: SectionPart[] }
+export interface SectionsResponse { data: ArticleSection[]; uncategorized: number }
+
+export function useArticleSections() {
+  return useQuery<SectionsResponse>({
+    queryKey: ['catalog', 'sections'],
+    queryFn: async () => (await api.get<SectionsResponse>('/catalog/sections')).data,
+    staleTime: 60_000,
+    // 栏目页每栏的 paper/essay 计数是库里聚合值，停留时每分钟刷新。
+    refetchInterval: 60_000,
+  })
+}
+
+export interface AppealRow {
+  id: number; resource_id: number; user_id: number; username: string
+  resource_title: string; kind: 'withdraw' | 'rescore' | 'rescore_zone'
+  reason: string; status: 'pending' | 'accepted' | 'rejected'
+  editor_note?: string | null; created_at: string; decided_at?: string | null
+}
+export function useMyAppeals() {
+  return useQuery<{ data: AppealRow[] }>({
+    queryKey: ['appeals', 'mine'],
+    queryFn: async () => (await api.get<{ data: AppealRow[] }>('/catalog/appeals/mine')).data,
+  })
+}
+export function useAppeals(status?: string) {
+  return useQuery<{ data: AppealRow[] }>({
+    queryKey: ['appeals', 'inbox', status ?? 'all'],
+    queryFn: async () => (await api.get<{ data: AppealRow[] }>('/catalog/appeals', { params: status ? { status } : {} })).data,
+  })
+}
+export function useSubmitAppeal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ resourceId, kind, reason }: { resourceId: number; kind: string; reason: string }) =>
+      (await api.post(`/catalog/${resourceId}/appeal`, { kind, reason })).data,
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['appeals'] }) },
+  })
+}
+export function useDecideAppeal() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status, editorNote }: { id: number; status: 'accepted' | 'rejected'; editorNote: string }) =>
+      (await api.post(`/catalog/appeals/${id}/decide`, { status, editor_note: editorNote })).data,
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['appeals'] }) },
   })
 }

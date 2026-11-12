@@ -35,7 +35,7 @@ from app.models import Tenant
 
 logger = get_logger("rubbish.scheduler")
 
-STARTUP_DELAY_SECONDS = 90
+STARTUP_DELAY_SECONDS = 10**9  # 2026-11-08 线上 CPU 打满排查：暂停自动催办，改手动触发
 INTERVAL_SECONDS = 6 * 60 * 60  # 每 6 小时一轮（催办最小窗口是 3 天，足够）
 
 _task: asyncio.Task[None] | None = None

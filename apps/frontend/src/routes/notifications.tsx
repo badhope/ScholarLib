@@ -33,11 +33,28 @@ type CategoryTab = 'all' | NotificationCategory
 
 const CATEGORY_TABS: { value: CategoryTab; label: string }[] = [
   { value: 'all', label: '全部' },
-  { value: 'assigned', label: '指派' },
-  { value: 'reminder', label: '催审' },
-  { value: 'decision', label: '裁决' },
-  { value: 'claim', label: '认领结果' },
+  { value: 'review', label: '审稿' },
+  { value: 'submission', label: '投稿' },
+  { value: 'claim', label: '认领' },
+  { value: 'feedback', label: '反馈' },
+  { value: 'system', label: '系统' },
 ]
+
+// 「全部」里也不再把类型混成一锅：每条通知带一个类型短标签。
+const TYPE_LABELS: Record<string, string> = {
+  'review.invited': '审稿邀请',
+  'review.reminder': '催审',
+  'review.accepted': '审稿接受',
+  'review.submitted': '审稿提交',
+  'submission.decision': '投稿裁决',
+  'submission.resubmitted': '重新投稿',
+  'submission.rework_requested': '返修',
+  'claim.created': '认领申请',
+  'claim.decision': '认领结果',
+  'site.feedback': '站点反馈',
+  system: '系统',
+  'gamification.role_application': '角色申请',
+}
 
 /**
  * 把通知的 related_type / related_id 解析成站内目标。
@@ -67,6 +84,13 @@ function resolveTarget(
     default:
       return null
   }
+}
+
+function formatWhen(value: string): string {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 function NotificationsPage() {
@@ -142,13 +166,15 @@ function NotificationsPage() {
           setPage(1)
         }}
       >
-        <TabsList>
-          {CATEGORY_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value}>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        <div className="overflow-x-auto pb-1">
+          <TabsList className="w-max">
+            {CATEGORY_TABS.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
       </Tabs>
 
       <div className="mt-4">
@@ -168,24 +194,26 @@ function NotificationsPage() {
                 n.is_read ? 'border-l-0' : 'border-l-4 border-l-primary'
               }
             >
-              <CardContent className="flex items-start justify-between gap-3 py-4">
+              <CardContent className="flex items-start gap-3 py-4">
                 <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-center gap-2">
-                    {/* 标题必须 min-w-0 + truncate：flex 子项默认 min-width:auto，
-                        长标题（尤其带长英文串）会把整行挤到只剩几像素宽，
-                        中文被迫一字一行——就是用户看到的"通知文字竖排" */}
-                    <p className="min-w-0 flex-1 truncate text-sm font-medium">{n.title}</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="secondary" className="shrink-0">
+                      {TYPE_LABELS[n.type] ?? n.type}
+                    </Badge>
                     {!n.is_read && (
                       <Badge variant="default" className="shrink-0">
                         新
                       </Badge>
                     )}
-                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                      {new Date(n.created_at).toLocaleString()}
+                    <span className="text-xs text-muted-foreground">
+                      {formatWhen(n.created_at)}
                     </span>
                   </div>
+                  <p className="mt-1.5 break-words text-sm font-medium leading-snug">
+                    {n.title}
+                  </p>
                   {n.body && (
-                    <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                    <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
                       {n.body}
                     </p>
                   )}
@@ -212,21 +240,24 @@ function NotificationsPage() {
                     )
                   })()}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+                <div className="flex shrink-0 flex-col items-center gap-1">
                   {!n.is_read && (
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
+                      aria-label="标为已读"
+                      title="标为已读"
                       onClick={() => onMarkRead(n.id)}
                       disabled={markMut.isPending}
                     >
                       <CheckCheck className="h-4 w-4" />
-                      标为已读
                     </Button>
                   )}
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="icon"
+                    aria-label="删除通知"
+                    title="删除通知"
                     onClick={() => onDelete(n.id)}
                     disabled={deleteMut.isPending}
                   >

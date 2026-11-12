@@ -20,7 +20,7 @@ from xml.sax.saxutils import (
 )
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_tenant_id
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/oai", tags=["oai-pmh"])
 REPOSITORY_NAME = "Rubbish — 开放获取期刊"
 ADMIN_EMAIL = "admin@argjiemi.cn"
 BASE_IDENTIFIER_PREFIX = "oai:rubbish.argjiemi.cn"
-EARLIEST_DATESTAMP = "2026-01-01T00:00:00Z"
+EARLIEST_DATESTAMP = "2026-04-03T00:00:00Z"
 
 OAI_NS = "http://www.openarchives.org/OAI/PMH/2.0/"
 OAIDC_NS = "http://www.openarchives.org/OAI/PMH/2.0/oai_dc/"
@@ -45,6 +45,19 @@ SCHEMA_LOCATION = (
 )
 
 _VALID_VERBS = {"Identify", "ListMetadataFormats", "ListRecords", "GetRecord"}
+
+
+def _scholarly_conditions() -> list:
+    """OAI 只收割学术轨的学术论文。
+
+    荒诞论文是站内讽刺内容，不是可被 DOAJ/CNKI 收录的研究记录；副刊同样
+    不进 OAI。把它们混进 oai_dc 会让外部索引把整站当成“231 篇荒诞研究”，
+    这是学术信用的硬伤，不是数量问题。
+    """
+    return [
+        catalog_models.Resource.content_track == "paper",
+        or_(catalog_models.Resource.track.is_(None), catalog_models.Resource.track != "absurd"),
+    ]
 
 
 def _now() -> str:
@@ -173,6 +186,7 @@ async def oai_endpoint(
                     catalog_models.Resource.id == int(rid),
                     catalog_models.Resource.tenant_id == tenant_id,
                     *public_conditions(),
+                    *_scholarly_conditions(),
                 )
             )
         ).scalar_one_or_none()
@@ -206,6 +220,7 @@ async def oai_endpoint(
         .where(
             catalog_models.Resource.tenant_id == tenant_id,
             *public_conditions(),
+            *_scholarly_conditions(),
         )
         .order_by(catalog_models.Resource.id.asc())
     )

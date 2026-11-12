@@ -1,12 +1,9 @@
 import { Link } from '@tanstack/react-router'
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { useCatalogStats } from '@/hooks/api/use-modules'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { useCatalogStats, useResources } from '@/hooks/api/use-modules'
 import type { ResourceResponse, ResourceStats } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { ArticleCover } from '@/components/common/article-cover'
-import { contentCategoryLabel } from '@/lib/resource-labels'
 import { DISCIPLINE_STYLE, DEFAULT_DISCIPLINE_STYLE } from '@/lib/discipline-style'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,20 +11,17 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/browse')({
+  // /browse 已并入 /papers 的筛选器；旧链接与书签统一跳转，避免出现两套目录。
+  beforeLoad: () => {
+    throw redirect({ to: '/papers' })
+  },
   component: BrowsePage,
 })
 
 function BrowsePage() {
   const statsQ = useCatalogStats()
-  const featuredQ = useQuery<{ data: ResourceResponse[] }>({
-    queryKey: ['catalog', 'featured'],
-    queryFn: async () =>
-      (
-        await api.get('/catalog', {
-          params: { page: 1, page_size: 6, sort: 'created_at', order: 'desc' },
-        })
-      ).data,
-  })
+  const papersQ = useResources({ track: 'paper', page: 1, page_size: 3, sort: 'created_at', order: 'desc' })
+  const essaysQ = useResources({ track: 'essay', page: 1, page_size: 3, sort: 'created_at', order: 'desc' })
 
   const stats: ResourceStats | undefined = statsQ.data
   const disciplines = Object.entries(stats?.by_discipline ?? {}).sort((a, b) => b[1] - a[1])
@@ -79,48 +73,83 @@ function BrowsePage() {
         )}
       </section>
 
-      {/* 最新发表：给"随便看看"的读者一个去处 */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-muted-foreground">最新发表</h2>
-          <Link to="/catalog" className="text-xs text-primary hover:underline">
-            全部文章 →
-          </Link>
-        </div>
-        {featuredQ.isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-56 rounded-xl" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(featuredQ.data?.data ?? []).map((r) => {
-              const categoryTag = contentCategoryLabel(r.content_category)
-              return (
-                <Link key={r.id} to="/catalog/$resourceId" params={{ resourceId: String(r.id) }}>
-                  <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
-                    <ArticleCover resource={r} className="h-32 w-full" />
-                    <CardContent className="space-y-2 p-4">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {categoryTag && (
-                          <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/25">
-                            {categoryTag}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
-                      <p className="line-clamp-1 text-xs text-muted-foreground">
-                        {r.authors.join('、')}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              )
-            })}
-          </div>
-        )}
+      {/* 最新内容分两栏：论文一栏、副刊一栏。不再把两条轨道混在同一列里。 */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        <LatestColumn
+          title="最新论文"
+          subtitle="学术论文与荒诞论文"
+          href="/papers"
+          rows={papersQ.data?.data ?? []}
+          loading={papersQ.isLoading}
+          showPaperKind
+        />
+        <LatestColumn
+          title="最新副刊"
+          subtitle="小说、随笔、评论、指南、吐槽"
+          href="/fun"
+          rows={essaysQ.data?.data ?? []}
+          loading={essaysQ.isLoading}
+        />
       </section>
+    </div>
+  )
+}
+
+function LatestColumn({
+  title,
+  subtitle,
+  href,
+  rows,
+  loading,
+  showPaperKind = false,
+}: {
+  title: string
+  subtitle: string
+  href: '/papers' | '/fun'
+  rows: ResourceResponse[]
+  loading: boolean
+  showPaperKind?: boolean
+}) {
+  return (
+    <div>
+      <div className="mb-3 flex items-end justify-between">
+        <div>
+          <h2 className="font-serif text-lg font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+        <Link to={href} className="text-xs text-primary hover:underline">
+          查看全部 →
+        </Link>
+      </div>
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((r) => {
+            const kindTag = showPaperKind ? (r.track === 'absurd' ? '荒诞论文' : '学术论文') : '副刊'
+            return (
+              <Link key={r.id} to="/catalog/$resourceId" params={{ resourceId: String(r.id) }}>
+                <Card className="overflow-hidden transition-shadow hover:shadow-md">
+                  <CardContent className="flex gap-3 p-3">
+                    <ArticleCover resource={r} className="h-20 w-24 shrink-0 rounded-lg" />
+                    <div className="min-w-0 space-y-1.5">
+                      <Badge variant="outline" className="text-[10px]">
+                        {kindTag}
+                      </Badge>
+                      <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
+                      <p className="line-clamp-1 text-xs text-muted-foreground">{r.authors.join('、')}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

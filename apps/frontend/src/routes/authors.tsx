@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,6 +20,10 @@ import { useAuth } from '@/hooks/use-auth'
 import { useAcceptAuthorRules, useGamificationProfile } from '@/hooks/api/use-modules'
 
 export const Route = createFileRoute('/authors')({
+  // 投稿指南与操作指南合并为 /guide 的两个页签，旧入口只做跳转。
+  beforeLoad: () => {
+    throw redirect({ to: '/guide', search: { tab: 'authors' } })
+  },
   component: AuthorsPage,
 })
 
@@ -38,20 +42,20 @@ const ACCEPT_CRITERIA: Array<{ title: string; body: string }> = [
   },
   {
     title: '清晰的写作',
-    body: '行文要完整：摘要、引言、方法（或论证）、结论缺一不可。玩梗选题的论证同样要像模像样。',
+    body: '论文轨（学术论文与荒诞论文）都要写全摘要、引言、方法（或论证）、结论与参考文献；副刊轨不强制论文范式，标题、正文和必要说明清楚即可。',
   },
 ]
 
 const ACCEPTED_KINDS = [
   {
     icon: BookOpenCheck,
-    title: '正经研究',
-    body: '标准学术论文：实证研究、综述、方法论、案例分析。按通行学术规范评审，双盲评审照常执行。',
+    title: '论文轨 · 学术 / 荒诞',
+    body: '论文内部再分两区：学术论文做真实研究（实证、综述、方法论、案例分析）；荒诞论文严格按论文格式，用可核查材料一本正经地论证荒诞命题。两者都走双盲同行评审、七维百分制评分，计分并进入 R 因子。',
   },
   {
     icon: Sparkles,
-    title: '脑洞研究',
-    body: '我们正式承认脑洞题材的学术价值：从「奶蛙形象与传统文化叙事」到「食堂窗口拥挤度预测」，只要论证自洽、格式规范、有趣而不伤人，编辑部照单全收。传统刊物嫌它离经叛道，我们嫌它不够好玩。稿件不再分赛道投稿——统一评审标准，发表后按学术/娱乐/吐槽分类呈现。',
+    title: '副刊轨',
+    body: '小说、随笔、评论、诗歌、指南和整活，统一归入 Rubbish Supplement（副刊）。副刊是正式期刊的一种，不走学术同行评审、不计分、不进 R 因子；只做格式、版权与社区规范检查。发表后按小说故事、评论杂谈、指南攻略、随笔、吐槽细分。',
   },
 ]
 
@@ -63,7 +67,7 @@ const NOT_ACCEPTED = [
   '已在外部刊物正式发表的内容',
 ]
 
-function AuthorsPage() {
+export function AuthorsPage() {
   const { isAuthenticated } = useAuth()
   const profile = useGamificationProfile({ enabled: isAuthenticated })
   const acceptRules = useAcceptAuthorRules()
@@ -88,8 +92,8 @@ function AuthorsPage() {
         <RevealSection>
           <h2 className="text-xl font-medium">收录范围</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Rubbish 是一家严肃格式与自由主题兼容的开放获取期刊。全部稿件共用同一套格式与伦理标准，
-            同一条评审流水线；内容按学术、娱乐、吐槽分类呈现，不影响同一把质量尺。
+            Rubbish 是一家严肃格式与自由主题兼容的开放获取期刊。所有稿件共用同一套伦理底线与排版清洁标准，
+            但分两条轨道运行：论文轨再分「学术论文 / 荒诞论文」两个独立区，都走同行评审与百分制计分；副刊轨独立成刊，不用论文体，只做格式与合规检查，不计分、不进 R 因子。
           </p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {ACCEPTED_KINDS.map(({ icon: Icon, title, body }) => (
@@ -137,7 +141,7 @@ function AuthorsPage() {
                 <li>· 稿件为 Markdown / PDF / Word 任一格式，图表清晰</li>
                 <li>· 中文为主，英文稿件亦可（目录会标注语言）</li>
                 <li>· 摘要 200–350 字，关键词 4–6 个，含 JEL/MSC 分类更佳</li>
-                <li>· 篇幅分三档：短篇 2,500–5,000 字 / 中篇 5,000–8,000 字 / 长篇 8,000 字以上</li>
+                <li>· 篇幅分三档：短篇 2,500–5,000 字 / 中篇 5,000–8,000 字 / 长篇 8,000 字以上（须经「特别篇」篇幅特许）</li>
                 <li>· 结构含「方法（或论证框架）」与「讨论」两节，缺一不可</li>
                 <li>· 图表编号 + 标题 + 正文引用；图 ≥ 300 dpi，表用三线表</li>
                 <li>· 参考文献 ≥ 8 条，全部可在 DOI 或公开数据库核实，格式统一为 GB/T 7714-2015</li>
@@ -214,7 +218,7 @@ function AuthorsPage() {
               },
               {
                 title: '篇幅三档',
-                body: '短篇 2,500–5,000 字、中篇 5,000–8,000 字、长篇 8,000 字以上（不设上限）。目录会标注篇幅档位；短篇不因短而减分，长篇不因长而加分，但内容必须撑得住。',
+                body: '短篇 2,500–5,000 字、中篇 5,000–8,000 字、长篇 8,000 字以上。超过 8,000 字默认不予刊发，只有编辑部/审稿人确认必要的「特别篇」才可特许，并在目录与正文页显式标注。短篇不因短而减分，长篇不因长而加分，但内容必须撑得住。',
               },
             ].map((c) => (
               <Card key={c.title}>

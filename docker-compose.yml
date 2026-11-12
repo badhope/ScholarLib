@@ -1,3 +1,5 @@
+name: rubbish
+
 # Rubbish 单机全家桶：数据库 + 后端(含前端静态) + 自动 HTTPS，一条命令上线。
 # 适用：任意 VPS（Hetzner/腾讯云轻量等，1C2G 起步）。前提：装好 Docker + Compose v2。
 #
@@ -107,6 +109,10 @@ services:
 
 volumes:
   pgdata:
+    name: rubbish_pgdata
   uploads:
+    name: rubbish_uploads
   caddy_data:
+    name: rubbish_caddy_data
   caddy_config:
+    name: rubbish_caddy_config

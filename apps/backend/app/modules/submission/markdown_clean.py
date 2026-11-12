@@ -2,7 +2,7 @@
 
 Why a structural pass and not more regex patches
 ------------------------------------------------
-The submitted PDFs typeset CJK with SimSun and Latin with Times/Bahnschrift.
+The submitted PDFs typeset CJK with a serif face and Latin with a serif face.
 pymupdf4llm turns every font switch into a bold run, so one paper produced
 930 ``**`` markers; it also merges a heading with the paragraph that follows
 on the same visual line ("## 2 研究方法 ### 2.1 动物实验 **实验采用…"), and

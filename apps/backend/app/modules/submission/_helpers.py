@@ -19,6 +19,7 @@ from app.core import search as fulltext
 from app.core.db import paginate
 from app.core.tracks import canonicalize_track_category, normalize_track
 from app.modules.catalog import cover_defaults
+from app.modules.catalog.genre import classify_essay_genre
 from app.modules.catalog.models import Resource as ResourceORM
 from app.modules.submission.models import Submission, SubmissionVersion
 from app.modules.submission.schemas import SubmissionListResponse, SubmissionResponse
@@ -114,6 +115,8 @@ async def _materialize_resource_from_submission(
         venue=submission.venue,
         discipline=submission.discipline,
         subdiscipline=submission.subdiscipline,
+        article_section=getattr(submission, "article_section", None),
+        issue_part=getattr(submission, "issue_part", None),
         tags=submission.tags,
         abstract=submission.abstract,
         preview=submission.preview,
@@ -142,6 +145,10 @@ async def _materialize_resource_from_submission(
     resource.content_track, resource.content_category = canonicalize_track_category(
         getattr(submission, "content_track", None), None
     )
+    if resource.content_track == "essay":
+        resource.content_genre = classify_essay_genre(
+            submission.title, category=resource.content_category
+        )
     db.add(resource)
     await db.flush()
     if not resource.download_url and submission.file_path:
@@ -154,7 +161,8 @@ async def _materialize_resource_from_submission(
     return resource
 
 
-def _to_response(entry: Submission) -> SubmissionResponse:
+def _to_response(entry: Submission, review_stats: dict | None = None) -> SubmissionResponse:
+    stats = review_stats or {}
     return SubmissionResponse(
         id=entry.id,
         title=entry.title,
@@ -165,6 +173,8 @@ def _to_response(entry: Submission) -> SubmissionResponse:
         venue=entry.venue,
         discipline=entry.discipline,
         subdiscipline=entry.subdiscipline,
+        article_section=getattr(entry, "article_section", None),
+        issue_part=getattr(entry, "issue_part", None),
         keywords=entry.keywords or [],
         jel_codes=entry.jel_codes or [],
         tags=entry.tags,
@@ -186,7 +196,63 @@ def _to_response(entry: Submission) -> SubmissionResponse:
         submitted_at=entry.submitted_at,
         reviewed_by=entry.reviewed_by,
         reviewed_at=entry.reviewed_at,
+        reports_completed=stats.get("reports_completed", 0),
+        distinct_reviewers=stats.get("distinct_reviewers", 0),
+        accept_recommendations=stats.get("accept_recommendations", 0),
+        reject_recommendations=stats.get("reject_recommendations", 0),
+        can_decide=stats.get("can_decide", False),
+        conflict=stats.get("conflict", False),
+        adjudicator_assigned=stats.get("adjudicator_assigned", False),
+        adjudicator_accepted=stats.get("adjudicator_accepted", False),
     )
+
+
+async def _review_stats_for_submissions(db: AsyncSession, ids: list[int], tenant_id: str) -> dict[int, dict]:
+    """批量算当前轮审稿进度，避免列表把“已有 1 份意见”显示成 0。"""
+    if not ids:
+        return {}
+    from app.modules.review.models import ReviewAssignment, ReviewReport
+
+    rows = (
+        await db.execute(
+            select(
+                ReviewAssignment.submission_id,
+                ReviewAssignment.reviewer_id,
+                ReviewAssignment.round,
+                ReviewAssignment.is_adjudicator,
+                ReviewReport.recommendation,
+            )
+            .join(ReviewReport, ReviewReport.assignment_id == ReviewAssignment.id, isouter=True)
+            .where(
+                ReviewAssignment.submission_id.in_(ids),
+                ReviewAssignment.tenant_id == tenant_id,
+            )
+        )
+    ).all()
+    by_sub: dict[int, list] = {}
+    for r in rows:
+        by_sub.setdefault(r[0], []).append(r)
+    out: dict[int, dict] = {}
+    for sid, rs in by_sub.items():
+        current_round = max((x[2] or 1) for x in rs)
+        cur = [x for x in rs if (x[2] or 1) == current_round and x[4] is not None]
+        accept_ids = {x[1] for x in cur if x[4] == "accept"}
+        reject = sum(1 for x in cur if x[4] == "reject")
+        major = sum(1 for x in cur if x[4] == "major_revision")
+        adj_rows = [x for x in rs if (x[2] or 1) == current_round and x[3]]
+        adj_accept = any(x[4] == "accept" for x in adj_rows)
+        conflict = bool(accept_ids) and (reject > 0 or major > 0)
+        out[sid] = {
+            "reports_completed": len(cur),
+            "distinct_reviewers": len({x[1] for x in cur}),
+            "accept_recommendations": len(accept_ids),
+            "reject_recommendations": reject,
+            "conflict": conflict,
+            "adjudicator_assigned": bool(adj_rows),
+            "adjudicator_accepted": adj_accept,
+            "can_decide": len(accept_ids) >= 2 and (not conflict or adj_accept),
+        }
+    return out
 
 
 # 参与版本快照的书目字段。故意不含 status / editor_note / resource_id ——
@@ -203,6 +269,10 @@ _VERSIONED_FIELDS = (
     "venue",
     "discipline",
     "subdiscipline",
+    # 栏目/分部也是作者可改的实质元数据：版本回滚时必须一起恢复，
+    # 否则会出现“回滚了正文但栏目仍留在新版本”的静默错位。
+    "article_section",
+    "issue_part",
     "keywords",
     "jel_codes",
     "tags",
@@ -270,7 +340,9 @@ async def _list_submissions(
         page_size=page_size,
         order_by=(desc(Submission.submitted_at), Submission.id.asc()),
     )
+    tenant_id = rows[0].tenant_id if rows else None
+    stats = await _review_stats_for_submissions(db, [r.id for r in rows], tenant_id) if tenant_id else {}
     return SubmissionListResponse(
-        data=[_to_response(r) for r in rows],
+        data=[_to_response(r, stats.get(r.id)) for r in rows],
         meta=meta,
     )

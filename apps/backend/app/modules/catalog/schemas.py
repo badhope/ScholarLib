@@ -102,14 +102,16 @@ PublicationStatus = Literal["published", "in_review", "draft"]
 # 内容类别（v1.11）：类别不是等级——内容不分等级，层级只与创作者经验
 # 挂钩；排行/推荐只允许同类别内容互相比对。
 ContentCategory = Literal["academic", "fun", "rant"]
+# 娱乐轨文体（v1.16）：只对 content_track=essay 有意义，论文轨恒为 NULL。
+EssayGenre = Literal["joke", "fiction", "review", "guide", "essay", "poetry", "rant"]
 
 
 class ResourceBase(BaseModel):
     """Shared fields for create / update / response."""
 
     type: ResourceType
-    # 赛道：历史字段，已下线（见 core/tracks.py）。仅保留 serious 一档，
-    # 旧客户端传 absurd 等值由 before-validator 归一为 serious，不 422。
+    # 论文子类型：serious=学术论文 / absurd=荒诞论文；副刊不使用该字段。
+    # 旧客户端传 absurd 会保留，不再静默归一为 serious。
     track: Track = "serious"
     # 内容类别：academic（学术研究）/ fun（娱乐向）/ rant（吐槽向）。
     # 子类型标签——由 content_track 权威推导（paper→academic，essay→fun/rant），
@@ -118,6 +120,8 @@ class ResourceBase(BaseModel):
     # 内容赛道（唯一权威）：paper=学术研究（进 R 因子/篇均指标），
     # essay=娱乐/吐槽。缺省按 paper（本刊默认学术刊）。
     content_track: Literal["paper", "essay"] | None = None
+    # 娱乐轨文体细分（v1.16）：小说/评论/指南/整活…；论文轨不填。
+    content_genre: EssayGenre | None = None
     # 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」。
     # 从稿件 front-matter 解析；非法值原样保留，详情接口 clc_status 标待校正。
     clc_code: str | None = Field(default=None, max_length=20)
@@ -154,7 +158,7 @@ class ResourceBase(BaseModel):
     @field_validator("track", mode="before")
     @classmethod
     def _normalize_track(cls, v: object) -> object:
-        """赛道已下线：任意非 serious 输入（含历史 absurd）归一为 serious。"""
+        """论文子类型只接受 serious / absurd；脏值保守归 serious。"""
         if v is None:
             return None
         return normalize_track(v) if isinstance(v, str) else v
@@ -179,6 +183,9 @@ class ResourceBase(BaseModel):
     # Journal metadata
     volume: str | None = Field(default=None, max_length=50)
     issue: str | None = Field(default=None, max_length=50)
+    # Nature 式栏目 / 期次分部分（021）
+    article_section: str | None = Field(default=None, max_length=40)
+    issue_part: str | None = Field(default=None, max_length=40)
     pages: str | None = Field(default=None, max_length=50)
     issn: str | None = Field(default=None, max_length=20)
     isbn: str | None = Field(default=None, max_length=20)
@@ -251,10 +258,15 @@ class ResourceUpdate(BaseModel):
     cover_image: str | None = Field(default=None, max_length=500)
     cover_theme: str | None = Field(default=None, max_length=50)
     publish_at: datetime | None = None
+    # Nature 式栏目与期次分部分（021）
+    article_section: str | None = Field(default=None, max_length=40)
+    issue_part: str | None = Field(default=None, max_length=40)
     # 内容赛道/类别：content_track 为唯一权威；只传类别时按类别回推赛道
     # （academic→paper，fun/rant→essay）。落库由 routes 统一走 canonicalize。
     content_track: Literal["paper", "essay"] | None = None
     content_category: ContentCategory | None = None
+    # 娱乐轨文体细分（v1.16）：后台可改；论文轨忽略。
+    content_genre: EssayGenre | None = None
 
     @field_validator("track", mode="before")
     @classmethod
@@ -292,6 +304,8 @@ class ResourceResponse(ResourceBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    # 本站刊号：R-<六位刊号>-<YYYYMMDD>-<四位流水>，不是官方 DOI。
+    site_id: str | None = None
     slug: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -300,6 +314,9 @@ class ResourceResponse(ResourceBase):
     has_markdown: bool = False
     # 内容赛道（唯一权威）：paper|essay。响应层按 track 校正 content_category。
     content_track: str | None = None
+    # 特别篇：篇幅超过轨道上限、经显式特许的稿件。阅读端显示标签。
+    is_special_issue: bool = False
+    special_issue_reason: str | None = None
     # 中图分类号校正状态：valid / needs_correction / absent（由 clc_code 反推）。
     clc_status: str | None = None
     # 互动指标（R 指数）：列表与详情都返回，未取到时为 None
@@ -310,6 +327,22 @@ class ResourceResponse(ResourceBase):
     quartile: str | None = None
     # P1：作者位明细（含认领状态）。未认领位 email 强制 null。
     authors_detail: list[AuthorDetail] | None = None
+
+    @field_validator("content_genre", mode="before")
+    @classmethod
+    def _empty_genre_to_none(cls, v):
+        # 历史库里有 content_genre=''（空串），Literal 校验会在
+        # model_validator 之前就 500；空串与 None 等价，统一折成 None。
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return None
+            # 历史/人工回填可能写入白名单外的值（如 article）。读接口
+            # 不能因为一条脏数据把整页目录打成 500，未知文体按“无文体”下发。
+            allowed = {"joke", "fiction", "review", "guide", "essay", "poetry", "rant"}
+            if v not in allowed:
+                return None
+        return v
 
     @model_validator(mode="after")
     def _derive_derived_fields(self) -> "ResourceResponse":
@@ -324,9 +357,26 @@ class ResourceResponse(ResourceBase):
         """
         from app.modules.submission.clc import clc_status_of
 
+        # 本站刊号：六位刊号 + 创建日期 + 四位全站流水。按 id 单调递增，
+        # 因此按刊号排序与按发表时间排序一致；它不是 DOI，也不冒充 DOI。
+        if not self.site_id:
+            from app.core.config import settings
+
+            code = (settings.publication_code or "000001").strip()
+            self.site_id = f"R-{code}-{self.created_at:%Y%m%d}-{self.id:04d}"
+
         self.content_track = resolve_content_track(self.content_track, self.content_category)
         self.content_category = resolve_category(self.content_track, self.content_category)
         self.clc_status = clc_status_of(self.clc_code)
+        if self.content_track == "paper":
+            # 论文轨没有“文体”这个概念，历史脏值一律不下发。
+            self.content_genre = None
+        elif not self.content_genre:
+            from app.modules.catalog.genre import classify_essay_genre
+
+            self.content_genre = classify_essay_genre(
+                self.title, category=self.content_category
+            )
         if self.content_track == "essay":
             self.quality_score = None
             self.quality_grade = None
@@ -372,7 +422,11 @@ class ResourceStats(BaseModel):
     total: int
     by_type: dict[str, int]
     by_discipline: dict[str, int]
-    # by_track 已随赛道下线移除，不再按赛道分组统计。
+    # 娱乐轨文体分布（只统计 essay）；论文轨不产生 key。
+    by_genre: dict[str, int] = {}
+    # 论文轨内部 serious / absurd 的实时分布。前端论文页两个 tab 的计数
+    # 必须用这份全量聚合，不能只数「随机推荐池」那 50 条。
+    by_paper_kind: dict[str, int] = {}
     downloads_total: int = 0
     reads_total: int = 0
 
@@ -390,6 +444,10 @@ class JournalMetrics(BaseModel):
     """
 
     published_total: int
+    # 论文轨内部拆分：学术稿 / 荒诞稿。指标页必须分开说，否则 240 篇里
+    # 231 篇荒诞稿会被读者误读成“学术产能”。
+    serious_total: int = 0
+    absurd_total: int = 0
     by_type: dict[str, int]
     by_discipline: dict[str, int]
     discipline_count: int
@@ -421,6 +479,7 @@ class ResourceFacets(BaseModel):
 
 __all__ = [
     "AuthorMeta",
+    "EssayGenre",
     "FacetBucket",
     "JournalMetrics",
     "PaginationMeta",

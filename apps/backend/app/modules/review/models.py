@@ -45,9 +45,11 @@ class ReviewAssignment(Base, TenantScopedMixin):
 
     __tablename__ = "review_assignments"
     __table_args__ = (
-        # 防止同一编辑对同一审稿人重复邀请同一稿件
+        # 同一稿件、同一审稿人、同一轮只能有一条邀请；重投后可邀请同一
+        # 审稿人进入新一轮，不能被旧的 (submission, reviewer) 约束拦住。
         UniqueConstraint(
-            "submission_id", "reviewer_id", name="uq_review_assignment_submission_reviewer"
+            "submission_id", "reviewer_id", "round",
+            name="uq_review_assignment_submission_reviewer_round",
         ),
     )
 
@@ -95,6 +97,12 @@ class ReviewAssignment(Base, TenantScopedMixin):
     is_adjudicator: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # 外审专家（主编指定，可标注外省/外单位）；不改变账号体系，
+    # 只记录这次邀请的性质，供矩阵与审计识别。
+    is_external: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    external_affiliation: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     submission = relationship("Submission", backref="review_assignments")
     reviewer = relationship("User", foreign_keys="ReviewAssignment.reviewer_id")
@@ -129,6 +137,11 @@ class ReviewReport(Base, TenantScopedMixin):
     scores: Mapped[dict[str, Any]] = mapped_column(JSONBVariant, nullable=False, default=dict)
     comments_to_editor: Mapped[str | None] = mapped_column(Text, nullable=True)
     comments_to_author: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 审稿报告附件（主要是带批注的 PDF/Word/图片）。存元数据数组而不是
+    # 单列：一个审稿人可能同时交“批注版 PDF + 补充数据表”。
+    attachments: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONBVariant, nullable=False, default=list
+    )
     submitted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

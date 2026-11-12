@@ -91,6 +91,10 @@ class Submission(Base, TenantScopedMixin):
     venue: Mapped[str | None] = mapped_column(Text, nullable=True)
     discipline: Mapped[str] = mapped_column(String(100), nullable=False)
     subdiscipline: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Nature 式栏目 / 期次分部：投稿时即确定，录用物化时原样带入
+    # Resource，避免“表单能选、目录永远是空栏目”的断链。
+    article_section: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    issue_part: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     # 关键词：补 submission → catalog 物化时丢失的字段，与 catalog.Resource
     # 对齐。jel_codes 暂不同步——catalog.Resource 没有该列（功能未落地），
     # 仅 keywords 参与物化，避免声称不存在的字段对齐。

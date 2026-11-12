@@ -6,8 +6,9 @@
 - 发帖/回帖：登录即可（不设积分门槛——参考前面身份体系 3.0 的原则）
 - 置顶/锁定/删除他人帖子：编辑或管理员（版主权限）
 
-为什么不做"分类版块树"：本刊是期刊社区，不是大型论坛。四个平铺分类
-（讨论/建议/求助/公告）已经够用，做树状版块只会让冷启动时每版都空。
+版块设计：五个**平铺**版块（论文沙龙/方法与写作/学术生存/组队招募/站务公告），
+不做树状子版。本刊是期刊社区，不是大型论坛；五个版块足够让帖子有归属，
+又不会在冷启动阶段把每个子版都做成空壳。
 """
 
 from __future__ import annotations
@@ -35,20 +36,45 @@ from app.modules.forum.models import ForumReply, ForumReport, ForumTopic
 
 router = APIRouter(prefix="/forum", tags=["forum"])
 
-ForumCategory = Literal["discussion", "suggestion", "question", "notice"]
+# 五个平铺版块：论文沙龙 / 方法与写作 / 学术生存 / 组队招募 / 站务公告。
+# 旧分类保留为兼容别名（历史帖子和既有测试仍可直接写入），列表查询按版块聚合。
+ForumCategory = Literal[
+    "paper",
+    "method",
+    "life",
+    "collab",
+    "meta",
+    "notice",
+    "discussion",
+    "question",
+    "suggestion",
+]
 
 CATEGORY_LABELS: dict[str, str] = {
-    "discussion": "讨论",
-    "suggestion": "建议",
-    "question": "求助",
+    "paper": "论文沙龙",
+    "method": "方法与写作",
+    "life": "学术生存",
+    "collab": "组队招募",
+    "meta": "站务公告",
     "notice": "公告",
+    "discussion": "讨论",
+    "question": "求助",
+    "suggestion": "建议",
+}
+
+# 版块 -> 实际落库的分类集合。旧帖不用搬家也能出现在新版块下。
+CATEGORY_BOARD: dict[str, tuple[str, ...]] = {
+    "paper": ("paper", "discussion"),
+    "method": ("method", "question"),
+    "meta": ("meta", "notice", "suggestion"),
 }
 
 
 class TopicCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     body: str = Field(min_length=2, max_length=20000)
-    category: ForumCategory = "discussion"
+    category: ForumCategory = "paper"
+    paper_id: int | None = Field(default=None, ge=1)
 
 
 class ReplyCreate(BaseModel):
@@ -72,6 +98,7 @@ class TopicOut(BaseModel):
     reply_count: int
     created_at: datetime
     last_reply_at: datetime | None
+    paper_id: int | None = None
     author: AuthorBrief | None = None
 
 
@@ -113,6 +140,7 @@ def _topic_out(t: ForumTopic, authors: dict[int, AuthorBrief]) -> TopicOut:
         reply_count=t.reply_count,
         created_at=t.created_at,
         last_reply_at=t.last_reply_at,
+        paper_id=t.paper_id,
         author=authors.get(t.author_id),
     )
 
@@ -129,9 +157,13 @@ def _reply_out(r: ForumReply, authors: dict[int, AuthorBrief]) -> ReplyOut:
 
 @router.get("/topics", response_model=TopicListOut)
 async def list_topics(
-    category: str | None = Query(default=None, pattern=r"^(discussion|suggestion|question|notice)$"),
+    category: str | None = Query(
+        default=None,
+        pattern=r"^(paper|method|life|collab|meta|notice|discussion|question|suggestion)$",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
+    paper_id: int | None = Query(default=None, ge=1),
     db: AsyncSession = Depends(get_db),
 ) -> TopicListOut:
     """帖子列表：置顶优先，其次按最近活跃。"""
@@ -141,7 +173,10 @@ async def list_topics(
         ForumTopic.deleted_at.is_(None),
     )
     if category:
-        stmt = stmt.where(ForumTopic.category == category)
+        board = CATEGORY_BOARD.get(category, (category,))
+        stmt = stmt.where(ForumTopic.category.in_(board))
+    if paper_id is not None:
+        stmt = stmt.where(ForumTopic.paper_id == paper_id)
     rows, meta = await paginate(
         db,
         stmt,
@@ -164,6 +199,44 @@ async def list_topics(
             "total_pages": meta.total_pages,
         },
     )
+
+
+@router.get("/boards")
+async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    """五个版块的帖子数与最近活跃时间。
+
+    冷启动阶段版块卡片如果只写定位、不写“有多少人在聊”，社区会显得空。
+    这里按版块聚合（旧分类按 CATEGORY_BOARD 归并），一次返回五条。
+    """
+    tenant_id = require_tenant_id()
+    rows = (
+        await db.execute(
+            select(
+                ForumTopic.category,
+                func.count(ForumTopic.id),
+                func.max(func.coalesce(ForumTopic.last_reply_at, ForumTopic.created_at)),
+            ).where(
+                ForumTopic.tenant_id == tenant_id,
+                ForumTopic.deleted_at.is_(None),
+            ).group_by(ForumTopic.category)
+        )
+    ).all()
+    buckets: dict[str, dict[str, object]] = {
+        b: {"category": b, "topics": 0, "last_active": None}
+        for b in ("paper", "method", "life", "collab", "meta")
+    }
+    for raw, count, last in rows:
+        board = next((b for b, raws in CATEGORY_BOARD.items() if raw in raws), raw)
+        if board not in buckets:
+            continue
+        buckets[board]["topics"] = int(buckets[board]["topics"]) + int(count)
+        current = buckets[board]["last_active"]
+        if last is not None and (current is None or last > current):
+            buckets[board]["last_active"] = last
+    for b in buckets.values():
+        if b["last_active"] is not None:
+            b["last_active"] = b["last_active"].isoformat()
+    return {"data": list(buckets.values())}
 
 
 @router.get("/topics/{topic_id}", response_model=TopicOut)
@@ -229,6 +302,7 @@ async def create_topic(
         title=payload.title.strip(),
         body=payload.body.strip(),
         category=payload.category,
+        paper_id=payload.paper_id,
     )
     db.add(topic)
     await db.commit()

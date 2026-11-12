@@ -29,7 +29,7 @@ echarts.use([
 
 export type EChartOption = echarts.EChartsCoreOption
 
-// 统一的图表主题：与站点配色一致，字体走系统衬线，网格极淡。
+// 统一的图表主题：与站点配色一致，字体走 OFL 衬线栈，网格极淡。
 // 每一处图表都从这份主题出发，保证「一页里所有图看起来是同一套设计」。
 // 主色是回收墨绿，暖赭色只作对比色出现；顺序即语义优先级，
 // 第一根柱子永远是最能代表刊物的颜色。
@@ -59,7 +59,7 @@ export function EChart({
       animation: !reduce,
       animationDuration: reduce ? 0 : 700,
       animationEasing: 'cubicOut',
-      textStyle: { fontFamily: "Georgia, 'Noto Serif SC', serif", fontSize: 12 },
+      textStyle: { fontFamily: "'Noto Serif SC', 'DejaVu Serif', serif", fontSize: 12 },
       grid: { left: 8, right: 12, top: 28, bottom: 8, containLabel: true },
       tooltip: { trigger: 'axis', confine: true },
       ...option,

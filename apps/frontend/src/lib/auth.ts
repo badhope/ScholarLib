@@ -13,6 +13,17 @@ export interface AuthUser {
   // 不为了两个只读字段去多打一次接口。
   email?: string
   is_email_verified?: boolean
+  // 个人资料（设置页编辑后由 /users/me 回填；旧缓存可能没有）。
+  display_name?: string | null
+  real_name?: string | null
+  affiliation?: string | null
+  department?: string | null
+  academic_title?: string | null
+  research_interests?: string | null
+  website?: string | null
+  google_scholar?: string | null
+  location?: string | null
+  bio?: string | null
 }
 
 interface AuthState {

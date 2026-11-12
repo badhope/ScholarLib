@@ -12,21 +12,30 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as R403RouteImport } from './routes/403'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as AppealsRouteImport } from './routes/appeals'
 import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as AuthorsRouteImport } from './routes/authors'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as FunRouteImport } from './routes/fun'
+import { Route as GradeRouteImport } from './routes/grade'
+import { Route as GuideRouteImport } from './routes/guide'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as JournalMetricsRouteImport } from './routes/journal-metrics'
 import { Route as LevelsRouteImport } from './routes/levels'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MeRouteImport } from './routes/me'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as PapersRouteImport } from './routes/papers'
 import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecommendationsRouteImport } from './routes/recommendations'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
+import { Route as RulesRouteImport } from './routes/rules'
+import { Route as SectionsRouteImport } from './routes/sections'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
@@ -42,6 +51,7 @@ import { Route as AdminRoleApplicationsRouteImport } from './routes/admin/role-a
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminVolumesRouteImport } from './routes/admin/volumes'
+import { Route as ArchiveIssueRouteImport } from './routes/archive_.$issue'
 import { Route as CatalogIndexRouteImport } from './routes/catalog/index'
 import { Route as CatalogResourceIdRouteImport } from './routes/catalog/$resourceId'
 import { Route as CatalogNewRouteImport } from './routes/catalog/new'
@@ -56,10 +66,12 @@ import { Route as LibraryListIdRouteImport } from './routes/library/$listId'
 import { Route as ReaderResourceIdRouteImport } from './routes/reader/$resourceId'
 import { Route as ReviewAssignmentsRouteImport } from './routes/review/assignments'
 import { Route as ReviewWorkbenchRouteImport } from './routes/review/workbench'
+import { Route as SectionsSlugRouteImport } from './routes/sections_.$slug'
 import { Route as SubmissionsIndexRouteImport } from './routes/submissions/index'
 import { Route as SubmissionsNewRouteImport } from './routes/submissions/new'
 import { Route as SubmissionsPendingRouteImport } from './routes/submissions/pending'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
+import { Route as CatalogTrackTrackRouteImport } from './routes/catalog/track.$track'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -74,6 +86,11 @@ const R403Route = R403RouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppealsRoute = AppealsRouteImport.update({
+  id: '/appeals',
+  path: '/appeals',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArchiveRoute = ArchiveRouteImport.update({
@@ -96,9 +113,34 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FeedbackRoute = FeedbackRouteImport.update({
+  id: '/feedback',
+  path: '/feedback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FunRoute = FunRouteImport.update({
+  id: '/fun',
+  path: '/fun',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GradeRoute = GradeRouteImport.update({
+  id: '/grade',
+  path: '/grade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuideRoute = GuideRouteImport.update({
+  id: '/guide',
+  path: '/guide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const JournalMetricsRoute = JournalMetricsRouteImport.update({
@@ -126,6 +168,11 @@ const NotificationsRoute = NotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PapersRoute = PapersRouteImport.update({
+  id: '/papers',
+  path: '/papers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PoliciesRoute = PoliciesRouteImport.update({
   id: '/policies',
   path: '/policies',
@@ -149,6 +196,16 @@ const RegisterRoute = RegisterRouteImport.update({
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SectionsRoute = SectionsRouteImport.update({
+  id: '/sections',
+  path: '/sections',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -226,6 +283,11 @@ const AdminVolumesRoute = AdminVolumesRouteImport.update({
   path: '/admin/volumes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArchiveIssueRoute = ArchiveIssueRouteImport.update({
+  id: '/archive_/$issue',
+  path: '/archive/$issue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CatalogIndexRoute = CatalogIndexRouteImport.update({
   id: '/catalog/',
   path: '/catalog/',
@@ -296,6 +358,11 @@ const ReviewWorkbenchRoute = ReviewWorkbenchRouteImport.update({
   path: '/review/workbench',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SectionsSlugRoute = SectionsSlugRouteImport.update({
+  id: '/sections_/$slug',
+  path: '/sections/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SubmissionsIndexRoute = SubmissionsIndexRouteImport.update({
   id: '/submissions/',
   path: '/submissions/',
@@ -316,26 +383,40 @@ const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
   path: '/auth/oidc/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CatalogTrackTrackRoute = CatalogTrackTrackRouteImport.update({
+  id: '/catalog/track/$track',
+  path: '/catalog/track/$track',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/403': typeof R403Route
   '/about': typeof AboutRoute
+  '/appeals': typeof AppealsRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/fun': typeof FunRoute
+  '/grade': typeof GradeRoute
+  '/guide': typeof GuideRoute
+  '/help': typeof HelpRoute
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
+  '/papers': typeof PapersRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
   '/recommendations': typeof RecommendationsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
+  '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -350,6 +431,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
+  '/archive/$issue': typeof ArchiveIssueRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
@@ -359,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/review/workbench': typeof ReviewWorkbenchRoute
+  '/sections/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
@@ -369,26 +452,36 @@ export interface FileRoutesByFullPath {
   '/library/': typeof LibraryIndexRoute
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
+  '/catalog/track/$track': typeof CatalogTrackTrackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/403': typeof R403Route
   '/about': typeof AboutRoute
+  '/appeals': typeof AppealsRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/fun': typeof FunRoute
+  '/grade': typeof GradeRoute
+  '/guide': typeof GuideRoute
+  '/help': typeof HelpRoute
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
+  '/papers': typeof PapersRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
   '/recommendations': typeof RecommendationsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
+  '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -403,6 +496,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
+  '/archive/$issue': typeof ArchiveIssueRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
@@ -412,6 +506,7 @@ export interface FileRoutesByTo {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/review/workbench': typeof ReviewWorkbenchRoute
+  '/sections/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin': typeof AdminIndexRoute
@@ -422,27 +517,37 @@ export interface FileRoutesByTo {
   '/library': typeof LibraryIndexRoute
   '/submissions': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
+  '/catalog/track/$track': typeof CatalogTrackTrackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/403': typeof R403Route
   '/about': typeof AboutRoute
+  '/appeals': typeof AppealsRoute
   '/archive': typeof ArchiveRoute
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/fun': typeof FunRoute
+  '/grade': typeof GradeRoute
+  '/guide': typeof GuideRoute
+  '/help': typeof HelpRoute
   '/journal-metrics': typeof JournalMetricsRoute
   '/levels': typeof LevelsRoute
   '/login': typeof LoginRoute
   '/me': typeof MeRoute
   '/notifications': typeof NotificationsRoute
+  '/papers': typeof PapersRoute
   '/policies': typeof PoliciesRoute
   '/profile': typeof ProfileRoute
   '/recommendations': typeof RecommendationsRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/rules': typeof RulesRoute
+  '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -457,6 +562,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
+  '/archive_/$issue': typeof ArchiveIssueRoute
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
@@ -466,6 +572,7 @@ export interface FileRoutesById {
   '/reader/$resourceId': typeof ReaderResourceIdRoute
   '/review/assignments': typeof ReviewAssignmentsRoute
   '/review/workbench': typeof ReviewWorkbenchRoute
+  '/sections_/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
   '/admin/': typeof AdminIndexRoute
@@ -476,6 +583,7 @@ export interface FileRoutesById {
   '/library/': typeof LibraryIndexRoute
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
+  '/catalog/track/$track': typeof CatalogTrackTrackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -483,21 +591,30 @@ export interface FileRouteTypes {
     | '/'
     | '/403'
     | '/about'
+    | '/appeals'
     | '/archive'
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/feedback'
     | '/forgot-password'
+    | '/fun'
+    | '/grade'
+    | '/guide'
+    | '/help'
     | '/journal-metrics'
     | '/levels'
     | '/login'
     | '/me'
     | '/notifications'
+    | '/papers'
     | '/policies'
     | '/profile'
     | '/recommendations'
     | '/register'
     | '/reset-password'
+    | '/rules'
+    | '/sections'
     | '/settings'
     | '/support'
     | '/verify-email'
@@ -512,6 +629,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin/volumes'
+    | '/archive/$issue'
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
@@ -521,6 +639,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/review/workbench'
+    | '/sections/$slug'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
@@ -531,26 +650,36 @@ export interface FileRouteTypes {
     | '/library/'
     | '/submissions/'
     | '/auth/oidc/callback'
+    | '/catalog/track/$track'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/403'
     | '/about'
+    | '/appeals'
     | '/archive'
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/feedback'
     | '/forgot-password'
+    | '/fun'
+    | '/grade'
+    | '/guide'
+    | '/help'
     | '/journal-metrics'
     | '/levels'
     | '/login'
     | '/me'
     | '/notifications'
+    | '/papers'
     | '/policies'
     | '/profile'
     | '/recommendations'
     | '/register'
     | '/reset-password'
+    | '/rules'
+    | '/sections'
     | '/settings'
     | '/support'
     | '/verify-email'
@@ -565,6 +694,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin/volumes'
+    | '/archive/$issue'
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
@@ -574,6 +704,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/review/workbench'
+    | '/sections/$slug'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin'
@@ -584,26 +715,36 @@ export interface FileRouteTypes {
     | '/library'
     | '/submissions'
     | '/auth/oidc/callback'
+    | '/catalog/track/$track'
   id:
     | '__root__'
     | '/'
     | '/403'
     | '/about'
+    | '/appeals'
     | '/archive'
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/feedback'
     | '/forgot-password'
+    | '/fun'
+    | '/grade'
+    | '/guide'
+    | '/help'
     | '/journal-metrics'
     | '/levels'
     | '/login'
     | '/me'
     | '/notifications'
+    | '/papers'
     | '/policies'
     | '/profile'
     | '/recommendations'
     | '/register'
     | '/reset-password'
+    | '/rules'
+    | '/sections'
     | '/settings'
     | '/support'
     | '/verify-email'
@@ -618,6 +759,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin/volumes'
+    | '/archive_/$issue'
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
@@ -627,6 +769,7 @@ export interface FileRouteTypes {
     | '/reader/$resourceId'
     | '/review/assignments'
     | '/review/workbench'
+    | '/sections_/$slug'
     | '/submissions/new'
     | '/submissions/pending'
     | '/admin/'
@@ -637,27 +780,37 @@ export interface FileRouteTypes {
     | '/library/'
     | '/submissions/'
     | '/auth/oidc/callback'
+    | '/catalog/track/$track'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   R403Route: typeof R403Route
   AboutRoute: typeof AboutRoute
+  AppealsRoute: typeof AppealsRoute
   ArchiveRoute: typeof ArchiveRoute
   AuthorsRoute: typeof AuthorsRoute
   BrowseRoute: typeof BrowseRoute
   DashboardRoute: typeof DashboardRoute
+  FeedbackRoute: typeof FeedbackRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  FunRoute: typeof FunRoute
+  GradeRoute: typeof GradeRoute
+  GuideRoute: typeof GuideRoute
+  HelpRoute: typeof HelpRoute
   JournalMetricsRoute: typeof JournalMetricsRoute
   LevelsRoute: typeof LevelsRoute
   LoginRoute: typeof LoginRoute
   MeRoute: typeof MeRoute
   NotificationsRoute: typeof NotificationsRoute
+  PapersRoute: typeof PapersRoute
   PoliciesRoute: typeof PoliciesRoute
   ProfileRoute: typeof ProfileRoute
   RecommendationsRoute: typeof RecommendationsRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RulesRoute: typeof RulesRoute
+  SectionsRoute: typeof SectionsRoute
   SettingsRoute: typeof SettingsRoute
   SupportRoute: typeof SupportRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -672,6 +825,7 @@ export interface RootRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVolumesRoute: typeof AdminVolumesRoute
+  ArchiveIssueRoute: typeof ArchiveIssueRoute
   CatalogResourceIdRoute: typeof CatalogResourceIdRoute
   CatalogNewRoute: typeof CatalogNewRoute
   ClaimResourceIdRoute: typeof ClaimResourceIdRoute
@@ -681,6 +835,7 @@ export interface RootRouteChildren {
   ReaderResourceIdRoute: typeof ReaderResourceIdRoute
   ReviewAssignmentsRoute: typeof ReviewAssignmentsRoute
   ReviewWorkbenchRoute: typeof ReviewWorkbenchRoute
+  SectionsSlugRoute: typeof SectionsSlugRoute
   SubmissionsNewRoute: typeof SubmissionsNewRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -691,6 +846,7 @@ export interface RootRouteChildren {
   LibraryIndexRoute: typeof LibraryIndexRoute
   SubmissionsIndexRoute: typeof SubmissionsIndexRoute
   AuthOidcCallbackRoute: typeof AuthOidcCallbackRoute
+  CatalogTrackTrackRoute: typeof CatalogTrackTrackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -714,6 +870,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/appeals': {
+      id: '/appeals'
+      path: '/appeals'
+      fullPath: '/appeals'
+      preLoaderRoute: typeof AppealsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/archive': {
@@ -744,11 +907,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/feedback': {
+      id: '/feedback'
+      path: '/feedback'
+      fullPath: '/feedback'
+      preLoaderRoute: typeof FeedbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/forgot-password': {
       id: '/forgot-password'
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/fun': {
+      id: '/fun'
+      path: '/fun'
+      fullPath: '/fun'
+      preLoaderRoute: typeof FunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/grade': {
+      id: '/grade'
+      path: '/grade'
+      fullPath: '/grade'
+      preLoaderRoute: typeof GradeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guide': {
+      id: '/guide'
+      path: '/guide'
+      fullPath: '/guide'
+      preLoaderRoute: typeof GuideRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/journal-metrics': {
@@ -786,6 +984,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/papers': {
+      id: '/papers'
+      path: '/papers'
+      fullPath: '/papers'
+      preLoaderRoute: typeof PapersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/policies': {
       id: '/policies'
       path: '/policies'
@@ -819,6 +1024,20 @@ declare module '@tanstack/react-router' {
       path: '/reset-password'
       fullPath: '/reset-password'
       preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sections': {
+      id: '/sections'
+      path: '/sections'
+      fullPath: '/sections'
+      preLoaderRoute: typeof SectionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -926,6 +1145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminVolumesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/archive_/$issue': {
+      id: '/archive_/$issue'
+      path: '/archive/$issue'
+      fullPath: '/archive/$issue'
+      preLoaderRoute: typeof ArchiveIssueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/catalog/': {
       id: '/catalog/'
       path: '/catalog'
@@ -1024,6 +1250,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewWorkbenchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sections_/$slug': {
+      id: '/sections_/$slug'
+      path: '/sections/$slug'
+      fullPath: '/sections/$slug'
+      preLoaderRoute: typeof SectionsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/submissions/': {
       id: '/submissions/'
       path: '/submissions'
@@ -1052,6 +1285,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthOidcCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/catalog/track/$track': {
+      id: '/catalog/track/$track'
+      path: '/catalog/track/$track'
+      fullPath: '/catalog/track/$track'
+      preLoaderRoute: typeof CatalogTrackTrackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -1059,21 +1299,30 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   R403Route: R403Route,
   AboutRoute: AboutRoute,
+  AppealsRoute: AppealsRoute,
   ArchiveRoute: ArchiveRoute,
   AuthorsRoute: AuthorsRoute,
   BrowseRoute: BrowseRoute,
   DashboardRoute: DashboardRoute,
+  FeedbackRoute: FeedbackRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  FunRoute: FunRoute,
+  GradeRoute: GradeRoute,
+  GuideRoute: GuideRoute,
+  HelpRoute: HelpRoute,
   JournalMetricsRoute: JournalMetricsRoute,
   LevelsRoute: LevelsRoute,
   LoginRoute: LoginRoute,
   MeRoute: MeRoute,
   NotificationsRoute: NotificationsRoute,
+  PapersRoute: PapersRoute,
   PoliciesRoute: PoliciesRoute,
   ProfileRoute: ProfileRoute,
   RecommendationsRoute: RecommendationsRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RulesRoute: RulesRoute,
+  SectionsRoute: SectionsRoute,
   SettingsRoute: SettingsRoute,
   SupportRoute: SupportRoute,
   VerifyEmailRoute: VerifyEmailRoute,
@@ -1088,6 +1337,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminVolumesRoute: AdminVolumesRoute,
+  ArchiveIssueRoute: ArchiveIssueRoute,
   CatalogResourceIdRoute: CatalogResourceIdRoute,
   CatalogNewRoute: CatalogNewRoute,
   ClaimResourceIdRoute: ClaimResourceIdRoute,
@@ -1097,6 +1347,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReaderResourceIdRoute: ReaderResourceIdRoute,
   ReviewAssignmentsRoute: ReviewAssignmentsRoute,
   ReviewWorkbenchRoute: ReviewWorkbenchRoute,
+  SectionsSlugRoute: SectionsSlugRoute,
   SubmissionsNewRoute: SubmissionsNewRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -1107,6 +1358,7 @@ const rootRouteChildren: RootRouteChildren = {
   LibraryIndexRoute: LibraryIndexRoute,
   SubmissionsIndexRoute: SubmissionsIndexRoute,
   AuthOidcCallbackRoute: AuthOidcCallbackRoute,
+  CatalogTrackTrackRoute: CatalogTrackTrackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

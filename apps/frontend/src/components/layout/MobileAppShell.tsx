@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
-import { LogOut, Plus, MoreHorizontal } from 'lucide-react'
+import { LogOut, Plus, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useLogout } from '@/hooks/api/use-auth'
@@ -170,7 +170,7 @@ export function MobileAppShell() {
   const bottomTab = showChrome && (
     <nav
       className={cn(
-        'fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-4 items-stretch border-t bg-background backdrop-blur pb-[env(safe-area-inset-bottom)]',
+        'fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-5 items-stretch border-t bg-background backdrop-blur pb-[env(safe-area-inset-bottom)]',
         'transition-transform duration-300 ease-out',
         immersive && barHidden ? 'translate-y-full' : 'translate-y-0',
       )}
@@ -208,19 +208,25 @@ export function MobileAppShell() {
   // 普通内页：header + 内容 + 底部 Tab
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* 紧凑头部：logo + 主题切换 + 折叠菜单（⋯） */}
+      {/* 紧凑头部：logo + 主题切换 + 显式「功能」入口 */}
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
           <BrandMark className="h-5 w-5 shrink-0" />
           <span>Rubbish</span>
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <ThemeToggle />
-          {/* 折叠菜单：收进抽屉时代的次级入口（指标/卷期/政策/关于/后台等） */}
+          {/* 次级入口不再藏在「⋯」里：用带文字的胶囊按钮，第一眼就知道能展开 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="更多菜单">
-                <MoreHorizontal className="h-5 w-5" />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 rounded-full px-3"
+                aria-label="打开功能菜单"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="text-xs font-medium">功能</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-[70vh] w-56 overflow-y-auto">

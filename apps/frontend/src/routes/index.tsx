@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion, MotionConfig, type Variants } from 'motion/react'
 import { useInViewReveal } from '@/hooks/use-in-view-reveal'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import {
   ArrowRight,
   ArrowUp,
@@ -12,6 +14,7 @@ import {
   Archive,
   LogIn,
   Mail,
+  MessageCircle,
   PenLine,
   Search,
   ShieldCheck,
@@ -58,7 +61,7 @@ export const Route = createFileRoute('/')({
 // prefers-reduced-motion。
 
 const DISPLAY_FONT =
-  "'Playfair Display Variable', Georgia, 'Times New Roman', 'Noto Serif SC Variable', 'Noto Serif SC', serif"
+  "'Playfair Display Variable', Georgia, 'Noto Serif SC Variable', 'Noto Serif SC', 'DejaVu Serif', serif"
 
 const TYPEWRITER_PHRASES = [
   '投稿 · 同行评审 · 开放出版',
@@ -196,32 +199,15 @@ function useTypewriter(phrases: string[]): string {
 
 /** 数字滚动：进入视口后从 0 缓动到目标；减弱动效时首帧直接到位。 */
 function CountUpNumber({ target, suffix = '' }: { target: number; suffix?: string }) {
-  const [started, setStarted] = useState(false)
-  const [value, setValue] = useState(0)
-
-  useEffect(() => {
-    if (!started) return
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const duration = reduce ? 0 : 1300
-    let raf = 0
-    const t0 = performance.now()
-    const tick = (t: number) => {
-      const p = duration === 0 ? 1 : Math.min(1, (t - t0) / duration)
-      setValue(Math.round(target * (1 - Math.pow(1 - p, 3))))
-      if (p < 1) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [started, target])
-
+  // 首页数字是“刊面事实”，不是装饰动画。原实现用 framer-motion 的
+  // onViewportEnter 触发 0→target 的计数：桌面端首屏未进入判定、或截图/
+  // 慢网下动画未完成时，页面上会长时间显示 0（读者第一眼以为站点没内容）。
+  // 改成挂载即显示真值，数字本身仍然 tabular-nums，不做滚动动画。
   return (
-    <motion.span
-      onViewportEnter={() => setStarted(true)}
-      viewport={{ once: true, amount: 0.6 }}
-    >
-      {value}
+    <span className="tabular-nums">
+      {target}
       {suffix}
-    </motion.span>
+    </span>
   )
 }
 
@@ -266,7 +252,7 @@ function CurrentIssueBar() {
       >
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <CalendarDays aria-hidden className="h-4 w-4 shrink-0 text-primary" />
-          <span className="font-medium">第 1 卷 第 {Number(current.issue)} 期</span>
+          <span className="font-medium">第 {current.volume} 卷 第 {current.issue} 期</span>
           <span className="truncate text-muted-foreground">《{issueTitle(current.issue)}》</span>
           <Badge variant="outline" className="tabular-nums">
             {current.published} 篇已上线
@@ -274,11 +260,61 @@ function CurrentIssueBar() {
         </p>
         <Link
           to="/archive"
-          className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-colors hover:underline"
+          className="ml-auto inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary transition-colors hover:underline"
         >
           本期目录 <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </motion.div>
+    </div>
+  )
+}
+
+function ContactStrip() {
+  const [copied, setCopied] = useState(false)
+  const copyGroup = async () => {
+    try {
+      await navigator.clipboard.writeText('1084870548')
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // 浏览器禁用剪贴板时退回选中文本，用户仍可手动复制。
+      window.prompt('复制 QQ 群号', '1084870548')
+    }
+  }
+  return (
+    <div className="border-b bg-primary/5">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:flex-wrap sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <MessageCircle aria-hidden className="h-4 w-4 shrink-0 text-primary" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">读者与作者 QQ 群</p>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              投稿、审稿、格式问题都可以在群里直接问编辑部；不方便加群就用右下角「有问题」。
+            </p>
+          </div>
+        </div>
+        <>
+          <a
+            href="mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1084870548&card_type=group&source=external"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="手机 QQ 可直接打开"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-card px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground sm:hidden"
+          >
+            打开 QQ 群
+            <ArrowRight className="h-3.5 w-3.5" />
+          </a>
+          <button
+            type="button"
+            onClick={() => void copyGroup()}
+            className="hidden shrink-0 items-center gap-1 rounded-full border border-primary/30 bg-card px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground sm:inline-flex sm:gap-1.5 sm:px-4 sm:py-2 sm:text-sm"
+            title="复制群号后在 QQ 里搜索加入"
+          >
+            {copied ? '已复制群号' : '复制群号 1084870548'}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </button>
+        </>
+      </div>
     </div>
   )
 }
@@ -486,7 +522,7 @@ function DiscoverTabs({
                 },
                 {
                   title: '投稿开放',
-                  body: '注册即可投稿，统一评审标准，无需申请、无需介绍信。',
+                  body: '注册即可投稿。论文轨再分学术论文与荒诞论文，统一走百分制评审；副刊轨不用论文体，只做格式与合规检查，不计分。无需申请、无需介绍信。',
                 },
                 {
                   title: '读者活动',
@@ -570,25 +606,103 @@ function DiscoverTabs({
   )
 }
 
+/** 首页社区脉搏：把“正在讨论”搬到首页，给论坛一个不靠用户主动点 tab 的入口。 */
+function ForumPulse() {
+  const q = useQuery({
+    queryKey: ['home', 'forum-pulse'],
+    queryFn: async () =>
+      (await api.get('/forum/topics', { params: { page_size: 5 } })).data,
+  })
+  const topics = (q.data?.data ?? []) as Array<{
+    id: number
+    title: string
+    category: string
+    reply_count: number
+    last_reply_at: string | null
+    author: { username: string } | null
+  }>
+  if (topics.length === 0) return null
+
+  const label: Record<string, string> = {
+    paper: '论文沙龙',
+    method: '方法与写作',
+    life: '学术生存',
+    collab: '组队招募',
+    meta: '站务公告',
+    notice: '公告',
+    discussion: '论文沙龙',
+    question: '方法与写作',
+    suggestion: '站务公告',
+  }
+  const rel = (iso: string | null) => {
+    if (!iso) return ''
+    const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+    if (m < 60) return `${Math.max(1, m)} 分钟前`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h} 小时前`
+    return `${Math.floor(h / 24)} 天前`
+  }
+
+  return (
+    <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+      <SectionHeading
+        label="Community"
+        title="正在讨论"
+        action={
+          <Link to="/forum" className="text-sm text-muted-foreground hover:text-primary">
+            进入讨论 →
+          </Link>
+        }
+      />
+      <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        {topics.map((t) => (
+          <Link
+            key={t.id}
+            to="/forum/$topicId"
+            params={{ topicId: String(t.id) }}
+            className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50"
+          >
+            <Badge variant="outline" className="mt-0.5 shrink-0">
+              {label[t.category] ?? t.category}
+            </Badge>
+            <span className="min-w-0 flex-1">
+              <span className="line-clamp-1 text-sm font-medium">{t.title}</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {t.author?.username ?? '匿名'} · {t.reply_count} 回复
+                {t.last_reply_at ? ` · 最后活跃 ${rel(t.last_reply_at)}` : ''}
+              </span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function HomePage() {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const typed = useTypewriter(TYPEWRITER_PHRASES)
   const { data, isLoading, isError, refetch } = useResources({
+    track: 'paper',
     page: 1,
     page_size: 6,
     sort: 'created_at',
     order: 'desc',
   })
-  const { data: stats, isLoading: statsLoading } = useCatalogStats()
+  const { data: stats, isLoading: statsLoading } = useCatalogStats('paper')
+  const { data: funStats } = useCatalogStats('essay')
   const { data: metrics } = useJournalMetrics()
 
   // 公告：自动弹出 + 顶栏重开入口共用一份状态
   const notice = useAnnouncementPortal()
 
   const resources = data?.data ?? []
-  const total = stats?.total ?? 0
+  const paperTotal = stats?.by_type?.paper ?? 0
+  const seriousTotal = stats?.by_paper_kind?.serious ?? 0
+  const absurdTotal = stats?.by_paper_kind?.absurd ?? 0
+  const funTotal = funStats?.total ?? 0
   const disciplines = stats ? Object.keys(stats.by_discipline).length : 0
   // 分类入口数据：按篇数降序，点击直达 /catalog?discipline=…（跳转式导航）
   const disciplineEntries = Object.entries(stats?.by_discipline ?? {}).sort(
@@ -683,7 +797,7 @@ function HomePage() {
             className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:radial-gradient(circle,theme(colors.foreground)_0.5px,transparent_0.5px)] [background-size:22px_22px] [mask-image:radial-gradient(50%_40%_at_50%_20%,black,transparent)]"
           />
 
-          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-14 text-center sm:px-6 sm:pt-20">
+          <div className="relative mx-auto max-w-6xl px-4 pb-12 pt-8 text-center sm:px-6 sm:pt-20">
             <motion.p
               variants={rise}
               custom={0}
@@ -696,14 +810,14 @@ function HomePage() {
 
             <motion.h1
               variants={slideInLeft}
-              className="mt-5 flex items-center justify-center gap-4 sm:gap-6"
+              className="mt-5 flex flex-wrap items-center justify-center gap-3 sm:flex-nowrap sm:gap-6"
             >
               {/* 刊头回收标志：源自创刊 PDF 原图，随主题色（品牌绿） */}
               <BrandMark
-                className="h-14 w-14 text-primary sm:h-24 sm:w-24"
+                className="h-11 w-11 shrink-0 text-primary sm:h-24 sm:w-24"
               />
               <span
-                className="text-7xl leading-none tracking-tight sm:text-9xl"
+                className="whitespace-nowrap text-5xl leading-none tracking-tight sm:text-9xl"
                 style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}
               >
                 Rubbish
@@ -771,7 +885,17 @@ function HomePage() {
                 // 四项都必须回答读者/作者真正关心的问题：
                 // 有多少可读、覆盖多广、是否付费、审稿要多久。
                 // 「累计阅读」这种虚荣指标留给后台看，不放在期刊门面。
-                { label: '已刊文章', node: <CountUpNumber target={total} /> },
+                {
+                  label: '已刊论文',
+                  node: (
+                    <span className="inline-flex flex-col items-start">
+                      <CountUpNumber target={paperTotal} />
+                      <span className="mt-1 text-[10px] font-normal tracking-normal text-muted-foreground sm:text-xs">
+                        学术 {seriousTotal} · 荒诞 {absurdTotal}
+                      </span>
+                    </span>
+                  ),
+                },
                 { label: '覆盖学科', node: <CountUpNumber target={disciplines} /> },
                 {
                   label: '开放获取',
@@ -779,7 +903,7 @@ function HomePage() {
                     metrics?.open_access_rate != null ? (
                       <span className="tabular-nums">{metrics.open_access_rate.toFixed(0)}%</span>
                     ) : (
-                      <span className="text-base text-muted-foreground">100%</span>
+                      <span className="text-base text-muted-foreground">全部</span>
                     ),
                 },
                 {
@@ -813,62 +937,67 @@ function HomePage() {
                 </motion.div>
               ))}
             </motion.div>
+
+            {funStats ? (
+              <div className="mx-auto mt-3 flex max-w-4xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:mt-4 sm:text-sm">
+                <Link to="/papers" className="font-medium text-primary hover:underline">
+                  论文 {paperTotal} 篇 →
+                </Link>
+                <span aria-hidden className="h-1 w-1 rounded-full bg-border" />
+                <Link to="/fun" className="font-medium text-primary hover:underline">
+                  副刊 {funTotal} 篇 →
+                </Link>
+              </div>
+            ) : null}
           </div>
         </motion.section>
 
+        <ContactStrip />
         <CurrentIssueBar />
 
         {/* ── 吸顶导航 + 检索：单根发丝线，无双线 ── */}
         <div className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2.5 sm:px-6">
-            <nav className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+          <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-2 px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6 sm:gap-y-2 sm:px-6">
+            {/* 手机端底部已有主导航，这里不再重复一行一级入口；桌面端保留。 */}
+            <nav className="hidden w-full items-center gap-x-5 overflow-x-auto whitespace-nowrap text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex sm:w-auto sm:flex-wrap sm:overflow-visible">
               <span aria-current="page" className="font-medium">
                 首页
               </span>
               <Link
-                to="/catalog"
+                to="/papers"
                 className="link-underline text-muted-foreground transition-colors hover:text-foreground"
               >
-                资源目录
+                论文
               </Link>
               <Link
-                to="/archive"
+                to="/fun"
                 className="link-underline text-muted-foreground transition-colors hover:text-foreground"
               >
-                卷期归档
+                副刊
               </Link>
               <Link
-                to="/levels"
+                to="/forum"
                 className="link-underline text-muted-foreground transition-colors hover:text-foreground"
               >
-                等级与规范
+                讨论
               </Link>
-              <Link
-                to="/journal-metrics"
-                className="link-underline text-muted-foreground transition-colors hover:text-foreground"
-              >
-                期刊指标
-              </Link>
-              <Link
-                to="/authors"
-                className="link-underline text-muted-foreground transition-colors hover:text-foreground"
-              >
-                作者指南
-              </Link>
-              <a
-                href="#faq"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                常见问题
-              </a>
-              <Link
-                to="/about"
-                className="link-underline text-muted-foreground transition-colors hover:text-foreground"
-              >
-                关于本刊
-              </Link>
+              {isAuthenticated ? (
+                <Link
+                  to="/me"
+                  className="link-underline text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  我的
+                </Link>
+              ) : (
+                <Link
+                  to="/login"
+                  className="link-underline text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  登录
+                </Link>
+              )}
             </nav>
-            <form onSubmit={onSearch} className="flex w-full max-w-xs items-center sm:w-64">
+            <form onSubmit={onSearch} className="flex w-full items-center sm:w-64 sm:max-w-xs">
               <div className="relative w-full">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -891,7 +1020,7 @@ function HomePage() {
           initial="hidden"
           animate={revealLatest ? 'show' : 'hidden'}
           variants={{ hidden: {}, show: { transition: { staggerChildren: 0.05 } } }}
-          className="mx-auto max-w-6xl px-4 py-16 sm:px-6"
+          className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16"
         >
           <SectionHeading
             title="按学科浏览"
@@ -974,14 +1103,14 @@ function HomePage() {
               {/* 横向滚动的封面卡条（v1.11）：首页最新发表从干列表升级为
                   可扫读的封面流，一屏多卡；列表形态保留在目录页。 */}
               <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
-                {resources.map((r) => (
+                {resources.map((r, i) => (
                   <Link
                     key={r.id}
                     to="/catalog/$resourceId"
                     params={{ resourceId: String(r.id) }}
                     className="w-44 shrink-0 snap-start overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md sm:w-52"
                   >
-                    <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" />
+                    <ArticleCover resource={r} aspect="aspect-[3/4]" className="w-full" priority={i < 2} />
                     <div className="space-y-1 p-3">
                       <p className="line-clamp-2 text-sm font-medium leading-snug">{r.title}</p>
                       <p className="text-xs text-muted-foreground">{fmtDate(r.created_at)}</p>
@@ -997,6 +1126,8 @@ function HomePage() {
             </div>
           )}
         </section>
+
+        <ForumPulse />
 
         {/* ── 了解本刊：四个栏目按需展开 ── */}
         <motion.section
@@ -1177,6 +1308,15 @@ function HomePage() {
                 </li>
                 <li>
                   <a
+                    href="mqqapi://card/show_pslcard?src_type=internal&version=1&uin=1084870548&card_type=group&source=external"
+                    className="text-primary-foreground/75 transition-colors hover:text-primary-foreground"
+                    title="手机 QQ 可直接打开；电脑端可搜索群号 1084870548"
+                  >
+                    加 QQ 群：1084870548
+                  </a>
+                </li>
+                <li>
+                  <a
                     href="mailto:admin@argjiemi.cn"
                     className="text-primary-foreground/75 transition-colors hover:text-primary-foreground"
                   >
@@ -1188,7 +1328,7 @@ function HomePage() {
           </div>
           <div className="border-t border-primary-foreground/15">
             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-primary-foreground/60 sm:px-6">
-              <span>© 2026 Rubbish · An Open Access Journal</span>
+              <span>© {new Date().getFullYear()} Rubbish · An Open Access Journal</span>
               <span>Powered by Rubbish</span>
             </div>
           </div>

@@ -81,16 +81,16 @@ export function CookieBanner() {
     // 位置：手机端走正常文档流（在页面标题上方占一行，不覆盖任何内容）；
     // 原来是 fixed 贴顶/贴底，实测会把页面 H1、列表首条、文章底部 CTA 盖住。
     // 桌面端仍固定左下角——原来贴右下会盖住文章右侧的「操作」面板。
-    // z-40：低于 Radix Dialog overlay 的 z-50——模态层压住横幅由层级保证，
+    // z-[60]：低于 Radix Dialog overlay 的 z-50——模态层压住横幅由层级保证，
     // 不再依赖 DOM 顺序（历史上 E2E 的 strict-mode 冲突也源于两者同层）
     <div
       role="dialog"
       aria-live="polite"
       aria-label="Cookie 使用同意"
       data-testid="cookie-banner"
-      className="relative z-40 mx-4 mt-2 max-h-[26vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:fixed sm:bottom-5 sm:left-5 sm:right-auto sm:top-auto sm:m-0 sm:w-[20rem] sm:rounded-xl sm:p-4 sm:shadow-lg"
+      className="relative z-[60] mx-3 my-2 max-h-[26vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-lg backdrop-blur sm:fixed sm:inset-x-0 sm:bottom-0 sm:mx-0 sm:my-0 sm:max-h-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-6 sm:py-2 sm:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
     >
-      <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-stretch sm:gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90">
           <p className="text-[13px] font-medium leading-tight">本站使用 Cookie</p>
           <p className="mt-1 hidden text-foreground/70 sm:block">

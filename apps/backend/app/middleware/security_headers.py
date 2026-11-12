@@ -1,14 +1,14 @@
-"""Security headers + API version response middleware.
+"""Security headers middleware.
 
 Adds baseline security headers (X-Content-Type-Options, X-Frame-Options,
-HSTS in production) and the ``X-API-Version`` header to every HTTP response.
+HSTS in production). 不再回显 ``X-API-Version``：版本号属于部署信息，
+公开响应头里没有任何业务价值，只会帮攻击者挑已知漏洞。
 """
 
 from __future__ import annotations
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app import __version__
 from app.core.config import settings
 
 
@@ -46,13 +46,12 @@ class SecurityHeadersMiddleware:
                             b"frame-ancestors 'self'; "
                             b"base-uri 'self'; "
                             b"form-action 'self'; "
-                            b"connect-src 'self'; "
+                            b"connect-src 'self' blob:; "
                             b"img-src 'self' data: https:; "
                             b"font-src 'self' data:; "
                             b"worker-src 'self' blob:; "
                             b"object-src 'self' blob:",
                         ),
-                        (b"x-api-version", __version__.encode()),
                     ]
                 )
                 if settings.is_production:

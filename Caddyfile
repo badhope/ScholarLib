@@ -5,6 +5,11 @@
 	# email: you@example.com
 }
 
+
+www.rubbish.argjiemi.cn, argjiemi.cn, www.argjiemi.cn {
+	redir https://rubbish.argjiemi.cn{uri} 301
+}
+
 {$SITE_DOMAIN} {
 	encode zstd gzip
 
@@ -22,6 +27,17 @@
 
 	# 健康检查直通，便于平台探活与 uptime 监控。
 	handle /api/health* {
+		reverse_proxy app:8080
+	}
+
+	# Vite 产物带内容哈希，可长期缓存；封面图按周缓存。
+	# 只对静态路径生效，API 与 HTML 不套长缓存，避免发布后拿到旧页面。
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy app:8080
+	}
+	handle /covers/* {
+		header Cache-Control "public, max-age=604800"
 		reverse_proxy app:8080
 	}
 

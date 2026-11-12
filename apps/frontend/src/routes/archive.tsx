@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowRight, CalendarDays, Clock3, Layers, Lock } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
@@ -40,12 +40,12 @@ function ArchivePage() {
   const { isAdmin } = useAuth()
   const entries = useMemo(() => plan.data?.entries ?? [], [plan.data])
   const liveEntries = useMemo(() => entries.filter((e) => e.state === 'live'), [entries])
-  const [issue, setIssue] = useState<string>('')
-  const activeIssue = issue || liveEntries[liveEntries.length - 1]?.issue || ''
+  const activeIssue = liveEntries[liveEntries.length - 1]?.issue || ''
   const activeEntry = entries.find((e) => e.issue === activeIssue)
+  const activeVolume = activeEntry?.volume ?? plan.data?.volume ?? ''
 
   const { data, isLoading, isError, refetch } = useResources({
-    volume: '1',
+    volume: activeVolume || undefined,
     issue: activeIssue || undefined,
     page: 1,
     page_size: 50,
@@ -59,7 +59,7 @@ function ArchivePage() {
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-10 sm:px-6">
       <PageHeader
         title="卷期归档"
-        description="第 1 卷（2026–2027）· 滚动刊出：稿件完成评审即上线，不设固定刊期；卷期仅作归档组织，排期信息仅供参考、随时可能调整。"
+        description="按卷期归档 · 滚动刊出：稿件完成评审即上线，不设固定刊期；卷期仅作归档组织，排期信息仅供参考、随时可能调整。"
       />
 
       {/* 出版日历：横向滚动，不撑破视口 */}
@@ -68,22 +68,16 @@ function ArchivePage() {
           {entries.map((entry) => {
             const isLive = entry.state === 'live'
             const isActive = entry.issue === activeIssue && isLive
-            return (
-              <button
-                key={entry.issue}
-                type="button"
-                disabled={!isLive}
-                onClick={() => isLive && setIssue(entry.issue)}
-                className={cn(
-                  'flex min-h-16 min-w-[92px] flex-col items-start justify-center rounded-lg border px-3.5 py-2 text-left transition-colors',
-                  isActive
-                    ? 'border-primary bg-primary/[0.06]'
-                    : isLive
-                      ? 'border-border bg-card hover:border-primary/40'
-                      : 'cursor-not-allowed border-dashed border-border/60 bg-muted/30 opacity-80',
-                )}
-                title={isLive ? '已上线' : `预计 ${fmtDate(entry.publish_at)} 上线`}
-              >
+            const cls = cn(
+              'flex min-h-16 min-w-[92px] flex-col items-start justify-center rounded-lg border px-3.5 py-2 text-left transition-colors',
+              isActive
+                ? 'border-primary bg-primary/[0.06]'
+                : isLive
+                  ? 'border-border bg-card hover:border-primary/40'
+                  : 'cursor-not-allowed border-dashed border-border/60 bg-muted/30 opacity-80',
+            )
+            const body = (
+              <>
                 <span className="text-[11px] tabular-nums text-muted-foreground">
                   第 {entry.issue} 期
                 </span>
@@ -100,6 +94,27 @@ function ArchivePage() {
                 <span className="text-[10px] tabular-nums text-muted-foreground">
                   {entry.published || entry.scheduled} 篇
                 </span>
+              </>
+            )
+            return isLive ? (
+              <Link
+                key={entry.issue}
+                to="/archive/$issue"
+                params={{ issue: entry.issue }}
+                className={cls}
+                title={`第 ${entry.issue} 期 · ${issueTitle(entry.issue)}`}
+              >
+                {body}
+              </Link>
+            ) : (
+              <button
+                key={entry.issue}
+                type="button"
+                disabled
+                className={cls}
+                title={`预计 ${fmtDate(entry.publish_at)} 上线`}
+              >
+                {body}
               </button>
             )
           })}
@@ -113,7 +128,7 @@ function ArchivePage() {
             <div>
               <p className="flex items-center gap-2 text-sm font-medium">
                 <CalendarDays className="h-4 w-4 text-primary" />
-                第 1 卷 第 {Number(activeEntry.issue)} 期
+                第 {activeEntry.volume} 卷 第 {activeEntry.issue} 期
                 <span className="text-muted-foreground">
                   {/* 滚动刊出：一期里最早/最晚上线能差半年（实测 04-04 与 11-06
                       同属第 5 期）。对已上线期号显示单一日期只会误导读者，
@@ -127,9 +142,20 @@ function ArchivePage() {
                 {issueTitle(activeEntry.issue)}
               </p>
             </div>
-            <Badge variant="outline" className="tabular-nums">
-              {items.length} 篇
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="tabular-nums">
+                {items.length} 篇
+              </Badge>
+              {activeEntry.state === 'live' ? (
+                <Link
+                  to="/archive/$issue"
+                  params={{ issue: activeEntry.issue }}
+                  className="inline-flex items-center gap-1 rounded-md border bg-background px-2.5 py-1 text-xs text-primary hover:bg-primary/5"
+                >
+                  <Layers className="h-3.5 w-3.5" /> 本期版面
+                </Link>
+              ) : null}
+            </div>
           </div>
 
           {isLoading ? (

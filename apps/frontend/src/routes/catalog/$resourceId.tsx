@@ -2,12 +2,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import {
   Bookmark,
+  ArrowUp,
   ChevronDown,
   ChevronLeft,
   Download,
   ExternalLink,
   FileDown,
+  FileText,
   ListTree,
+  MessagesSquare,
   MoreVertical,
   Pencil,
   Quote,
@@ -16,6 +19,7 @@ import {
   Trash2,
   UserCheck,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useAuth } from '@/hooks/use-auth'
 import { useIsMobile } from '@/hooks/use-is-mobile'
@@ -27,7 +31,9 @@ import {
   useResources,
   useUpdateResource,
 } from '@/hooks/api/use-modules'
+import { api } from '@/lib/api'
 import type { AuthorDetail, ResourceUpdate } from '@/lib/types'
+import { normalizeAbstract } from '@/lib/abstract'
 import { extractError, parseListField, sanitizeAuthors } from '@/lib/utils'
 import { safeHref } from '@/lib/url-safety'
 import {
@@ -41,6 +47,7 @@ import {
   type ContentKind,
 } from '@/lib/resource-labels'
 import { ManuscriptView, type TocEntry } from '@/components/common/manuscript-view'
+import PdfImagePreview from '@/components/pdf-image-preview'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -65,6 +72,7 @@ import { AddToListDialog } from '@/components/common/add-to-list-dialog'
 import { BottomSheet } from '@/components/common/bottom-sheet'
 import { ConfirmDialog } from '@/components/common/confirm-dialog'
 import { Comments } from '@/components/common/comments'
+import { FunArticle } from '@/components/catalog/fun-article'
 import { MetaItem } from '@/components/common/meta-item'
 import { ErrorState, LoadingSkeleton } from '@/components/common/state'
 
@@ -77,6 +85,12 @@ export const Route = createFileRoute('/catalog/$resourceId')({
 function CatalogDetailPage() {
   const { resourceId } = Route.useParams()
   const id = Number(resourceId)
+  const forumQ = useQuery({
+    queryKey: ['forum', 'paper-count', id],
+    queryFn: async () => (await api.get('/forum/topics', { params: { paper_id: id, page_size: 1 } })).data,
+    enabled: Number.isFinite(id) && id > 0,
+  })
+  const discussCount: number = forumQ.data?.meta?.total ?? 0
   const navigate = useNavigate()
   const { isAdmin, isAuthenticated, user } = useAuth()
 
@@ -97,12 +111,26 @@ function CatalogDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
-  const claimStatus = useClaimStatus(id, isAuthenticated)
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const claimStatus = useClaimStatus(id, true)
 
   // ManuscriptView 把 TOC 上提到这里，供右侧 sticky 侧栏渲染。
   const [toc, setToc] = useState<TocEntry[]>([])
+  const [progress, setProgress] = useState(0)
+  const [showTop, setShowTop] = useState(false)
   // 稿件加载失败（409 needs_docx / 404 无正文）时由 ManuscriptView 回调上来。
   const [manuscriptError, setManuscriptError] = useState<unknown>(null)
+
+  useEffect(() => {
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight
+      setProgress(max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0)
+      setShowTop(window.scrollY > 640)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   if (isLoading) return <LoadingSkeleton rows={6} />
   if (isError || !data) {
@@ -118,7 +146,7 @@ function CatalogDetailPage() {
     try {
       await deleteMut.mutateAsync(id)
       toast.success('已删除')
-      void navigate({ to: '/catalog' })
+      void navigate({ to: data?.content_track === 'essay' ? '/fun' : '/papers' } as never)
     } catch {
       toast.error('删除失败')
     }
@@ -139,6 +167,52 @@ function CatalogDetailPage() {
   const canClaim =
     isAuthenticated && !isAuthor && !ownerBound && claimStatus.data?.claimable === true
 
+  // 娱乐轨直接走独立文章版式：不渲染摘要卡、CLC、引用、评审、PDF、R 评分，
+  // 也不使用论文页的侧栏与 3/4 封面。论文轨继续走下面的学术版式。
+  if (isEssayTrack) {
+    return (
+      <>
+        <FunArticle
+          data={data}
+          progress={progress}
+          isAuthenticated={isAuthenticated}
+          isAdmin={isAdmin}
+          onEdit={() => setEditOpen(true)}
+          onDelete={() => setDeleteOpen(true)}
+          onSave={() => setListOpen(true)}
+        />
+        {editOpen && (
+          <EditDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            initial={data}
+            onSubmit={async (body) => {
+              try {
+                await updateMut.mutateAsync({ id, body })
+                toast.success('已更新')
+                setEditOpen(false)
+              } catch (err) {
+                toast.error(extractError(err, '更新失败'))
+              }
+            }}
+          />
+        )}
+        {isAuthenticated && (
+          <AddToListDialog resourceId={id} open={listOpen} onOpenChange={setListOpen} />
+        )}
+        <ConfirmDialog
+          open={deleteOpen}
+          title="删除资源"
+          description="确认删除该资源？此操作不可撤销。"
+          confirmText="删除"
+          destructive
+          onOpenChange={setDeleteOpen}
+          onConfirm={onDelete}
+        />
+      </>
+    )
+  }
+
   // 评分细则与分区口径只对审稿/编辑端可见：后端详情接口已对非 staff
   // 清空 quality_* / quartile，前端再按角色 gate 渲染，避免「尚未评分」占位。
   const SCORE_STAFF_ROLES = new Set([
@@ -150,8 +224,15 @@ function CatalogDetailPage() {
 
   return (
     <div className={isMobile ? 'pb-20' : ''}>
+      {/* 顶栏阅读进度：读者随时知道还剩多少，不占正文空间 */}
+      <div className="fixed left-0 top-0 z-50 h-[2px] w-full bg-transparent">
+        <div
+          className="h-full bg-primary transition-[width] duration-150"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
       <Link
-        to="/catalog"
+        to="/papers"
         className="mb-3 inline-flex min-h-[36px] items-center text-sm text-muted-foreground hover:text-primary"
       >
         <ChevronLeft className="mr-1 h-4 w-4" />
@@ -165,11 +246,19 @@ function CatalogDetailPage() {
           <div className="mb-5">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <Badge variant="secondary">
-                {displayTypeLabel(data.type, data.content_category, data.content_track)}
+                {displayTypeLabel(data.type, data.content_category, data.content_track, data.track)}
               </Badge>
               {isEssayTrack && (
                 <Badge className="border-amber-400/60 bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-                  娱乐轨 · 不计分
+                  副刊轨 · 不计分
+                </Badge>
+              )}
+              {data.is_special_issue && (
+                <Badge
+                  className="border-rose-300/70 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200"
+                  title={data.special_issue_reason ?? '篇幅超过上限，经编辑部特许收录'}
+                >
+                  特别篇
                 </Badge>
               )}
               {!isEssayTrack && data.content_category ? (
@@ -193,6 +282,33 @@ function CatalogDetailPage() {
             <h1 className="text-xl font-semibold leading-snug tracking-tight sm:text-2xl">{data.title}</h1>
             {/* 作者行：优先用 authors_detail（v5）；未认领者邮箱/单位为 null，绝不展示 PDF 抓出来的私人邮箱。 */}
             <AuthorRow detail={data.authors_detail ?? null} fallbackNames={cleanAuthors} />
+            {/* 移动端：桌面右栏在 xl 以下整块隐藏，这里补回“规范 PDF / 作者原件”入口，
+               否则手机上根本进不去两个预览（只剩底栏直接下载 Word）。 */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.has_file && isPaperTrack && (
+                <>
+                  <Button variant="outline" size="sm" className="min-w-0 flex-1" onClick={() => setPdfPreviewOpen(true)}>
+                    <FileText className="h-4 w-4 shrink-0" />
+                    <span className="truncate">PDF 版式预览</span>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+                    <a href={`/api/catalog/${id}/export?format=pdf&v=20`} download>
+                      <FileDown className="h-4 w-4 shrink-0" />
+                      <span className="truncate">下载 PDF</span>
+                    </a>
+                  </Button>
+                </>
+              )}
+              <Button asChild variant="outline" size="sm" className="min-w-0 flex-1">
+                <Link
+                  to="/forum"
+                  search={{ category: 'paper', paperId: id, paperTitle: data.title }}
+                >
+                  <MessagesSquare className="h-4 w-4 shrink-0" />
+                  <span className="truncate">讨论{discussCount ? ` · ${discussCount}` : ''}</span>
+                </Link>
+              </Button>
+            </div>
           </div>
 
           {/* 四轨导语/摘要卡：论文=摘要，科普=导语，娱乐/吐槽=不渲染 */}
@@ -240,13 +356,15 @@ function CatalogDetailPage() {
             <ManuscriptView
               resourceId={id}
               initialPercent={0}
-              onProgress={() => {}}
+              onProgress={setProgress}
               useWindowScroll
               hideTocNav
               onTocReady={setToc}
               onFatalError={setManuscriptError}
               contentCategory={data.content_category}
               contentTrack={data.content_track}
+              title={data.title}
+              abstract={data.abstract}
             />
           )}
 
@@ -258,9 +376,13 @@ function CatalogDetailPage() {
                   <CardTitle className="text-base">标签</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex min-w-0 max-w-full flex-wrap gap-2">
                     {data.tags.map((t) => (
-                      <Badge key={t} variant="outline">
+                      <Badge
+                        key={t}
+                        variant="outline"
+                        className="max-w-full whitespace-normal break-words text-left"
+                      >
                         {t}
                       </Badge>
                     ))}
@@ -277,6 +399,7 @@ function CatalogDetailPage() {
                   <MetaItem label="出版物" value={data.venue} />
                   <MetaItem label="学科" value={data.discipline} />
                   <MetaItem label="子学科" value={data.subdiscipline} />
+                  <MetaItem label="本站刊号" value={data.site_id} />
                   <MetaItem label="DOI" value={data.doi} />
                   <MetaItem
                     label="卷/期/页"
@@ -310,7 +433,7 @@ function CatalogDetailPage() {
 
             {/* 论文轨：评审信息 RQS（仅审稿/编辑端可见） */}
             {isPaperTrack && canSeeScores && (
-              <FoldCard title="评审信息（RQS v4.0）" defaultOpen={!isMobile}>
+              <FoldCard title="评审信息（评审质量分）" defaultOpen={!isMobile}>
                 <CardContent>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     {(() => {
@@ -433,22 +556,46 @@ function CatalogDetailPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <Button asChild variant="outline" size="sm" className="w-full">
-                  <a href={`/api/catalog/${id}/export?format=docx`} download>
+                  <a href={`/api/catalog/${id}/export?format=docx&v=20`} download>
                     <FileDown className="h-4 w-4" />
                     Word 文档（.docx）
                   </a>
                 </Button>
                 {isPaperTrack && (
-                  <Button asChild variant="outline" size="sm" className="w-full">
-                    <a href={`/api/catalog/${id}/export?format=pdf`} download>
-                      <FileDown className="h-4 w-4" />
-                      规范化 PDF
-                    </a>
-                  </Button>
+                  <>
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <a href={`/api/catalog/${id}/export?format=pdf&v=20`} download>
+                        <FileDown className="h-4 w-4" />
+                        规范化 PDF
+                      </a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setPdfPreviewOpen(true)}
+                    >
+                      <FileText className="h-4 w-4" />
+                      PDF 版式预览
+                    </Button>
+                  </>
                 )}
               </CardContent>
             </Card>
           )}
+
+          <Dialog open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
+            <DialogContent className="flex h-[86vh] max-w-5xl flex-col overflow-hidden p-0">
+              <DialogHeader className="border-b px-4 py-3">
+                <DialogTitle className="text-sm">PDF 版式预览 · 与下载件同源</DialogTitle>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 p-2">
+                {pdfPreviewOpen && (
+                  <PdfImagePreview resourceId={id} />
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {!isEssayTrack && (
           <Card>
@@ -500,6 +647,7 @@ function CatalogDetailPage() {
             <CardContent className="space-y-1.5 text-xs">
               <MetaItem label="卷期" value={[data.volume, data.issue].filter(Boolean).join(' / ') || '—'} />
               <MetaItem label="页码" value={data.pages || '—'} />
+              <MetaItem label="本站刊号" value={data.site_id || '—'} />
               <MetaItem label="DOI" value={data.doi || '—'} />
               <MetaItem label="年份" value={String(data.year)} />
               {isPaperTrack && data.clc_code && (
@@ -578,6 +726,17 @@ function CatalogDetailPage() {
           )}
         </aside>
       </div>
+
+      {showTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="回到顶部"
+          className="fixed bottom-6 right-5 z-40 hidden h-10 w-10 items-center justify-center rounded-full border bg-background/90 text-muted-foreground shadow-md backdrop-blur transition hover:text-primary sm:flex"
+        >
+          <ArrowUp className="h-4 w-4" />
+        </button>
+      )}
 
       {/* 移动端底部浮动条：下载 / 收藏 / 更多，高 ≤56px */}
       {isMobile && (
@@ -812,6 +971,7 @@ function EditDialog({
 
 // 摘要卡：可折叠，默认展开；科普轨标题写"导语"，论文轨写"摘要"。
 function AbstractCard({ text, collapsible, label = '摘要' }: { text: string; collapsible: boolean; label?: string }) {
+  const body = normalizeAbstract(text)
   const [open, setOpen] = useState(true)
   const [overflowing, setOverflowing] = useState(false)
   const ref = useRef<HTMLParagraphElement>(null)
@@ -835,7 +995,7 @@ function AbstractCard({ text, collapsible, label = '摘要' }: { text: string; c
             (collapsible && !open ? ' line-clamp-5' : '')
           }
         >
-          {text}
+          {body}
         </p>
         {collapsible && (overflowing || !open) && (
           <button
@@ -896,7 +1056,7 @@ function MobileDetailActions({
       <div className="fixed inset-x-0 bottom-0 z-40 flex h-14 items-center gap-2 border-t bg-background/95 px-3 backdrop-blur">
         {hasFile && (
           <Button asChild variant="ghost" size="sm" className="flex-1 gap-1">
-            <a href={`/api/catalog/${resourceId}/export?format=docx`} download aria-label="下载 Word">
+            <a href={`/api/catalog/${resourceId}/export?format=docx&v=20`} download aria-label="下载 Word">
               <FileDown className="h-4 w-4" />
               下载
             </a>
@@ -998,10 +1158,8 @@ function AuthorRow({ detail, fallbackNames }: { detail: AuthorDetail[] | null; f
             <span className="text-foreground">{a.name}</span>
             {a.roles.includes('first') && <sup title="第一作者">†</sup>}
             {a.roles.includes('corresponding') && <sup title="通讯作者">✉</sup>}
-            {a.claimed ? (
+            {a.claimed && (
               <Badge variant="secondary" className="ml-0.5 text-[10px]">已认领</Badge>
-            ) : (
-              <span className="ml-0.5 text-[11px] text-muted-foreground/70">未认领</span>
             )}
             {i < sorted.length - 1 && <span className="ml-2 text-border">·</span>}
           </span>
@@ -1009,9 +1167,19 @@ function AuthorRow({ detail, fallbackNames }: { detail: AuthorDetail[] | null; f
       </div>
     )
   }
-  // 兜底：无 authors_detail 时用 authors 数组（不显示邮箱）
+  // 兜底：无 authors_detail 时用 authors 数组（不显示邮箱）。
+  // 数组顺序就是署名顺序：第一位补 †（第一作者），避免读者只看到一串
+  // 名字、分不清谁是一作；后续作者用「·」分隔，与 detail 分支保持一致。
   return fallbackNames.length > 0 ? (
-    <p className="mt-1 text-sm text-muted-foreground">{fallbackNames.join('、')}</p>
+    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+      {fallbackNames.map((name, i) => (
+        <span key={`${name}-${i}`} className="inline-flex items-center gap-1">
+          <span className="text-foreground">{name}</span>
+          {i === 0 && <sup title="第一作者">†</sup>}
+          {i < fallbackNames.length - 1 && <span className="ml-1 text-border">·</span>}
+        </span>
+      ))}
+    </div>
   ) : null
 }
 

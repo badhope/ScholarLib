@@ -24,7 +24,7 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
       : resource.discipline
     : resource.content_category === 'rant'
       ? '吐槽向'
-      : '娱乐向'
+      : '副刊'
 
   return (
     <Link
@@ -56,7 +56,7 @@ export function ResourceCard({ resource }: { resource: ResourceResponse }) {
                   : 'border-amber-600/40 bg-amber-500/90 text-white',
               )}
             >
-              {scholarly ? '论文' : '娱乐'}
+              {scholarly ? (resource.track === 'absurd' ? '荒诞论文' : '学术论文') : '副刊'}
             </span>
             <span className="text-muted-foreground">{subLabel}</span>
             {resource.has_file ? <FileDown className="h-3 w-3" /> : null}

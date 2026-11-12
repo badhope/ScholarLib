@@ -46,10 +46,16 @@ MAX_PAGE_SIZE = 100
 
 # 工作台四类事件的聚合筛选（前端 tab：指派/催审/裁决/认领结果）。
 _CATEGORY_TYPES: dict[str, tuple[str, ...]] = {
-    "assigned": ("review.invited",),
+    # 旧键保留，避免老客户端/测试失效
+    "assigned": ("review.invited", "review.reminder", "review.accepted", "review.submitted"),
     "reminder": ("review.reminder",),
-    "decision": ("submission.decision",),
-    "claim": ("claim.decision",),
+    "decision": ("submission.decision", "submission.resubmitted", "submission.rework_requested"),
+    "claim": ("claim.created", "claim.decision"),
+    # 新分组：通知页按工作流分开，不再全部倒进「全部」
+    "review": ("review.invited", "review.reminder", "review.accepted", "review.submitted"),
+    "submission": ("submission.decision", "submission.resubmitted", "submission.rework_requested"),
+    "feedback": ("site.feedback",),
+    "system": ("system", "gamification.role_application"),
 }
 
 
@@ -69,8 +75,8 @@ async def list_notifications(
     type: str | None = Query(default=None, description="精确 type 过滤"),
     category: str | None = Query(
         default=None,
-        pattern=r"^(assigned|reminder|decision|claim)$",
-        description="聚合分类：指派/催审/裁决/认领结果",
+        pattern=r"^(assigned|reminder|decision|claim|review|submission|feedback|system)$",
+        description="聚合分类：审稿/投稿/认领/反馈/系统",
     ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),

@@ -10,14 +10,25 @@ import {
   useMyReviewAssignments,
   useReviewSubmissionDetail,
   useSubmitReview,
+  useUploadReviewAttachment,
 } from '@/hooks/api/use-modules'
-import type { AssignmentStatus, Recommendation, ReviewSubmit } from '@/lib/types'
+import type { AssignmentStatus, ReviewSubmit } from '@/lib/types'
 import { typeLabel } from '@/lib/resource-labels'
 import { extractError } from '@/lib/utils'
 import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
+import {
+  ReviewAttachmentLinks,
+  ReviewAttachmentPicker,
+  ReviewAttachmentUploadButton,
+} from '@/components/common/review-attachments'
+import {
+  EMPTY_REVIEW_FORM,
+  ReviewReportFields,
+  type ReviewFormValue,
+} from '@/components/review/review-report-fields'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -29,16 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import { waitingChip } from '@/components/common/waiting-chip'
 
 export const Route = createFileRoute('/review/assignments')({
@@ -63,27 +65,6 @@ const STATUS_TABS: { value: AssignmentStatus | 'all'; label: string }[] = [
   { value: 'cancelled', label: '已撤销' },
 ]
 
-const RECOMMENDATION_OPTIONS: { value: Recommendation; label: string }[] = [
-  { value: 'accept', label: '接收（Accept）' },
-  { value: 'minor_revision', label: '小修（Minor Revision）' },
-  { value: 'major_revision', label: '大修（Major Revision）' },
-  { value: 'reject', label: '拒稿（Reject）' },
-]
-
-// 与后端 RQS v3.0 的七个学术价值维度一一对应（rubric.py）。
-// 旧的 originality/methodology/clarity/significance 四个临时维度已废弃——
-// 它们与公开的评分口径对不上，导致"审稿人打分"与"文章页展示的 RQS"是
-// 两套互不相干的数字。
-const SCORE_DIMENSIONS = [
-  { key: 'problem', label: '问题价值' },
-  { key: 'argument', label: '论证链' },
-  { key: 'method', label: '方法透明度' },
-  { key: 'evidence', label: '证据强度' },
-  { key: 'novelty', label: '创新与定位' },
-  { key: 'integrity', label: '学术诚信' },
-  { key: 'presentation', label: '表达与结构' },
-]
-
 function statusBadge(status: AssignmentStatus) {
   switch (status) {
     case 'pending':
@@ -101,28 +82,6 @@ function statusBadge(status: AssignmentStatus) {
   }
 }
 
-interface ReviewFormState {
-  recommendation: Recommendation
-  scores: Record<string, number>
-  comments_to_editor: string
-  comments_to_author: string
-}
-
-const EMPTY_REVIEW: ReviewFormState = {
-  recommendation: 'minor_revision',
-  scores: {
-    problem: 3,
-    argument: 3,
-    method: 3,
-    evidence: 3,
-    novelty: 3,
-    integrity: 5,
-    presentation: 3,
-  },
-  comments_to_editor: '',
-  comments_to_author: '',
-}
-
 function ReviewWorkbenchPage() {
   const navigate = useNavigate()
   const search = useSearch({ strict: false }) as ReviewSearch
@@ -138,9 +97,11 @@ function ReviewWorkbenchPage() {
   const acceptMut = useAcceptAssignment()
   const declineMut = useDeclineAssignment()
   const submitMut = useSubmitReview()
+  const uploadAttachmentMut = useUploadReviewAttachment()
 
   const [reviewTargetId, setReviewTargetId] = useState<number | null>(null)
-  const [reviewForm, setReviewForm] = useState<ReviewFormState>(EMPTY_REVIEW)
+  const [reviewForm, setReviewForm] = useState<ReviewFormValue>(EMPTY_REVIEW_FORM)
+  const [reviewAttachments, setReviewAttachments] = useState<File[]>([])
   const [declineTargetId, setDeclineTargetId] = useState<number | null>(null)
   // 查看稿件详情的 assignmentId（仅 pending/accepted/completed 可查）
   const [submissionViewId, setSubmissionViewId] = useState<number | null>(null)
@@ -175,23 +136,52 @@ function ReviewWorkbenchPage() {
   }
 
   const openReviewForm = (id: number) => {
-    setReviewForm(EMPTY_REVIEW)
+    setReviewForm(EMPTY_REVIEW_FORM)
+    setReviewAttachments([])
     setReviewTargetId(id)
   }
 
   const onSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
     if (reviewTargetId === null) return
+    if (reviewForm.special_issue && reviewForm.special_issue_reason.trim().length < 10) {
+      toast.error('勾选「特别篇」后必须填写不少于 10 字的理由')
+      return
+    }
     const body: ReviewSubmit = {
       recommendation: reviewForm.recommendation,
       scores: reviewForm.scores,
       comments_to_editor: reviewForm.comments_to_editor || undefined,
       comments_to_author: reviewForm.comments_to_author || undefined,
+      special_issue: reviewForm.special_issue || undefined,
+      special_issue_reason: reviewForm.special_issue
+        ? reviewForm.special_issue_reason || '审稿人确认篇幅特许'
+        : undefined,
     }
     try {
-      await submitMut.mutateAsync({ id: reviewTargetId, body })
-      toast.success('审稿报告已提交')
+      const report = await submitMut.mutateAsync({ id: reviewTargetId, body })
+      let attachmentError: unknown = null
+      for (const file of reviewAttachments) {
+        try {
+          await uploadAttachmentMut.mutateAsync({ reportId: report.id, file })
+        } catch (err) {
+          attachmentError = err
+          break
+        }
+      }
+      if (attachmentError) {
+        toast.warning(
+          `审稿报告已提交，但附件上传失败：${extractError(attachmentError, '请到已完成任务里补传')}`,
+        )
+      } else {
+        toast.success(
+          reviewAttachments.length
+            ? `审稿报告与 ${reviewAttachments.length} 个附件已提交`
+            : '审稿报告已提交',
+        )
+      }
       setReviewTargetId(null)
+      setReviewAttachments([])
     } catch (err) {
       toast.error(extractError(err, '提交失败'))
     }
@@ -201,8 +191,28 @@ function ReviewWorkbenchPage() {
     <div>
       <PageHeader
         title="审稿工作台"
-        description="查看分配给您的审稿任务，接受邀请后填写审稿报告。"
+        description="填写审稿报告：先过四问，再按七个维度逐项打分；意见支持 Markdown 与预览，提交前可看作者/编辑两个视角。稿件默认下载 Word，也可切换 PDF。"
       />
+
+      <div className="mb-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
+        <span className="mr-2 font-medium text-foreground">评审依据与版式要求：</span>
+        <a className="font-medium text-primary hover:underline" href="/templates/rubbish-submission-template.docx" download>
+          Word 模板
+        </a>
+        <span className="mx-2">·</span>
+        <a className="font-medium text-primary hover:underline" href="/templates/rubbish-submission-template-word.md" download>
+          Word 排版要求
+        </a>
+        <span className="mx-2">·</span>
+        <a className="font-medium text-primary hover:underline" href="/templates/rubbish-editorial-standards.md" download>
+          编辑规范
+        </a>
+        <span className="mx-2">·</span>
+        <a className="font-medium text-primary hover:underline" href="/authors">
+          投稿指南
+        </a>
+        <div className="mt-1">审稿时请按上述版式与编辑规范核对结构、图表题注、参考文献和篇幅分档。</div>
+      </div>
 
       <Tabs
         value={statusTab}
@@ -299,6 +309,18 @@ function ReviewWorkbenchPage() {
                     </Badge>
                   )}
                 </div>
+                {a.status === 'completed' && a.report_id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2">
+                    <ReviewAttachmentLinks
+                      reportId={a.report_id}
+                      attachments={a.attachments}
+                    />
+                    <ReviewAttachmentUploadButton
+                      reportId={a.report_id}
+                      onUploaded={() => void refetch()}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -318,105 +340,22 @@ function ReviewWorkbenchPage() {
         open={reviewTargetId !== null}
         onOpenChange={(o) => !o && setReviewTargetId(null)}
       >
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>填写审稿报告</DialogTitle>
           </DialogHeader>
           <form onSubmit={onSubmitReview} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="recommendation">推荐决定</Label>
-              <Select
-                value={reviewForm.recommendation}
-                onValueChange={(v) =>
-                  setReviewForm((prev) => ({
-                    ...prev,
-                    recommendation: v as Recommendation,
-                  }))
-                }
-              >
-                <SelectTrigger id="recommendation" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RECOMMENDATION_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <ReviewReportFields
+              value={reviewForm}
+              onChange={setReviewForm}
+              disabled={submitMut.isPending}
+            />
 
-            <div className="space-y-2">
-              <Label>评分（1–5）· 对应公开的 RQS v3.0 七个维度</Label>
-              <p className="text-[11px] text-muted-foreground">
-                学术诚信为 0 分即全篇判 D（一票否决）。完整检查项与 0–5 锚点见
-                「等级与规范」页。
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {SCORE_DIMENSIONS.map((dim) => (
-                  <div key={dim.key} className="space-y-1">
-                    <Label htmlFor={`score-${dim.key}`} className="text-xs">
-                      {dim.label}
-                    </Label>
-                    <Select
-                      value={String(reviewForm.scores[dim.key] ?? 3)}
-                      onValueChange={(v) =>
-                        setReviewForm((prev) => ({
-                          ...prev,
-                          scores: { ...prev.scores, [dim.key]: Number(v) },
-                        }))
-                      }
-                    >
-                      <SelectTrigger id={`score-${dim.key}`} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <SelectItem key={n} value={String(n)}>
-                            {n}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="comments_to_author">给作者的意见</Label>
-              <Textarea
-                id="comments_to_author"
-                value={reviewForm.comments_to_author}
-                onChange={(e) =>
-                  setReviewForm((prev) => ({
-                    ...prev,
-                    comments_to_author: e.target.value,
-                  }))
-                }
-                placeholder="作者可见（单盲模式：作者看不到您的身份）"
-                rows={4}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="comments_to_editor">
-                给编辑的保密意见（可选）
-              </Label>
-              <Textarea
-                id="comments_to_editor"
-                value={reviewForm.comments_to_editor}
-                onChange={(e) =>
-                  setReviewForm((prev) => ({
-                    ...prev,
-                    comments_to_editor: e.target.value,
-                  }))
-                }
-                placeholder="仅编辑可见，作者看不到"
-                rows={3}
-              />
-            </div>
+            <ReviewAttachmentPicker
+              files={reviewAttachments}
+              onChange={setReviewAttachments}
+              disabled={submitMut.isPending}
+            />
 
             <DialogFooter>
               <Button
@@ -426,7 +365,13 @@ function ReviewWorkbenchPage() {
               >
                 取消
               </Button>
-              <Button type="submit" disabled={submitMut.isPending}>
+              <Button
+                type="submit"
+                disabled={
+                  submitMut.isPending ||
+                  (reviewForm.special_issue && reviewForm.special_issue_reason.trim().length < 10)
+                }
+              >
                 {submitMut.isPending ? '提交中…' : '提交审稿报告'}
               </Button>
             </DialogFooter>
@@ -627,10 +572,18 @@ function SubmissionDetailDialog({
                   <button
                     type="button"
                     className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
-                    onClick={() => void downloadSubmissionFile(data.id)}
+                    onClick={() => void downloadSubmissionFile(data.id, 'docx')}
                   >
                     <Download className="h-3.5 w-3.5" />
-                    下载稿件
+                    下载 Word
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
+                    onClick={() => void downloadSubmissionFile(data.id, 'pdf')}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    下载 PDF
                   </button>
                 </div>
               )}

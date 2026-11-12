@@ -61,8 +61,17 @@ export function CatalogGridCard({ resource }: CatalogGridCardProps) {
               : 'border-amber-600/40 bg-amber-500/90 text-white',
           )}
         >
-          {scholarly ? '论文' : '娱乐'}
+          {scholarly ? (resource.track === 'absurd' ? '荒诞论文' : '学术论文') : '副刊'}
         </span>
+
+        {resource.is_special_issue ? (
+          <span
+            className="absolute right-2 top-2 rounded-md border border-rose-200/60 bg-rose-50/90 px-2 py-0.5 text-[11px] font-semibold leading-none text-rose-800 shadow-sm backdrop-blur-sm"
+            title={resource.special_issue_reason ?? '篇幅特许收录'}
+          >
+            特别篇
+          </span>
+        ) : null}
 
         {/* 学科角标：封面左下角，辅助识别 */}
         {resource.discipline ? (
@@ -85,7 +94,7 @@ export function CatalogGridCard({ resource }: CatalogGridCardProps) {
         ) : (
           // 娱乐卡：轨道向标（不显示 CLC 空占位）
           <p className="line-clamp-1 text-[11px] text-muted-foreground">
-            {resource.content_category === 'rant' ? '吐槽向' : '娱乐向'}
+            {resource.content_category === 'rant' ? '吐槽向' : '副刊'}
             {resource.year ? ` · ${resource.year}` : ''}
           </p>
         )}
