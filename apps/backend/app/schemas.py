@@ -278,6 +278,33 @@ class RoleAssign(BaseModel):
     ]
 
 
+class AdminUserCreate(BaseModel):
+    """Body for POST /admin/users — create an invited staff account.
+
+    Password is generated server-side and never returned. The invitee signs in
+    with an email login code, so no self-registration is required.
+    """
+
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=100)
+    role: Literal[
+        "chief_editor",
+        "deputy_editor",
+        "board_editor",
+        "reviewer",
+        "senior_reviewer",
+        "editor",
+        "section_editor",
+    ] | None = None
+    note: str = Field(default="", max_length=300)
+
+
+class AdminUserCreateResponse(BaseModel):
+    user: UserResponse
+    invite_sent: bool
+    invite_error: str | None = None
+
+
 class ReviewModeUpdate(BaseModel):
     """Body for PATCH /admin/settings/review-mode."""
 

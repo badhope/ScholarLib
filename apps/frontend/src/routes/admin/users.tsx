@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { MoreHorizontal, Search } from 'lucide-react'
+import { MoreHorizontal, Plus, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
-import { useAdminUsers, useAssignRole, useRevokeRole, useSetUserActive, useSetUserAdmin } from '@/hooks/api/use-modules'
+import { useAdminUsers, useAssignRole, useCreateAdminUser, useRevokeRole, useSetUserActive, useSetUserAdmin } from '@/hooks/api/use-modules'
 import { useAuth } from '@/hooks/use-auth'
 import type { AssignableRole, UserResponse } from '@/lib/types'
 import { extractError, inferTotalPagesFromFullPage } from '@/lib/utils'
@@ -22,6 +22,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -68,6 +78,14 @@ export const Route = createFileRoute('/admin/users')({
 function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [query, setQuery] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({
+    email: '',
+    username: '',
+    role: 'reviewer' as AssignableRole,
+    note: '',
+  })
+  const [createError, setCreateError] = useState('')
   // 受控的「当前展开的那行菜单」。Radix 默认在 onSelect 时立即卸载菜单，
   // 而列表 mutation 又会 invalidate 重拉数据；键盘 Enter/Space 的 keyup
   // 常落在菜单卸载之后，Playwright 判定元素 detached 反复重试（E2E 稳定
@@ -90,6 +108,7 @@ function AdminUsersPage() {
   const setAdminMut = useSetUserAdmin()
   const assignRoleMut = useAssignRole()
   const revokeRoleMut = useRevokeRole()
+  const createUserMut = useCreateAdminUser()
   const { user } = useAuth()
 
   // 后端返回裸数组无 meta，totalPages 用「当前页是否满页」推断（与审计日志页共用）。
@@ -130,7 +149,13 @@ function AdminUsersPage() {
         title="用户管理"
         description="管理用户、启用状态与编辑线角色分配。读者身份=注册即得，作者身份=确认《投稿规范》即得，均不在此分配。"
         actions={
-          data ? <Badge variant="secondary">当前页 {data.length}</Badge> : null
+          <div className="flex items-center gap-2">
+            {data ? <Badge variant="secondary">当前页 {data.length}</Badge> : null}
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" />
+              新增人员
+            </Button>
+          </div>
         }
       />
 
@@ -287,6 +312,103 @@ function AdminUsersPage() {
           onPageChange={setPage}
         />
       )}
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>新增人员</DialogTitle>
+            <DialogDescription>
+              直接创建编辑部账号并指派角色；对方无需注册，用邮箱验证码登录后即可开始工作。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="create-email">邮箱</Label>
+              <Input
+                id="create-email"
+                type="email"
+                value={createForm.email}
+                onChange={(e) => setCreateForm((v) => ({ ...v, email: e.target.value }))}
+                placeholder="name@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-username">用户名</Label>
+              <Input
+                id="create-username"
+                value={createForm.username}
+                onChange={(e) => setCreateForm((v) => ({ ...v, username: e.target.value }))}
+                placeholder="用于登录与署名"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-role">角色</Label>
+              <select
+                id="create-role"
+                value={createForm.role}
+                onChange={(e) =>
+                  setCreateForm((v) => ({ ...v, role: e.target.value as AssignableRole }))
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {ASSIGNABLE_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="create-note">邀请留言（可选）</Label>
+              <Textarea
+                id="create-note"
+                rows={3}
+                maxLength={300}
+                value={createForm.note}
+                onChange={(e) => setCreateForm((v) => ({ ...v, note: e.target.value }))}
+                placeholder="例：请负责本期方法学稿件的外审。"
+              />
+            </div>
+            {createError && <p className="text-sm text-destructive">{createError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              取消
+            </Button>
+            <Button
+              disabled={createUserMut.isPending}
+              onClick={async () => {
+                setCreateError('')
+                if (!createForm.email.trim() || !createForm.username.trim()) {
+                  setCreateError('邮箱和用户名都必须填写')
+                  return
+                }
+                try {
+                  const res = await createUserMut.mutateAsync({
+                    email: createForm.email.trim(),
+                    username: createForm.username.trim(),
+                    role: createForm.role,
+                    note: createForm.note.trim(),
+                  })
+                  if (res.invite_sent) {
+                    toast.success('账号已创建，邀请邮件已发送')
+                  } else {
+                    toast.warning(
+                      `账号已创建，但邀请邮件发送失败：${res.invite_error || '请稍后让对方用邮箱验证码登录'}`,
+                    )
+                  }
+                  setCreateOpen(false)
+                  setCreateForm({ email: '', username: '', role: 'reviewer', note: '' })
+                } catch (err) {
+                  setCreateError(extractError(err, '创建失败'))
+                }
+              }}
+            >
+              {createUserMut.isPending ? '创建中…' : '创建并邀请'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

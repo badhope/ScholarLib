@@ -369,42 +369,54 @@ function ReviewWorkbenchPage() {
         open={reviewTargetId !== null}
         onOpenChange={(o) => !o && setReviewTargetId(null)}
       >
-        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>填写审稿报告</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={onSubmitReview} className="space-y-4">
-            <ReviewReportFields
-              value={reviewForm}
-              onChange={setReviewForm}
-              disabled={submitMut.isPending}
-            />
-
-            <ReviewAttachmentPicker
-              files={reviewAttachments}
-              onChange={setReviewAttachments}
-              disabled={submitMut.isPending}
-            />
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setReviewTargetId(null)}
-              >
-                取消
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  submitMut.isPending ||
-                  (reviewForm.special_issue && reviewForm.special_issue_reason.trim().length < 10)
-                }
-              >
-                {submitMut.isPending ? '提交中…' : '提交审稿报告'}
-              </Button>
-            </DialogFooter>
-          </form>
+        <DialogContent className="h-[96vh] max-h-[96vh] w-[96vw] max-w-none overflow-hidden p-0">
+          <div className="flex h-full flex-col">
+            <DialogHeader className="border-b px-5 py-4">
+              <DialogTitle>审稿工作台</DialogTitle>
+              <DialogDescription>
+                左侧为完整稿件，右侧为评审表单；两栏同时滚动，边读边打分。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-1">
+              <div className="min-h-0 overflow-y-auto border-b px-5 py-4 lg:border-b-0 lg:border-r">
+                {reviewTargetId !== null && (
+                  <ReviewManuscriptPane assignmentId={reviewTargetId} />
+                )}
+              </div>
+              <form onSubmit={onSubmitReview} className="flex min-h-0 flex-col">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                  <ReviewReportFields
+                    value={reviewForm}
+                    onChange={setReviewForm}
+                    disabled={submitMut.isPending}
+                  />
+                  <ReviewAttachmentPicker
+                    files={reviewAttachments}
+                    onChange={setReviewAttachments}
+                    disabled={submitMut.isPending}
+                  />
+                </div>
+                <DialogFooter className="border-t px-4 py-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setReviewTargetId(null)}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      submitMut.isPending ||
+                      (reviewForm.special_issue && reviewForm.special_issue_reason.trim().length < 10)
+                    }
+                  >
+                    {submitMut.isPending ? '提交中…' : '提交审稿报告'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -444,6 +456,84 @@ function ReviewWorkbenchPage() {
         assignmentId={submissionViewId}
         onClose={() => setSubmissionViewId(null)}
       />
+    </div>
+  )
+}
+
+function ReviewManuscriptPane({ assignmentId }: { assignmentId: number }) {
+  const { data, isLoading, isError, error } = useReviewSubmissionDetail(assignmentId)
+  if (isLoading) return <LoadingSkeleton rows={6} />
+  if (isError) return <ErrorState message={extractError(error, '加载稿件失败')} />
+  if (!data) return null
+  return (
+    <div className="space-y-4 text-sm">
+      <div>
+        <h3 className="text-lg font-semibold leading-snug">{data.title}</h3>
+        <div className="mt-2 flex flex-wrap gap-1">
+          <Badge variant="secondary">{typeLabel(data.type)}</Badge>
+          <Badge variant="outline">{data.discipline}</Badge>
+          {data.subdiscipline && <Badge variant="outline">{data.subdiscipline}</Badge>}
+          <Badge variant="outline">状态：{data.status}</Badge>
+        </div>
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground">作者</div>
+        <div>{(data.authors ?? []).join(' · ') || '—'}</div>
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground">摘要</div>
+        <p className="whitespace-pre-wrap leading-relaxed">{data.abstract || '—'}</p>
+      </div>
+      {data.preview && (
+        <div>
+          <div className="text-xs text-muted-foreground">正文预览</div>
+          <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
+            {data.preview}
+          </p>
+        </div>
+      )}
+      {(data.keywords?.length ?? 0) > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground">关键词</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {data.keywords.map((k) => (
+              <Badge key={k} variant="outline" className="text-xs">
+                {k}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {(data.jel_codes?.length ?? 0) > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground">JEL Codes</div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {data.jel_codes.map((c) => (
+              <Badge key={c} variant="outline" className="text-xs">
+                {c}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2 border-t pt-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void downloadSubmissionFile(data.id, 'docx')}
+        >
+          <Download className="h-4 w-4" /> 下载 Word
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void downloadSubmissionFile(data.id, 'pdf')}
+        >
+          <Download className="h-4 w-4" /> 下载 PDF
+        </Button>
+      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 import { downloadBlob } from '@/lib/utils'
 import type {
   AdminAnalytics,
+  AdminUserCreateResponse,
   Announcement,
   AssignableRole,
   AssignmentCreate,
@@ -1121,6 +1122,21 @@ export function useAdminUsers(limit = 50, offset = 0, query = '') {
           params: { limit, offset, ...(query ? { q: query } : {}) },
         })
       ).data,
+  })
+}
+
+export function useCreateAdminUser() {
+  const qc = useQueryClient()
+  return useMutation<
+    AdminUserCreateResponse,
+    Error,
+    { email: string; username: string; role?: AssignableRole; note?: string }
+  >({
+    mutationFn: async (body) =>
+      (await api.post<AdminUserCreateResponse>('/admin/users', body)).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+    },
   })
 }
 

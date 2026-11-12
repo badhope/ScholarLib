@@ -191,3 +191,36 @@ async def test_admin_site_settings_roundtrip_and_audit(
         json={"doi_author_entry_enabled": True},
         headers=headers,
     )
+
+
+@pytest.mark.asyncio
+async def test_admin_creates_invited_reviewer_account(
+    client: AsyncClient, admin_user: dict, db_session: AsyncSession
+) -> None:
+    body = {
+        "email": "invited.reviewer@example.com",
+        "username": "invited_reviewer",
+        "role": "reviewer",
+        "note": "负责本期方法学稿件",
+    }
+    r = await client.post("/api/admin/users", json=body, headers=auth_headers(admin_user))
+    assert r.status_code == 201, r.text
+    payload = r.json()
+    assert payload["user"]["email"] == body["email"]
+    assert payload["user"]["username"] == body["username"]
+    assert "reviewer" in payload["user"]["roles"]
+    # Console sender in tests succeeds, so the invite is marked sent.
+    assert payload["invite_sent"] is True
+
+    audit = await db_session.execute(
+        select(AuditLog).where(
+            AuditLog.action == "user.admin_create",
+            AuditLog.target_id == str(payload["user"]["id"]),
+        )
+    )
+    assert audit.scalars().first() is not None
+
+    duplicate = await client.post(
+        "/api/admin/users", json=body, headers=auth_headers(admin_user)
+    )
+    assert duplicate.status_code == 409

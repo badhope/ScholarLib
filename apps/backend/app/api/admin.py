@@ -9,6 +9,7 @@ tenant B's data.
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 from uuid import UUID
 
@@ -20,12 +21,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_admin, require_tenant_id
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.email import get_email_sender
+from app.core.email_templates import account_created
 from app.core.key_rotation import _active_secret_keys, _signing_key, reload_settings
 from app.core.logging import get_logger
+from app.core.security import hash_password
 from app.models import AuditLog, Role, User, UserRole
 from app.modules.review.blinding import get_review_mode, set_review_mode
 from app.core.site_settings import get_all_site_flags, set_site_flag
 from app.schemas import (
+    AdminUserCreate,
+    AdminUserCreateResponse,
     ReviewModeResponse,
     ReviewModeUpdate,
     RoleAssign,
@@ -53,6 +59,16 @@ ASSIGNABLE_ROLES = {
     "board_editor",
     "deputy_editor",
     "chief_editor",
+}
+
+ROLE_LABELS = {
+    "reviewer": "审稿人",
+    "senior_reviewer": "资深审稿人",
+    "editor": "编辑",
+    "section_editor": "栏目编辑",
+    "board_editor": "编委",
+    "deputy_editor": "副主编",
+    "chief_editor": "主编",
 }
 
 
@@ -162,6 +178,106 @@ async def list_users(
     result = await db.execute(stmt.order_by(User.id.desc()).limit(limit).offset(offset))
     users = result.scalars().all()
     return [await _user_with_roles(db, u) for u in users]
+
+
+@router.post(
+    "/users",
+    response_model=AdminUserCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_invited_user(
+    payload: AdminUserCreate,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> AdminUserCreateResponse:
+    """Create a staff account on behalf of an editor and send the invite.
+
+    The account is created with an unusable random password: the invitee is
+    expected to sign in with an email login code. That keeps the "no
+    self-registration needed" workflow without ever returning a password
+    through the API.
+    """
+    tenant_id = require_tenant_id()
+    if payload.role is not None and payload.role not in ASSIGNABLE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Role '{payload.role}' is not assignable",
+        )
+    email = str(payload.email).strip().lower()
+    username = payload.username.strip()
+    existing = (
+        await db.execute(
+            select(User).where(
+                User.tenant_id == tenant_id,
+                or_(
+                    func.lower(User.email) == email,
+                    func.lower(User.username) == username.lower(),
+                ),
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该邮箱或用户名已存在",
+        )
+
+    user = User(
+        tenant_id=tenant_id,
+        email=email,
+        username=username,
+        hashed_password=hash_password(secrets.token_urlsafe(32)),
+        is_active=True,
+        is_admin=False,
+        is_email_verified=False,
+    )
+    db.add(user)
+    await db.flush()
+
+    if payload.role is not None:
+        role = await _get_or_create_role(db, tenant_id, payload.role)
+        db.add(UserRole(tenant_id=tenant_id, user_id=user.id, role_id=role.id))
+
+    invite_sent = False
+    invite_error: str | None = None
+    if payload.role is not None:
+        link = f"{settings.frontend_base_url.rstrip('/')}/login"
+        try:
+            subject, text, html = account_created(
+                username=user.username,
+                role_label=ROLE_LABELS[payload.role],
+                link=link,
+                note=payload.note.strip(),
+            )
+            await get_email_sender().send(
+                to=user.email, subject=subject, body=text, html=html
+            )
+            invite_sent = True
+        except Exception as exc:  # noqa: BLE001 - surfaced to the admin, not swallowed
+            invite_error = str(exc)[:300]
+            logger.warning("admin_user_invite_failed", user_id=user.id, exc_info=True)
+
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="user.admin_create",
+            target_type="user",
+            target_id=str(user.id),
+            payload={
+                "role": payload.role,
+                "invite_sent": invite_sent,
+                "email": user.email,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(user)
+    return AdminUserCreateResponse(
+        user=await _user_with_roles(db, user),
+        invite_sent=invite_sent,
+        invite_error=invite_error,
+    )
 
 
 @router.patch("/users/{user_id}/active", response_model=UserResponse)

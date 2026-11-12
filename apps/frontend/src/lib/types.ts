@@ -88,6 +88,12 @@ export type AssignableRole =
   | 'author'
   | 'reader'
 
+export interface AdminUserCreateResponse {
+  user: UserResponse
+  invite_sent: boolean
+  invite_error: string | null
+}
+
 export interface UserCreate {
   email: string
   username: string

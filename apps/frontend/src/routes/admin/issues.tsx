@@ -142,13 +142,11 @@ function AdminIssuesPage() {
                   </TableCell>
                   <TableCell>
                     <Link
-                      to="/catalog"
-                      search={{
-                        q: `volume:${volume} issue:${item.issue}`,
-                      }}
+                      to="/admin/issues/$volume/$issue"
+                      params={{ volume, issue: item.issue }}
                       className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                     >
-                      查看文章
+                      分部与发布
                     </Link>
                   </TableCell>
                 </TableRow>

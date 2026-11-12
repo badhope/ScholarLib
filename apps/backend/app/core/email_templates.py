@@ -145,6 +145,43 @@ def duplicate_registration(username: str) -> tuple[str, str, str]:
     return subject, text, html
 
 
+def account_created(
+    username: str, role_label: str, link: str, note: str = ""
+) -> tuple[str, str, str]:
+    """Invitation for an account created by an editor (no self-registration)."""
+    subject = f"{settings.site_name}：你的编辑部账号已创建"
+    note_text = f"\n编辑留言：{note}\n" if note else ""
+    note_html = (
+        f'<div style="margin:14px 0;padding:10px 14px;background:{PAPER};'
+        f'border-left:3px solid {ACCENT};font-size:13px;color:{INK};'
+        f'white-space:pre-wrap;">{escape(note)}</div>'
+        if note
+        else ""
+    )
+    text = (
+        f"你好，{username}：\n\n"
+        f"编辑部已为你创建 {settings.site_name} 账号，角色：{role_label}。\n"
+        f"{note_text}"
+        f"请打开以下页面，使用邮箱验证码登录并设置个人资料：\n{link}\n\n"
+        "登录时选择「邮箱验证码登录」，验证码会发送到本邮箱。\n"
+        "如果这不是你本人预期的安排，请直接回复编辑部或忽略本邮件。\n"
+    )
+    html = _shell(
+        "你的编辑部账号已创建",
+        f"<p>你好，{escape(username)}：</p>"
+        f"<p>编辑部已为你创建 <strong>{escape(settings.site_name)}</strong> 账号，"
+        f"角色：<strong>{escape(role_label)}</strong>。</p>"
+        + (f"<p>编辑留言：</p>{note_html}" if note else "")
+        + "<p>请使用邮箱验证码登录并设置个人资料：</p>"
+        + _button("登录并设置", link)
+        + '<p style="margin-top:16px;font-size:12px;color:'
+        + MUTED
+        + ';">登录时选择「邮箱验证码登录」，验证码会发送到本邮箱。'
+        "如果这不是你本人预期的安排，请直接回复编辑部或忽略本邮件。</p>",
+    )
+    return subject, text, html
+
+
 def review_assigned(
     reviewer: str, paper_title: str, link: str, due_days: int
 ) -> tuple[str, str, str]:
