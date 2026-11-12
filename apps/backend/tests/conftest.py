@@ -304,11 +304,24 @@ async def admin_user(client: AsyncClient, db_session: AsyncSession) -> dict[str,
 
 def review_scores(score: int = 82) -> dict[str, object]:
     """v5.0 合法审稿评分：五维 + 理由 + 正文证据。"""
+    # 90+ 的顶刊级分数在接口层有更长的理由/证据门槛，fixture 也要给出
+    # 与该档位匹配的证据，而不是用同一句短话骗过校验。
+    high = score >= 90
     dimensions = {
         key: {
             "score": score,
-            "reason": f"{key} 维度按检查项逐条核对后给分",
-            "evidence": f"证据：正文 §3 第 2 段与表 1（{key}）",
+            "reason": (
+                f"{key} 维度逐条核对：问题边界清楚，论证链条从假设到结论完整，"
+                "反例与替代解释有交代，方法可复现，证据与结论之间没有跳步。"
+                if high
+                else f"{key} 维度按检查项逐条核对后给分"
+            ),
+            "evidence": (
+                f"证据：正文 §3 第 2 段给出主论证；§4 表 1 列出全部样本与对照；"
+                f"§5 第 3 段讨论反例；参考文献[4][7]支撑方法来源（{key}）。"
+                if high
+                else f"证据：正文 §3 第 2 段与表 1（{key}）"
+            ),
         }
         for key in ("question", "argument", "method", "evidence", "integrity")
     }

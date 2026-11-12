@@ -74,8 +74,10 @@ def test_full_marks_scores_100() -> None:
 def test_all_zero_scores_zero() -> None:
     result = evaluate(_scores(0))
     assert result["score"] == 0.0
-    assert result["grade"] == "R"
+    assert result["complete"] is False
+    assert result["grade"] == "NA"
     assert result["rejected"] is True
+    assert result["editorial_completion_required"] is False
 
 
 def test_integrity_veto_forces_zero() -> None:
@@ -88,7 +90,10 @@ def test_integrity_veto_forces_zero() -> None:
     result = evaluate(scores)
     assert result["integrity_veto"] is True
     assert result["score"] == 0.0
+    assert result["complete"] is False
+    assert result["grade"] == "NA"
     assert result["rejected"] is True
+    assert result["editorial_completion_required"] is False
 
 
 def test_evidence_is_required() -> None:
@@ -154,12 +159,15 @@ def test_low_dimension_caps_at_79() -> None:
     assert result["grade"] == "Q2"
 
 
-def test_one_dimension_below_50_caps_at_59() -> None:
+def test_one_dimension_below_50_is_incomplete_not_quartile() -> None:
     scores = _scores(95)
     scores[2] = DimensionScore("method", 45, "方法不可复现", "证据：§3 未报告样本量与参数")
     result = evaluate(scores)
-    assert result["score"] == 59.0
-    assert result["grade"] == "Q4"
+    assert result["score"] == 85.0  # 诊断分不封顶，封顶只用于完整稿评级
+    assert result["complete"] is False
+    assert result["incomplete_dimensions"] == ["method"]
+    assert result["grade"] == "NA"
+    assert result["quartile"] is None
 
 
 def test_two_dimensions_below_50_caps_at_49() -> None:
@@ -167,15 +175,18 @@ def test_two_dimensions_below_50_caps_at_49() -> None:
     scores[2] = DimensionScore("method", 45, "方法不可复现", "证据：§3 未报告样本量")
     scores[3] = DimensionScore("evidence", 40, "证据不足", "证据：§4 仅 3 个样本")
     result = evaluate(scores)
-    assert result["score"] == 49.0
-    assert result["rejected"] is True
+    assert result["score"] == 74.0  # 诊断分不封顶
+    assert result["complete"] is False
+    assert result["grade"] == "NA"
+    assert result["rejected"] is False
+    assert result["editorial_completion_required"] is True
 
 
 def test_absurd_coherence_gate() -> None:
     scores = _scores(95, track="absurd")
     scores[1] = DimensionScore("coherence", 45, "规则打架", "证据：第 2 节与第 5 节时间线冲突")
     result = evaluate(scores, track="absurd")
-    assert result["score"] == 59.0
+    assert result["score"] == 85.0  # 诊断分不封顶
 
 
 def test_same_scores_same_total() -> None:

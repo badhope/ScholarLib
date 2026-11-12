@@ -432,10 +432,31 @@ def evaluate(
         total = round(_clamp(override_total, 0, 100), 1)
         overridden = True
 
-    grade, grade_label = grade_for(total, track)
-    rejected = total < 50
-    borderline = 50 <= total <= 52
+    # 完整性闸门：任一维 < 50 说明这个部分“没有交付”，不是“质量差一点”。
+    # 没有交付的稿子不进入分区，不能用一个加权总分把它抬进 Q3/Q4；
+    # 完整稿（五维都 >= 50）才评“上限”，50–59 是完整但最弱的一档。
     veto = track == "academic" and by_key["integrity"].score == 0
+    incomplete = [key for key, _label, _hint in dims if by_key[key].score < 50]
+    if veto and "integrity" not in incomplete:
+        incomplete.append("integrity")
+    complete = not incomplete
+    if complete:
+        grade, grade_label = grade_for(total, track)
+        rejected = total < 50
+        borderline = 50 <= total <= 52
+        quartile: str | None = grade
+    else:
+        grade = "NA"
+        grade_label = "待编辑部补全，暂不评级"
+        # 不完整不等于退稿：由编辑部按作者原思路补全后直接进入评级/发布，
+        # 不打回作者。rejected 只表示“完整稿但总分 <50”。
+        rejected = veto
+        borderline = False
+        quartile = None
+        # 诊断分不封顶：封顶只在“完整稿”里限制等级；不完整稿本就不评级。
+        # 诚信一票否决仍保留 0 分，不能用“诊断”名义把造假稿救回来。
+        total = 0.0 if veto else uncapped
+    requires_rework = rejected
     payload: dict[str, object] = {
         "rubric_version": RUBRIC_VERSION,
         "track": track,
@@ -448,13 +469,22 @@ def evaluate(
         "cap_notes": cap_notes,
         "grade": grade,
         "grade_label": grade_label,
-        "quartile": None if rejected else grade,
+        "quartile": quartile,
+        "complete": complete,
+        "incomplete_dimensions": incomplete,
+        "completeness_note": (
+            "五维完整，进入上限评审"
+            if complete
+            else "存在未交付维度（<50）：由编辑部按原思路补全，补全后再评级；不打回作者"
+        ),
+        "editorial_completion_required": (not complete) and not veto,
+        "completion_owner": "editorial" if ((not complete) and not veto) else None,
         "breakdown": breakdown,
         "integrity_veto": veto,
         "overridden": overridden,
         "rejected": rejected,
         "borderline": borderline,
-        "requires_rework": rejected,
+        "requires_rework": requires_rework,
     }
     if metrics is not None:
         payload["auto_precheck"] = auto_precheck(metrics)

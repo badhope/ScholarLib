@@ -163,12 +163,21 @@ export interface HealthResponse {
 }
 
 // --- Public capabilities ---
+export interface SiteSettingsResponse {
+  captcha_required_for_registration: boolean
+  doi_author_entry_enabled: boolean
+}
+
 export interface CapabilitiesResponse {
   email_backend: string
   email_delivery: boolean
   email_verification_required: boolean
   oidc_enabled: boolean
   registration_open: boolean
+  /** 注册是否必须答自建验证码（管理员可在后台切换）。 */
+  captcha_required_for_registration: boolean
+  /** 投稿表单是否允许作者填写官方 DOI。 */
+  doi_author_entry_enabled: boolean
   /** 服务端允许的单文件上限（字节）；前端据此做预校验与文案 */
   upload_max_bytes: number
   /** 服务端接受的扩展名清单（含点号），用于 <input accept> 与文案 */

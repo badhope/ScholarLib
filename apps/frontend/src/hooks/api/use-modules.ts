@@ -45,6 +45,7 @@ import type {
   ReviewMatrixResponse,
   ReviewMode,
   ReviewModeResponse,
+  SiteSettingsResponse,
   ReviewReportResponse,
   ReviewSubmit,
   SubmissionCreate,
@@ -122,6 +123,7 @@ export const keys = {
       ['admin', 'users', limit, offset, query] as const,
     audit: (limit = 50, offset = 0) => ['admin', 'audit', limit, offset] as const,
     reviewMode: () => ['admin', 'review-mode'] as const,
+    siteSettings: () => ['admin', 'site-settings'] as const,
     volumes: () => ['admin', 'volumes'] as const,
     issues: (volume: string) => ['admin', 'issues', volume] as const,
     journalSettings: () => ['admin', 'journal-settings'] as const,
@@ -1253,6 +1255,27 @@ export function useReviewMode() {
     queryKey: keys.admin.reviewMode(),
     queryFn: async () =>
       (await api.get<ReviewModeResponse>('/admin/settings/review-mode')).data,
+  })
+}
+
+export function useSiteSettings() {
+  return useQuery<SiteSettingsResponse>({
+    queryKey: keys.admin.siteSettings(),
+    queryFn: async () =>
+      (await api.get<SiteSettingsResponse>('/admin/settings/site')).data,
+  })
+}
+
+export function useUpdateSiteSettings() {
+  const qc = useQueryClient()
+  return useMutation<SiteSettingsResponse, Error, Partial<SiteSettingsResponse>>({
+    mutationFn: async (patch) =>
+      (await api.patch<SiteSettingsResponse>('/admin/settings/site', patch)).data,
+    onSuccess: (data) => {
+      qc.setQueryData(keys.admin.siteSettings(), data)
+      // 注册页与投稿表单都读 /capabilities，切换后立即使旧缓存失效。
+      void qc.invalidateQueries({ queryKey: ['capabilities'] })
+    },
   })
 }
 

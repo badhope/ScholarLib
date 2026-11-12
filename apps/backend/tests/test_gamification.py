@@ -271,42 +271,35 @@ async def test_quality_rubric_is_public_and_frozen(client: AsyncClient) -> None:
     r = await client.get("/api/quality/rubric")
     assert r.status_code == 200
     body = r.json()
-    assert body["version"] == "4.0"
-    assert set(body["profiles"]) == {"research", "review", "essay", "note"}
-    for profile in body["profiles"].values():
-        assert sum(profile["weights"].values()) == 100
+    assert body["version"] == "5.0"
+    tracks = body["tracks"]
+    assert set(tracks) == {"academic", "absurd"}
+    assert tracks["academic"]["dimensions"][0]["key"] == "question"
+    assert sum(d["weight"] for d in tracks["academic"]["dimensions"]) == 100
+    assert sum(d["weight"] for d in tracks["absurd"]["dimensions"]) == 100
     assert [g["code"] for g in body["grades"]] == [
-        "A+",
-        "A",
-        "A-",
-        "B+",
-        "B",
-        "B-",
-        "C+",
-        "C",
-        "C-",
-        "D+",
-        "D",
-        "D-",
-        "E+",
-        "E",
-        "E-",
-        "F",
+        "T1+",
+        "T1",
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "R",
     ]
-    assert body["min_references"]["research"] == 8
-    # 3.0 的关键承诺：学术价值维度 + 诚信一票否决 + <40 分不予发表必须打回
-    keys = {d["key"] for d in body["dimensions"]}
-    assert {"problem", "argument", "method", "evidence", "novelty", "integrity"} <= keys
-    assert "integrity_veto" in body
-    assert "rejected_action" in body
+    assert any("封顶 79" in g for g in body["gates"])
+    assert any("封顶 59" in g for g in body["gates"])
+    assert any("封顶 49" in g for g in body["gates"])
 
 
 async def test_quality_form_and_prompt_are_public(client: AsyncClient) -> None:
     """审稿表单与 AI 判分规格也必须公开——口径不公开就无法自证公正。"""
-    form = await client.get("/api/quality/form")
+    form = await client.get("/api/quality/form?track=academic")
     assert form.status_code == 200
-    assert len(form.json()["dimensions"]) == 7
-    prompt = await client.get("/api/quality/prompt?article_type=research")
+    assert len(form.json()["dimensions"]) == 5
+    absurd = await client.get("/api/quality/form?track=absurd")
+    assert absurd.status_code == 200
+    assert len(absurd.json()["dimensions"]) == 5
+    prompt = await client.get("/api/quality/prompt?article_type=research&track=academic")
     assert prompt.status_code == 200
     assert "output_schema" in prompt.json()
 

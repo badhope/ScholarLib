@@ -161,15 +161,25 @@ async def register(
     they just chose. The owner of an existing matching email is notified of
     the duplicate attempt (best effort when SMTP is configured).
     """
-    # CAPTCHA check if the policy is enabled.
-    await verify_captcha_token(request, payload.captcha_token, payload.captcha_answer)
-
     tenant_id = get_current_tenant_id()
     if tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tenant context not resolved",
         )
+    # CAPTCHA policy is tenant-editable (admin settings), with the process
+    # default as the fallback. Read it before validating the token.
+    from app.core.site_settings import get_site_flag
+
+    captcha_required = await get_site_flag(
+        db, tenant_id, "captcha_required_for_registration"
+    )
+    await verify_captcha_token(
+        request,
+        payload.captcha_token,
+        payload.captcha_answer,
+        required=captcha_required,
+    )
     user = User(
         tenant_id=tenant_id,
         email=payload.email,

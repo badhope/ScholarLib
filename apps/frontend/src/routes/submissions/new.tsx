@@ -761,7 +761,14 @@ function SubmissionWizardPage() {
         {/* 右侧：当前步骤 */}
         <div className="min-w-0">
           <div className="rounded-lg border bg-card p-5 sm:p-6">
-            {step === 0 && <StepBibliography form={form} set={set} fieldError={fieldError} />}
+            {step === 0 && (
+              <StepBibliography
+                form={form}
+                set={set}
+                fieldError={fieldError}
+                doiEntryEnabled={caps.data?.doi_author_entry_enabled ?? true}
+              />
+            )}
             {step === 1 && (
               <StepUpload
                 form={form}
@@ -844,10 +851,12 @@ function StepBibliography({
   form,
   set,
   fieldError,
+  doiEntryEnabled,
 }: {
   form: WizardForm
   set: <K extends keyof WizardForm>(key: K, value: WizardForm[K]) => void
   fieldError: (key: string) => boolean
+  doiEntryEnabled: boolean
 }) {
   return (
     <div className="space-y-5">
@@ -1085,18 +1094,20 @@ function StepBibliography({
             placeholder="若已有正式出处"
           />
         </div>
-        <div className="space-y-2 md:col-span-2">
-          <Label htmlFor="w-doi">官方 DOI（选填，作者自行决定是否注册）</Label>
-          <Input
-            id="w-doi"
-            value={form.doi}
-            onChange={(e) => set('doi', e.target.value)}
-            placeholder="例如：10.12345/rubbish.2026.001；没有就留空"
-          />
-          <p className="text-xs text-muted-foreground">
-            本站会为每篇录用稿生成内部刊号；官方 DOI 由作者决定是否另行注册，不强制。
-          </p>
-        </div>
+        {doiEntryEnabled ? (
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="w-doi">官方 DOI（选填，作者自行决定是否注册）</Label>
+            <Input
+              id="w-doi"
+              value={form.doi}
+              onChange={(e) => set('doi', e.target.value)}
+              placeholder="例如：10.12345/rubbish.2026.001；没有就留空"
+            />
+            <p className="text-xs text-muted-foreground">
+              本站会为每篇录用稿生成内部刊号；官方 DOI 由作者决定是否另行注册，不强制。
+            </p>
+          </div>
+        ) : null}
       </div>
     </div>
   )

@@ -117,6 +117,7 @@ class Resource(Base, TenantScopedMixin):
     )
     # --- 质量评分（quality 模块 RQS v2.0，冻结口径） ---
     # 0–100；grade = A+/A/B/C/D；breakdown 存各维度得分明细（可复现）。
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     quality_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 1), nullable=True)
     quality_grade: Mapped[str | None] = mapped_column(String(4), nullable=True)
     quality_breakdown: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

@@ -157,3 +157,37 @@ async def test_list_users_search_filters_before_pagination(
     )
     assert found.status_code == 200
     assert [u["username"] for u in found.json()] == ["testuser"]
+
+
+@pytest.mark.asyncio
+async def test_admin_site_settings_roundtrip_and_audit(
+    client: AsyncClient, admin_user: dict, db_session: AsyncSession
+) -> None:
+    """运营开关：GET 默认值 → PATCH 关 DOI → 再读 → 写审计。"""
+    headers = auth_headers(admin_user)
+    initial = await client.get("/api/admin/settings/site", headers=headers)
+    assert initial.status_code == 200
+    assert initial.json()["doi_author_entry_enabled"] is True
+
+    patched = await client.patch(
+        "/api/admin/settings/site",
+        json={"doi_author_entry_enabled": False},
+        headers=headers,
+    )
+    assert patched.status_code == 200
+    assert patched.json()["doi_author_entry_enabled"] is False
+
+    reread = await client.get("/api/admin/settings/site", headers=headers)
+    assert reread.status_code == 200
+    assert reread.json()["doi_author_entry_enabled"] is False
+
+    audit = await db_session.execute(
+        select(AuditLog).where(AuditLog.action == "admin.settings.site")
+    )
+    assert audit.scalars().first() is not None
+
+    await client.patch(
+        "/api/admin/settings/site",
+        json={"doi_author_entry_enabled": True},
+        headers=headers,
+    )

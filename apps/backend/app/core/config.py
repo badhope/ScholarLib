@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     # When True, /api/auth/register demands a captcha_token field and
     # runs it through the verifier at ``captcha_verifier``. Default
     # off so dev / CI / unit tests do not need an external provider.
-    captcha_required_for_registration: bool = True
+    captcha_required_for_registration: bool = False
     # Dotted path to a verifier. Empty -> a dev passthrough that
     # accepts everything (with a single warning log).
     # 默认使用自建算术题，不依赖第三方 SaaS、不产生费用。
@@ -202,6 +202,11 @@ class Settings(BaseSettings):
     # 进程内定时任务（审稿催办等）。单节点部署默认开启；多节点部署时
     # 应只在一个实例上开启，或用外部调度器触发 admin 端点。
     scheduler_enabled: bool = True
+    # 首次运行延迟（秒）。线上曾用 10**9 直接把催办永久挂起，这是事故补丁
+    # 而不是配置；现在改成可配，默认 5 分钟，避开启动迁移窗口。
+    scheduler_startup_delay_seconds: int = Field(default=300, ge=0, le=86400)
+    # 两轮之间的间隔（秒）。催办最小窗口是 3 天，6 小时足够。
+    scheduler_interval_seconds: int = Field(default=6 * 60 * 60, ge=60, le=7 * 24 * 60 * 60)
 
     # --- Frontend base URL ---
     # Used to build deep-link URLs in transactional emails (verify-email,

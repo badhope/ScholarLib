@@ -19,11 +19,14 @@ from httpx import AsyncClient
 from app.modules.export.exporters import export_resources
 from app.modules.export.jats import JatsMeta, markdown_to_jats
 
-_DIMS = ("problem", "argument", "method", "evidence", "novelty", "integrity", "presentation")
+_DIMS = ("question", "argument", "method", "evidence", "integrity")
 
 
 def _all(value: int, reason: str = "理由：正文第 2 节可核") -> list[dict[str, object]]:
-    return [{"key": k, "score": value, "reason": reason} for k in _DIMS]
+    return [
+        {"key": k, "score": value, "reason": reason, "evidence": "§2 第 2 节原文可核"}
+        for k in _DIMS
+    ]
 
 
 # --- JATS 转换器 -----------------------------------------------------------
@@ -149,7 +152,7 @@ async def test_batch_rescore_updates_score_absurdity_and_category(
     assert body["updated"] == 1
     item = body["results"][0]
     assert item["ok"] is True
-    assert item["grade"].startswith(("D", "C"))
+    assert item["grade"].startswith(("Q3", "Q4"))
     assert item["absurdity_index"] == 3.5
     assert item["category_changed"] is True
 

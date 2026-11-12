@@ -142,10 +142,19 @@ export function emptyDimensionReviews(track: ReviewTrack): DimensionReviews {
   )
 }
 
-export function dimensionIssue(dim: DimensionMeta, value: DimensionReview | undefined): string | null {
+export function dimensionIssue(_dim: DimensionMeta, value: DimensionReview | undefined): string | null {
   if (!value || value.score === null) return '未给分'
-  if (value.reason.trim().length < 4) return '缺理由'
-  if (value.evidence.trim().length < 8) return '缺正文证据'
+  const score = value.score
+  // 与服务端同一条门槛：90+ 顶刊级要 40 字理由 + 60 字可定位证据，
+  // 80+ 一区要 15/20 字，其余至少 4/10 字。前端先拦，避免提交后 422。
+  const [reasonMin, evidenceMin] = score >= 90 ? [40, 60] : score >= 80 ? [15, 20] : [4, 10]
+  const reason = value.reason.trim()
+  const evidence = value.evidence.trim()
+  if (reason.length < reasonMin) return `理由至少 ${reasonMin} 字（当前 ${reason.length}）`
+  if (evidence.length < evidenceMin) return `正文证据至少 ${evidenceMin} 字（当前 ${evidence.length}）`
+  if (!['第', '§', '图', '表', '页', '段', '节', '引用', '文献', '附录', 'http'].some((t) => evidence.includes(t))) {
+    return '证据要定位到正文（§/段/图/表/引用编号）'
+  }
   return null
 }
 
@@ -156,6 +165,8 @@ export function scoreReviewTotal(track: ReviewTrack, reviews: DimensionReviews):
   capNotes: string[]
   grade: string
   gradeLabel: string
+  complete: boolean
+  incomplete: string[]
 } {
   const dims = TRACK_DIMENSIONS[track]
   let uncapped = 0
@@ -165,7 +176,7 @@ export function scoreReviewTotal(track: ReviewTrack, reviews: DimensionReviews):
   }
   uncapped = Math.round(uncapped * 10) / 10
   const caps: number[] = []
-  const capNotes: string[] = []
+  let capNotes: string[] = []
   const entries = dims.map((d) => ({ key: d.key, score: reviews[d.key]?.score ?? 0 }))
   if (track === 'academic' && reviews.integrity?.score === 0) {
     caps.push(0)
@@ -197,12 +208,23 @@ export function scoreReviewTotal(track: ReviewTrack, reviews: DimensionReviews):
     capNotes.push('执行低于 50 分：总分封顶 69')
   }
   const cap = caps.length ? Math.min(...caps) : null
-  const total = cap !== null && uncapped > cap ? cap : uncapped
-  const grade =
-    total >= 95 ? 'T1+' : total >= 90 ? 'T1' : total >= 80 ? 'Q1' : total >= 70 ? 'Q2' : total >= 60 ? 'Q3' : total >= 50 ? 'Q4' : 'R'
-  const gradeLabel =
-    grade === 'T1+' ? '顶刊范本' : grade === 'T1' ? '顶刊级' : grade === 'Q1' ? '一区' : grade === 'Q2' ? '二区' : grade === 'Q3' ? '三区' : grade === 'Q4' ? '四区' : '退稿'
-  return { total, uncapped, cap, capNotes, grade, gradeLabel }
+  const ratedTotal = cap !== null && uncapped > cap ? cap : uncapped
+  const incomplete = entries.filter((e) => e.score < 50).map((e) => e.key)
+  const complete = incomplete.length === 0
+  // 不完整稿不评级，也不封顶诊断分：封顶只对完整稿的等级有意义。
+  if (!complete) {
+    capNotes = track === 'academic' && reviews.integrity?.score === 0
+      ? ['诚信维度 0 分：总分归零，不进入编辑部补全']
+      : ['任一维低于 50 分：暂不评级；编辑部按原思路补全后直接评级，不打回作者']
+  }
+  const total = complete ? ratedTotal : uncapped
+  const grade = complete
+    ? total >= 95 ? 'T1+' : total >= 90 ? 'T1' : total >= 80 ? 'Q1' : total >= 70 ? 'Q2' : total >= 60 ? 'Q3' : total >= 50 ? 'Q4' : 'R'
+    : 'NA'
+  const gradeLabel = complete
+    ? grade === 'T1+' ? '顶刊范本' : grade === 'T1' ? '顶刊级' : grade === 'Q1' ? '一区' : grade === 'Q2' ? '二区' : grade === 'Q3' ? '三区' : grade === 'Q4' ? '四区' : '退稿'
+    : '待编辑部补全，暂不评级'
+  return { total, uncapped, cap, capNotes, grade, gradeLabel, complete, incomplete }
 }
 
 export function RubricScoreFields({
@@ -235,7 +257,7 @@ export function RubricScoreFields({
       </div>
       <p className="text-[11px] leading-5 text-muted-foreground">
         每个维度必须同时有 <strong>分数 + 理由 + 正文证据</strong>。证据写到章节/段落/图号/表号/引用编号，只写“整体不错”不算。
-        三项任一缺失，服务端会拒绝整份报告。
+        90 分以上按顶刊级取证：理由至少 40 字、证据至少 60 字；80 分以上也要能定位到正文。三项任一缺失，服务端会拒绝整份报告。
       </p>
 
       {dims.map((dim) => {
@@ -321,8 +343,8 @@ export function RubricScoreFields({
       <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-3 dark:border-primary/25 dark:bg-primary/10">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <p className="flex items-center gap-1.5 text-sm font-medium">
-            {summary.grade === 'R' ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-            当前合计 {summary.total} 分 · {summary.grade} {summary.gradeLabel}
+            {summary.grade === 'R' || summary.grade === 'NA' ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+            {summary.complete ? `当前合计 ${summary.total} 分 · ${summary.grade} ${summary.gradeLabel}` : `当前诊断 ${summary.uncapped} 分 · ${summary.gradeLabel}；补全后直接评级，不打回作者`}
           </p>
           <span className="text-[11px] text-muted-foreground tabular-nums">
             未封顶 {summary.uncapped} · {completed}/{dims.length} 维
@@ -337,7 +359,7 @@ export function RubricScoreFields({
         )}
         <p className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-4 text-muted-foreground">
           <Info className="mt-0.5 h-3 w-3 shrink-0" />
-          90+ 顶刊级，80/70/60/50 分别为一/二/三/四区，低于 50 退稿。系统按五维权重合成，触发门槛自动封顶，不允许手工抬分。
+          90+ 顶刊级，80/70/60/50 分别为一/二/三/四区。完整稿才评级；任一维低于 50 进编辑部补全，暂不评级，补全后按实际内容重评。
         </p>
       </div>
     </div>

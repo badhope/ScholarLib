@@ -35,8 +35,8 @@ from app.models import Tenant
 
 logger = get_logger("rubbish.scheduler")
 
-STARTUP_DELAY_SECONDS = 10**9  # 2026-11-08 线上 CPU 打满排查：暂停自动催办，改手动触发
-INTERVAL_SECONDS = 6 * 60 * 60  # 每 6 小时一轮（催办最小窗口是 3 天，足够）
+STARTUP_DELAY_SECONDS = settings.scheduler_startup_delay_seconds
+INTERVAL_SECONDS = settings.scheduler_interval_seconds
 
 _task: asyncio.Task[None] | None = None
 
@@ -94,7 +94,11 @@ def start_scheduler() -> None:
     if _task is not None and not _task.done():
         return
     _task = asyncio.create_task(_loop(), name="rubbish-scheduler")
-    logger.info("scheduler_started", interval_seconds=INTERVAL_SECONDS)
+    logger.info(
+        "scheduler_started",
+        startup_delay_seconds=STARTUP_DELAY_SECONDS,
+        interval_seconds=INTERVAL_SECONDS,
+    )
 
 
 async def stop_scheduler() -> None:

@@ -54,6 +54,11 @@ class SecurityHeadersMiddleware:
                         ),
                     ]
                 )
+                # API responses are dynamic and often user-scoped. Without an
+                # explicit directive browsers may heuristically cache them;
+                # a stale permission or submission list is worse than a refetch.
+                if scope["path"].startswith("/api/"):
+                    headers.append((b"cache-control", b"no-store"))
                 if settings.is_production:
                     headers.append(
                         (

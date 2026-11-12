@@ -88,14 +88,45 @@ def _normalize_review_scores(scores: dict[str, Any]) -> dict[str, Any]:
             score = int(item.get("score"))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=f"{key}: score 必须是 0–100 整数") from exc
+        if not 0 <= score <= 100:
+            raise HTTPException(status_code=422, detail=f"{key}: score 必须在 0–100")
         reason = str(item.get("reason") or "").strip()
         evidence = str(item.get("evidence") or "").strip()
-        if len(reason) < 4:
-            raise HTTPException(status_code=422, detail=f"{key}: 必须写评分理由")
-        if len(evidence) < 8:
+        # 分越高，证据门槛越高：90+ 是“顶刊范本”，不能用一句“写得不错”
+        # 换一个高分。80+ 也要求能定位到正文位置，而不是泛泛而谈。
+        if score >= 90:
+            reason_min, evidence_min = 40, 60
+            level = "90+ 顶刊级"
+        elif score >= 80:
+            reason_min, evidence_min = 15, 20
+            level = "80+ 一区"
+        else:
+            reason_min, evidence_min = 4, 10
+            level = "常规"
+        if len(reason) < reason_min:
             raise HTTPException(
                 status_code=422,
-                detail=f"{key}: 必须附正文证据（章节/段落/图号/表号/引用编号/链接，至少 8 字）",
+                detail=f"{key}: {level}评分理由至少 {reason_min} 字，当前 {len(reason)} 字",
+            )
+        if len(evidence) < evidence_min:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{key}: {level}正文证据至少 {evidence_min} 字，当前 {len(evidence)} 字；"
+                    "需写清章节/段落/图号/表号/引用编号或可访问链接"
+                ),
+            )
+        locator_hit = any(
+            token in evidence
+            for token in ("第", "§", "图", "表", "页", "段", "节", "引用", "文献", "附录", "http")
+        )
+        if not locator_hit:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{key}: 证据必须能定位到正文（例如“§3 第2段 / 图2 / 表1 / 参考文献[4]”），"
+                    "不能只写主观印象"
+                ),
             )
         parsed.append(DimensionScore(key=key, score=score, reason=reason, evidence=evidence))
     result = evaluate(parsed, track=track)
@@ -118,6 +149,12 @@ def _normalize_review_scores(scores: dict[str, Any]) -> dict[str, Any]:
         "cap_notes": result["cap_notes"],
         "grade": result["grade"],
         "grade_label": result["grade_label"],
+        "quartile": result["quartile"],
+        "complete": result["complete"],
+        "incomplete_dimensions": result["incomplete_dimensions"],
+        "completeness_note": result["completeness_note"],
+        "editorial_completion_required": result["editorial_completion_required"],
+        "completion_owner": result["completion_owner"],
         "rejected": result["rejected"],
         "integrity_veto": result["integrity_veto"],
     }

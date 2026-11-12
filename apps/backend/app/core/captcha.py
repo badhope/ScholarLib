@@ -189,7 +189,11 @@ def _load_verifier() -> CaptchaVerifier:
 
 
 async def verify_captcha_token(
-    request: Request, token: str | None, answer: str | None = None
+    request: Request,
+    token: str | None,
+    answer: str | None = None,
+    *,
+    required: bool | None = None,
 ) -> None:
     """Validate the CAPTCHA token against the configured verifier.
 
@@ -200,7 +204,10 @@ async def verify_captcha_token(
     verification. Returns ``None`` when verification succeeds or
     when the policy is off.
     """
-    if not settings.captcha_required_for_registration:
+    policy_on = (
+        settings.captcha_required_for_registration if required is None else required
+    )
+    if not policy_on:
         return
     if not token:
         raise HTTPException(

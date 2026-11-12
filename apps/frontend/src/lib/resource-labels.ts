@@ -87,24 +87,34 @@ export interface QualityGrade {
 }
 
 const QUALITY_GRADES: Record<string, QualityGrade> = {
-  // 评审质量分 十六档口径（与 /api/quality/rubric 一致）。等级属于评审
-  // 信息元数据，不属于内容分层：界面只在评审区呈现，不进列表排序。
-  'A+': { label: 'A+ 典范', description: '97–100，领域范本，编辑部极少量授予', className: 'bg-amber-300 text-amber-950 border-amber-400/70' },
-  'A': { label: 'A 顶尖', description: '93–96，可直接发表', className: 'bg-amber-200/80 text-amber-950 border-amber-300/60' },
-  'A-': { label: 'A- 优秀', description: '90–92，小修即可', className: 'bg-amber-100 text-amber-900 border-amber-200' },
-  'B+': { label: 'B+ 良好', description: '87–89，有发表价值', className: 'bg-primary/15 text-primary border-primary/30' },
-  'B': { label: 'B 良好', description: '83–86，个别维度有可修正缺口', className: 'bg-primary/10 text-primary border-primary/20' },
-  'B-': { label: 'B- 良好', description: '80–82，建议小修', className: 'bg-primary/10 text-primary border-primary/20' },
-  'C+': { label: 'C+ 中等', description: '77–79，内容成立但需编辑加工', className: 'bg-muted text-foreground border-border' },
-  'C': { label: 'C 中等', description: '73–76，引用或表达需编辑加工', className: 'bg-muted text-foreground border-border' },
-  'C-': { label: 'C- 中等', description: '70–72，多处需修订', className: 'bg-muted text-foreground border-border' },
-  'D+': { label: 'D+ 达标', description: '67–69，达标线以上，明显修订', className: 'bg-muted text-foreground border-border' },
-  'D': { label: 'D 达标', description: '63–66，达标线以上，需大幅修订', className: 'bg-muted text-foreground border-border' },
-  'D-': { label: 'D- 达标', description: '60–62，borderline，可发表但需逐条修回', className: 'bg-muted text-foreground border-border' },
-  'E+': { label: 'E+ 基础', description: '57–59，基础层级，建议撤回重组', className: 'bg-muted text-muted-foreground border-border' },
-  'E': { label: 'E 基础', description: '53–56，基础层级', className: 'bg-muted text-muted-foreground border-border' },
-  'E-': { label: 'E- 基础', description: '50–52，borderline 基础', className: 'bg-muted text-muted-foreground border-border' },
-  'F': { label: 'F 及格', description: '40–49，及格可发表，按意见修订', className: 'bg-muted text-muted-foreground border-border' },
+  // RQS v5.0 分区口径（与 /api/quality/rubric 一致）。学术与荒诞共用
+  // 同一套分段，但锚点措辞不同；等级只在评审区出现，不进内容分层。
+  'T1+': { label: 'T1+ 顶刊范本', description: '95–100，同领域写作范本，极少授予', className: 'bg-amber-300 text-amber-950 border-amber-400/70' },
+  'T1': { label: 'T1 顶刊级', description: '90–94，达到顶刊同领域已发表水准', className: 'bg-amber-200/80 text-amber-950 border-amber-300/60' },
+  'Q1': { label: 'Q1 一区', description: '80–89，五个判断面都站得住', className: 'bg-primary/15 text-primary border-primary/30' },
+  'Q2': { label: 'Q2 二区', description: '70–79，有一处实质短板，修回后可成立', className: 'bg-primary/10 text-primary border-primary/20' },
+  'Q3': { label: 'Q3 三区', description: '60–69，能自圆其说，但方法或证据链有明显缺口', className: 'bg-muted text-foreground border-border' },
+  'Q4': { label: 'Q4 四区', description: '50–59，核心环节勉强成立，结论可靠性存疑', className: 'bg-muted text-muted-foreground border-border' },
+  'R': { label: 'R 退稿', description: '0–49，未达发表门槛，不入区', className: 'bg-destructive/10 text-destructive border-destructive/30' },
+}
+
+const LEGACY_GRADE_MAP: Record<string, string> = {
+  'A+': 'T1+', A: 'T1', 'A-': 'T1',
+  'B+': 'Q1', B: 'Q1', 'B-': 'Q1',
+  'C+': 'Q2', C: 'Q2', 'C-': 'Q2',
+  'D+': 'Q3', D: 'Q3', 'D-': 'Q3',
+  'E+': 'Q4', E: 'Q4', 'E-': 'Q4',
+  F: 'R',
+}
+
+function bandForScore(score: number): string {
+  if (score >= 95) return 'T1+'
+  if (score >= 90) return 'T1'
+  if (score >= 80) return 'Q1'
+  if (score >= 70) return 'Q2'
+  if (score >= 60) return 'Q3'
+  if (score >= 50) return 'Q4'
+  return 'R'
 }
 
 const GRADE_FALLBACK: QualityGrade = {
@@ -113,9 +123,17 @@ const GRADE_FALLBACK: QualityGrade = {
   className: 'bg-muted text-muted-foreground border-border',
 }
 
-export function qualityGrade(grade: string | null | undefined): QualityGrade | null {
+export function qualityGrade(
+  grade: string | null | undefined,
+  score?: number | null,
+): QualityGrade | null {
+  if (score != null && Number.isFinite(score)) {
+    const byScore = QUALITY_GRADES[bandForScore(score)]
+    if (byScore) return byScore
+  }
   if (!grade) return null
-  const known = QUALITY_GRADES[grade]
+  const normalized = LEGACY_GRADE_MAP[grade] ?? grade
+  const known = QUALITY_GRADES[normalized]
   if (known) return known
   return { ...GRADE_FALLBACK, label: grade, description: `评级 ${grade}` }
 }

@@ -41,7 +41,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
 
 export interface ReviewFormValue {
   recommendation: Recommendation
@@ -224,7 +223,6 @@ export function ReviewReportFields({
   disabled?: boolean
 }) {
   const [previewOpen, setPreviewOpen] = useState(false)
-  const average = useMemo(() => reviewAverage(value.track, value.dimensions), [value.track, value.dimensions])
   const summary = useMemo(() => scoreReviewTotal(value.track, value.dimensions), [value.track, value.dimensions])
   const dims = TRACK_DIMENSIONS[value.track]
   const selectedRecommendation =
@@ -396,7 +394,11 @@ export function ReviewReportFields({
               <Badge>{selectedRecommendation.label}</Badge>
               <Badge variant="outline">{TRACK_LABELS[value.track]}</Badge>
               <span className="text-xs text-muted-foreground">
-                合计 {summary.total} 分 · {summary.grade} {summary.gradeLabel}
+                {summary.complete
+                  ? `合计 ${summary.total} 分 · ${summary.grade} ${summary.gradeLabel}`
+                  : `诊断 ${summary.total} 分 · ${summary.gradeLabel}（${summary.incomplete
+                      .map((k) => dims.find((d) => d.key === k)?.label ?? k)
+                      .join('、')} 待编辑部补全，不打回作者）`}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">

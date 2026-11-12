@@ -288,6 +288,20 @@ class ReviewModeResponse(BaseModel):
     review_mode: Literal["single_blind", "double_blind"]
 
 
+class SiteSettingsResponse(BaseModel):
+    """Tenant-editable runtime switches (persist across restarts)."""
+
+    captcha_required_for_registration: bool
+    doi_author_entry_enabled: bool
+
+
+class SiteSettingsUpdate(BaseModel):
+    """Partial update; omitted keys keep their stored values."""
+
+    captcha_required_for_registration: bool | None = None
+    doi_author_entry_enabled: bool | None = None
+
+
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     username: str | None = Field(default=None, min_length=3, max_length=100)

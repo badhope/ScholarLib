@@ -36,53 +36,54 @@ function AboutTabs({ active }: { active: 'about' | 'metrics' }) {
   )
 }
 
-// 关于本刊：定位、理念、编委会、卷期与联系方式。
-// 编委会为编辑部化名的虚构阵容（本刊自己就是一本正经与玩梗并存的刊物，
-// 编委信息按刊物设定的方式呈现，不指向任何真实人物）。
+// 关于本刊：定位、岗位职责、刊史与联系方式。
+// 本站是小型独立出版项目，不虚构编委姓名、头衔或机构。对外展示的是
+// 真实存在的岗位与职责边界，而不是一套看起来像大刊的假阵容。
 
 const BOARD = [
   {
-    name: '陆止于海',
-    role: '主编',
-    affiliation: 'Rubbish 编辑部 · 风格观察站',
-    note: '主张「严肃的格式，自由的主题」，创刊口号撰写人。',
+    name: '主编岗',
+    role: '终审',
+    affiliation: '录用 · 修回 · 拒稿',
+    note: '对每篇稿件的最终去留有决定权，并对评审口径的一致性负责。',
   },
   {
-    name: '沈知非',
-    role: '副主编 · 学术质量',
-    affiliation: '开放获取出版研究室',
-    note: '负责学术质量与评审流程：统一标准，离谱选题也不能放松格式。',
+    name: '学术编辑岗',
+    role: '学术质量',
+    affiliation: '初筛 · 送审 · 复审',
+    note: '判断选题是否成立、方法是否可复现、证据是否支撑结论；不替作者补实验。',
   },
   {
-    name: '顾荒唐',
-    role: '副主编 · 选题把关',
-    affiliation: '应用风格研究中心（筹）',
-    note: '负责选题把关与内容风格定位，格言：「可以离谱，不可以伤人」。',
+    name: '副刊编辑岗',
+    role: '荒诞与文体',
+    affiliation: '设定 · 结构 · 文风',
+    note: '荒诞赛道按“设定是否新、内部是否自洽、执行是否完整”审，不套学术论文的样本量尺子。',
   },
   {
-    name: '白鹿原上',
-    role: '编委 · 审稿协调',
-    affiliation: '编辑部',
-    note: '维护匿名评审管道与审稿人队伍。',
+    name: '出版伦理岗',
+    role: '诚信与更正',
+    affiliation: '引用 · 数据 · 撤稿',
+    note: '核查引用、数据与 AI 使用声明；受理更正、申诉与撤稿，利益冲突时回避。',
   },
   {
-    name: '林一苇',
-    role: '编委 · 出版伦理',
-    affiliation: '编辑部',
-    note: '负责学术不端调查与撤稿流程。',
+    name: '技术出版岗',
+    role: '平台与存档',
+    affiliation: '投稿 · 评审 · 阅读',
+    note: '维护投稿、匿名评审、PDF/Word 导出与长期可读性；不介入学术判断。',
   },
   {
-    name: 'R. 编辑部',
-    role: '编委 · 技术出版',
-    affiliation: 'Rubbish 平台组',
-    note: '维护投稿、评审与阅读系统，本站即其作品。',
+    name: '审稿人池',
+    role: '同行评审',
+    affiliation: '匿名 · 逐维证据',
+    note: '按五维逐项写理由与正文证据；没有证据的判断不计分，审稿人身份不公开。',
   },
 ]
 
 const TIMELINE = [
-  ['2026 年 10 月', '创刊。首卷第 1 期上线，投稿、匿名评审、在线阅读全流程开放。'],
-  ['2026 年 10 月', '引入 R 因子，建立基于站内互动的全刊热度指标。'],
-  ['今天', '等你投稿。'],
+  ['2026 年 10 月', '创刊。首卷上线，投稿、匿名评审与在线阅读全流程开放。'],
+  ['2026 年 11 月', '五入口与社区版块上线；学术轨与荒诞轨分轨评审，不再共用一把尺子。'],
+  ['2026 年 11 月', 'RQS v5.0 收口：五维、逐维证据、分区硬门槛；90 分只留给顶刊级完成度。'],
+  ['现在', 'ISSN 与 DOI 均不伪造：刊号申请中，官方 DOI 由作者自行决定是否注册。'],
 ]
 
 function AboutPage() {
@@ -130,7 +131,7 @@ function AboutPage() {
         </RevealSection>
 
         <RevealSection>
-          <h2 className="text-xl font-medium">编辑部</h2>
+          <h2 className="text-xl font-medium">编辑部岗位与职责</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             {BOARD.map((m) => (
               <Card key={m.name}>
@@ -148,7 +149,8 @@ function AboutPage() {
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            编委署名为编辑部化名。本刊实行匿名评审，审稿人身份仅编辑部掌握。
+            本站是小型独立出版项目，不虚构编委姓名、头衔或机构。上表是岗位与职责边界，
+            不是一份看起来像大刊的假阵容；审稿人身份仅编辑部掌握。
           </p>
         </RevealSection>
 
@@ -173,6 +175,7 @@ function AboutPage() {
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
               { icon: Newspaper, label: '刊名', value: 'Rubbish（开放获取学术期刊）' },
+              { icon: ScrollText, label: '刊号状态', value: 'ISSN 申请中；站内刊号不等同官方 DOI' },
               { icon: Globe, label: '出版形式', value: '纯数字出版 · 滚动刊出 + 不定期合卷' },
               { icon: ScrollText, label: '收录范围', value: '严肃格式与自由主题统一评审 · 学术/副刊/吐槽分类呈现' },
               { icon: Building2, label: '出版方', value: 'Rubbish 编辑部' },

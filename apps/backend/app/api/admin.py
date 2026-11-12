@@ -24,10 +24,13 @@ from app.core.key_rotation import _active_secret_keys, _signing_key, reload_sett
 from app.core.logging import get_logger
 from app.models import AuditLog, Role, User, UserRole
 from app.modules.review.blinding import get_review_mode, set_review_mode
+from app.core.site_settings import get_all_site_flags, set_site_flag
 from app.schemas import (
     ReviewModeResponse,
     ReviewModeUpdate,
     RoleAssign,
+    SiteSettingsResponse,
+    SiteSettingsUpdate,
     UserResponse,
 )
 
@@ -556,6 +559,44 @@ async def update_review_mode_setting(
     )
     await db.commit()
     return ReviewModeResponse(review_mode=payload.review_mode)
+
+
+@router.get("/settings/site", response_model=SiteSettingsResponse)
+async def get_site_settings(
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> SiteSettingsResponse:
+    """读取本租户的运营开关（注册验证码 / 作者 DOI 入口）。"""
+    tenant_id = require_tenant_id()
+    flags = await get_all_site_flags(db, tenant_id)
+    return SiteSettingsResponse(**flags)
+
+
+@router.patch("/settings/site", response_model=SiteSettingsResponse)
+async def update_site_settings(
+    payload: SiteSettingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> SiteSettingsResponse:
+    """局部更新运营开关；未传的键保持不变，写审计日志。"""
+    tenant_id = require_tenant_id()
+    updates = payload.model_dump(exclude_none=True)
+    for key, value in updates.items():
+        await set_site_flag(db, tenant_id, key, bool(value))
+    if updates:
+        db.add(
+            AuditLog(
+                tenant_id=tenant_id,
+                actor_user_id=current_admin.id,
+                action="admin.settings.site",
+                target_type="tenant",
+                target_id=str(tenant_id),
+                payload=updates,
+            )
+        )
+        await db.commit()
+    flags = await get_all_site_flags(db, tenant_id)
+    return SiteSettingsResponse(**flags)
 
 
 @router.post("/maintenance/review-reminders")

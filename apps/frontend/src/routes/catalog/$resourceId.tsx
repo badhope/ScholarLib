@@ -438,7 +438,7 @@ function CatalogDetailPage() {
                 <CardContent>
                   <div className="mb-3 flex flex-wrap items-center gap-2">
                     {(() => {
-                      const grade = qualityGrade(data.quality_grade)
+                      const grade = qualityGrade(data.quality_grade, data.quality_score)
                       if (!grade) {
                         return <span className="text-sm text-muted-foreground">尚未评分</span>
                       }

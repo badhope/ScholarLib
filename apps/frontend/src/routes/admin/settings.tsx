@@ -4,8 +4,13 @@ import { AxiosError } from 'axios'
 import { Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { requireAdminGuard } from '@/lib/route-guards'
-import { useReviewMode, useSetReviewMode } from '@/hooks/api/use-modules'
-import type { ReviewMode } from '@/lib/types'
+import {
+  useReviewMode,
+  useSetReviewMode,
+  useSiteSettings,
+  useUpdateSiteSettings,
+} from '@/hooks/api/use-modules'
+import type { ReviewMode, SiteSettingsResponse } from '@/lib/types'
 import { PageHeader } from '@/components/common/page-header'
 import { ErrorState, Loading } from '@/components/common/state'
 import { Button } from '@/components/ui/button'
@@ -47,6 +52,18 @@ const REVIEW_MODE_OPTIONS: {
 function AdminSettingsPage() {
   const { data, isLoading, isError, refetch } = useReviewMode()
   const setMode = useSetReviewMode()
+  const site = useSiteSettings()
+  const updateSite = useUpdateSiteSettings()
+  const [siteDraft, setSiteDraft] = useState<SiteSettingsResponse | null>(null)
+  if (siteDraft === null && site.data) {
+    setSiteDraft(site.data)
+  }
+  const siteDirty =
+    siteDraft !== null &&
+    site.data !== undefined &&
+    (siteDraft.captcha_required_for_registration !==
+      site.data.captcha_required_for_registration ||
+      siteDraft.doi_author_entry_enabled !== site.data.doi_author_entry_enabled)
   // 本地暂存选择，点"保存"才提交，避免误点即生效
   const [draft, setDraft] = useState<ReviewMode | null>(null)
   // 当 draft 为 null 且 data 到达时初始化（仅首次）
@@ -89,6 +106,7 @@ function AdminSettingsPage() {
       ) : isError ? (
         <ErrorState message="加载期刊设置失败" onRetry={() => refetch()} />
       ) : (
+        <div className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">评审模式</CardTitle>
@@ -168,6 +186,87 @@ function AdminSettingsPage() {
             )}
           </CardFooter>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">注册与题录开关</CardTitle>
+            <CardDescription>
+              这些开关写入本租户设置，重启后仍然生效；不会改动环境变量默认值。
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {site.isLoading ? (
+              <Loading />
+            ) : site.isError || siteDraft === null ? (
+              <ErrorState message="加载运营开关失败" onRetry={() => site.refetch()} />
+            ) : (
+              <>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
+                  <input
+                    type="checkbox"
+                    checked={siteDraft.captcha_required_for_registration}
+                    onChange={(e) =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        captcha_required_for_registration: e.target.checked,
+                      })
+                    }
+                    className="mt-1 size-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">注册必须回答验证码</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      关闭后注册页不再请求验证码；已签发但未使用的验证码自然失效。
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
+                  <input
+                    type="checkbox"
+                    checked={siteDraft.doi_author_entry_enabled}
+                    onChange={(e) =>
+                      setSiteDraft({
+                        ...siteDraft,
+                        doi_author_entry_enabled: e.target.checked,
+                      })
+                    }
+                    className="mt-1 size-4 accent-primary"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">允许作者填写官方 DOI</span>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      关闭后投稿表单隐藏 DOI 输入；已保存的 DOI 不会被删除，只是不再新增。
+                    </span>
+                  </span>
+                </label>
+              </>
+            )}
+          </CardContent>
+          <CardFooter className="gap-2">
+            <Button
+              onClick={() => {
+                if (!siteDraft || !siteDirty) return
+                updateSite.mutate(siteDraft, {
+                  onSuccess: (res) => {
+                    setSiteDraft(res)
+                    toast.success('运营开关已保存')
+                  },
+                  onError: (err) => {
+                    const msg =
+                      err instanceof AxiosError
+                        ? (err.response?.data?.detail ?? err.message)
+                        : '保存失败'
+                    toast.error(typeof msg === 'string' ? msg : '保存失败')
+                  },
+                })
+              }}
+              disabled={!siteDirty || updateSite.isPending}
+            >
+              {updateSite.isPending ? '保存中…' : '保存开关'}
+            </Button>
+          </CardFooter>
+        </Card>
+        </div>
       )}
     </div>
   )

@@ -92,3 +92,11 @@ async def test_hsts_absent_in_test_env(client: AsyncClient) -> None:
     response = await client.get("/healthz")
     assert response.status_code == 200
     assert "strict-transport-security" not in response.headers
+
+
+@pytest.mark.asyncio
+async def test_api_responses_are_not_cached(client: AsyncClient) -> None:
+    """动态 API 必须显式 no-store，避免权限/列表被浏览器 heuristic cache。"""
+    response = await client.get("/api/capabilities")
+    assert response.status_code == 200
+    assert response.headers.get("cache-control") == "no-store"

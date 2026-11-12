@@ -19,6 +19,7 @@ export function RegisterPage() {
   const registerMut = useRegister()
   const capabilities = useCapabilities()
   const emailDelivery = capabilities.data?.email_delivery ?? false
+  const captchaRequired = capabilities.data?.captcha_required_for_registration ?? true
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -27,6 +28,10 @@ export function RegisterPage() {
   const [captchaAnswer, setCaptchaAnswer] = useState('')
 
   useEffect(() => {
+    if (capabilities.isLoading || !captchaRequired) {
+      setCaptcha(null)
+      return
+    }
     let cancelled = false
     void api
       .get<{ token: string; question: string }>('/auth/captcha')
@@ -39,7 +44,7 @@ export function RegisterPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [capabilities.isLoading, captchaRequired])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -52,20 +57,22 @@ export function RegisterPage() {
       return
     }
     try {
-      if (!captcha) {
-        toast.error('验证码还没加载好，请稍等或刷新页面')
-        return
-      }
-      if (!captchaAnswer.trim()) {
-        toast.error('请先回答验证码')
-        return
+      if (captchaRequired) {
+        if (!captcha) {
+          toast.error('验证码还没加载好，请稍等或刷新页面')
+          return
+        }
+        if (!captchaAnswer.trim()) {
+          toast.error('请先回答验证码')
+          return
+        }
       }
       const result = await registerMut.mutateAsync({
         email,
         username,
         password,
-        captcha_token: captcha.token,
-        captcha_answer: captchaAnswer.trim(),
+        captcha_token: captchaRequired ? captcha?.token : undefined,
+        captcha_answer: captchaRequired ? captchaAnswer.trim() : undefined,
       })
       if (!('access_token' in result) || !result.access_token) {
         // 注册端点对成功与冲突返回同一响应（防枚举），且注册响应不再建立会话：
