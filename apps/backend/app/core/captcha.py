@@ -204,9 +204,7 @@ async def verify_captcha_token(
     verification. Returns ``None`` when verification succeeds or
     when the policy is off.
     """
-    policy_on = (
-        settings.captcha_required_for_registration if required is None else required
-    )
+    policy_on = settings.captcha_required_for_registration if required is None else required
     if not policy_on:
         return
     if not token:

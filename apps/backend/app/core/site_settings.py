@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models import Tenant
 
+
 def _default_for(key: str) -> bool:
     """Process default, read live so tests / env reloads are reflected."""
     if key == "captcha_required_for_registration":
@@ -63,9 +64,7 @@ async def set_site_flag(
     """Persist one boolean flag without clobbering other tenant settings."""
     if key not in SITE_FLAGS:
         raise KeyError(key)
-    tenant = (
-        await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    ).scalar_one_or_none()
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
     if tenant is None:
         raise LookupError("Tenant not found")
     merged: dict[str, Any] = dict(tenant.settings or {})

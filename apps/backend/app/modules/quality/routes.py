@@ -46,8 +46,16 @@ class DimensionInput(BaseModel):
     """一个维度的评分输入。理由与证据必填——没证据的分数不受理。"""
 
     key: Literal[
-        "question", "argument", "method", "evidence", "integrity",
-        "concept", "coherence", "execution", "material", "voice",
+        "question",
+        "argument",
+        "method",
+        "evidence",
+        "integrity",
+        "concept",
+        "coherence",
+        "execution",
+        "material",
+        "voice",
     ]
     score: int = Field(ge=0, le=100)
     reason: str = Field(min_length=4, max_length=2000)

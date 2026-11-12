@@ -1959,9 +1959,7 @@ def _localize_catalog_images(md_text: str, resource_id: int, submission) -> str:
     except Exception:
         return md_text
 
-    pattern = re.compile(
-        rf"(?:https://rubbish\.argjiemi\.cn)?/api/catalog/{resource_id}/img/(\d+)"
-    )
+    pattern = re.compile(rf"(?:https://rubbish\.argjiemi\.cn)?/api/catalog/{resource_id}/img/(\d+)")
 
     def _replace(match: re.Match) -> str:
         n = match.group(1)

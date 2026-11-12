@@ -24,7 +24,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.modules.quality.rubric import (
-    DIMENSIONS_BY_TRACK,
     DIMENSION_HINTS,
     DIMENSION_LABELS,
     SCORE_ANCHORS,
@@ -81,11 +80,15 @@ ABSURD_CHECK_ITEMS: tuple[CheckItem, ...] = (
     CheckItem("x_consistency", "coherence", "前后是否不打架（人物、时间、规则、数字一致）？", 3),
     CheckItem("x_ending", "coherence", "结尾是否收得住，而不是写不下去就停？", 2),
     # --- 一本正经的执行 ---
-    CheckItem("x_format", "execution", "是否用完整结构（摘要/方法/结果或叙事推进）把荒诞当正事写？", 2),
+    CheckItem(
+        "x_format", "execution", "是否用完整结构（摘要/方法/结果或叙事推进）把荒诞当正事写？", 2
+    ),
     CheckItem("x_serious", "execution", "语气是否稳得住，不靠作者自己跳出来解释“这很好笑”？", 2),
     CheckItem("x_progress", "execution", "是否有推进，而不是同一层级的段子反复堆叠？", 2),
     # --- 材料与梗的可核查 ---
-    CheckItem("x_source", "material", "引用的梗、案例、数据是否给出可核出处（链接/作品/时间）？", 2),
+    CheckItem(
+        "x_source", "material", "引用的梗、案例、数据是否给出可核出处（链接/作品/时间）？", 2
+    ),
     CheckItem("x_rule_clarity", "material", "自造数据/规则是否说明是自造，而不是冒充真实来源？", 2),
     CheckItem("x_quote", "material", "引用原文/台词/论文是否准确，没有被张冠李戴？", 2),
     # --- 文风与节奏 ---
@@ -111,12 +114,15 @@ ANSWER_VALUES: dict[str, float] = {"yes": 1.0, "partial": 0.5, "no": 0.0}
 
 def _items_for(track: str, dimension: str) -> tuple[CheckItem, ...]:
     return tuple(
-        item for item in CHECK_ITEMS_BY_TRACK.get(track, ACADEMIC_CHECK_ITEMS)
+        item
+        for item in CHECK_ITEMS_BY_TRACK.get(track, ACADEMIC_CHECK_ITEMS)
         if item.dimension == dimension
     )
 
 
-def suggest_dimension_score(answers: dict[str, str], dimension: str, track: str = "academic") -> float:
+def suggest_dimension_score(
+    answers: dict[str, str], dimension: str, track: str = "academic"
+) -> float:
     """把检查项答案折算成该维度的建议分（0–100 百分制）。
 
     只作**建议**：审稿人可以覆盖，但覆盖必须写理由与证据。``na`` 从分母里

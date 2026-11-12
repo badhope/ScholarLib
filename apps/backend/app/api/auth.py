@@ -171,9 +171,7 @@ async def register(
     # default as the fallback. Read it before validating the token.
     from app.core.site_settings import get_site_flag
 
-    captcha_required = await get_site_flag(
-        db, tenant_id, "captcha_required_for_registration"
-    )
+    captcha_required = await get_site_flag(db, tenant_id, "captcha_required_for_registration")
     await verify_captcha_token(
         request,
         payload.captcha_token,

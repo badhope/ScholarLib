@@ -150,28 +150,28 @@ async def robots(request: Request) -> Response:
 @router.get("/sitemap.xml", response_class=Response, include_in_schema=False)
 async def sitemap(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     root = _root(request)
-    urls = [
-        (f"{root}/", "weekly", "1.0"),
-        (f"{root}/papers", "daily", "0.9"),
-        (f"{root}/catalog", "daily", "0.9"),
-        (f"{root}/fun", "daily", "0.8"),
-        (f"{root}/forum", "daily", "0.7"),
-        (f"{root}/archive", "weekly", "0.7"),
-        (f"{root}/sections", "weekly", "0.6"),
-        (f"{root}/about", "monthly", "0.6"),
-        (f"{root}/guide", "monthly", "0.6"),
-        (f"{root}/rules", "monthly", "0.5"),
-        (f"{root}/journal-metrics", "monthly", "0.6"),
-        (f"{root}/help", "monthly", "0.5"),
-        (f"{root}/support", "monthly", "0.4"),
-        (f"{root}/policies", "monthly", "0.4"),
-        (f"{root}/privacy", "yearly", "0.3"),
+    urls: list[tuple[str, str, str, str | None]] = [
+        (f"{root}/", "weekly", "1.0", None),
+        (f"{root}/papers", "daily", "0.9", None),
+        (f"{root}/catalog", "daily", "0.9", None),
+        (f"{root}/fun", "daily", "0.8", None),
+        (f"{root}/forum", "daily", "0.7", None),
+        (f"{root}/archive", "weekly", "0.7", None),
+        (f"{root}/sections", "weekly", "0.6", None),
+        (f"{root}/about", "monthly", "0.6", None),
+        (f"{root}/guide", "monthly", "0.6", None),
+        (f"{root}/rules", "monthly", "0.5", None),
+        (f"{root}/journal-metrics", "monthly", "0.6", None),
+        (f"{root}/help", "monthly", "0.5", None),
+        (f"{root}/support", "monthly", "0.4", None),
+        (f"{root}/policies", "monthly", "0.4", None),
+        (f"{root}/privacy", "yearly", "0.3", None),
     ]
     for slug in sorted(SECTION_PAGE_SLUGS):
-        urls.append((f"{root}/sections/{slug}", "weekly", "0.6"))
+        urls.append((f"{root}/sections/{slug}", "weekly", "0.6", None))
     rows = await _published_resources(db)
     for issue in sorted({int(str(r.issue)) for r in rows if str(r.issue).isdigit()}):
-        urls.append((f"{root}/archive/{issue:02d}", "monthly", "0.5"))
+        urls.append((f"{root}/archive/{issue:02d}", "monthly", "0.5", None))
     for r in rows:
         lastmod = r.publish_at or r.updated_at or r.created_at
         urls.append(
@@ -187,12 +187,11 @@ async def sitemap(request: Request, db: AsyncSession = Depends(get_db)) -> Respo
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
     ]
-    for loc, changefreq, priority, *rest in urls:
-        lastmod = rest[0] if rest else None
+    for loc, changefreq, priority, last_modified in urls:
         lines.append(
             "  <url>"
             f"<loc>{html.escape(loc)}</loc>"
-            + (f"<lastmod>{html.escape(str(lastmod))}</lastmod>" if lastmod else "")
+            + (f"<lastmod>{html.escape(str(last_modified))}</lastmod>" if last_modified else "")
             + f"<changefreq>{changefreq}</changefreq>"
             f"<priority>{priority}</priority>"
             "</url>"
@@ -451,17 +450,16 @@ async def build_index_html(
             description = (resource.abstract or DEFAULT_DESCRIPTION)[:300]
             extra = _citation_tags(resource, root)
             og_type = "article"
+            updated_at = resource.updated_at or resource.created_at or resource.publish_at
             payload: dict[str, Any] = {
                 "@context": "https://schema.org",
                 "@type": "ScholarlyArticle",
                 "headline": resource.title,
                 "author": [{"@type": "Person", "name": str(a)} for a in resource.authors or []],
                 "datePublished": _publication_date(resource),
-                "dateModified": (resource.updated_at or resource.created_at or resource.publish_at)
-                .date()
-                .isoformat()
-                if (resource.updated_at or resource.created_at or resource.publish_at)
-                else _publication_date(resource),
+                "dateModified": (
+                    updated_at.date().isoformat() if updated_at else _publication_date(resource)
+                ),
                 "abstract": (resource.abstract or "")[:2000],
                 "url": f"{root}/catalog/{resource.id}",
                 "mainEntityOfPage": {"@type": "WebPage", "@id": f"{root}/catalog/{resource.id}"},

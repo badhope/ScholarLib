@@ -26,9 +26,9 @@ from app.core.email_templates import account_created
 from app.core.key_rotation import _active_secret_keys, _signing_key, reload_settings
 from app.core.logging import get_logger
 from app.core.security import hash_password
+from app.core.site_settings import get_all_site_flags, set_site_flag
 from app.models import AuditLog, Role, User, UserRole
 from app.modules.review.blinding import get_review_mode, set_review_mode
-from app.core.site_settings import get_all_site_flags, set_site_flag
 from app.schemas import (
     AdminUserCreate,
     AdminUserCreateResponse,
@@ -249,11 +249,9 @@ async def create_invited_user(
                 link=link,
                 note=payload.note.strip(),
             )
-            await get_email_sender().send(
-                to=user.email, subject=subject, body=text, html=html
-            )
+            await get_email_sender().send(to=user.email, subject=subject, body=text, html=html)
             invite_sent = True
-        except Exception as exc:  # noqa: BLE001 - surfaced to the admin, not swallowed
+        except Exception as exc:
             invite_error = str(exc)[:300]
             logger.warning("admin_user_invite_failed", user_id=user.id, exc_info=True)
 

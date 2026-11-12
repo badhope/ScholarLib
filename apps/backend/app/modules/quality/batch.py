@@ -39,8 +39,16 @@ Verdict = Literal["keep", "rewrite", "reject", "delete"]
 
 class BatchDimensionInput(BaseModel):
     key: Literal[
-        "question", "argument", "method", "evidence", "integrity",
-        "concept", "coherence", "execution", "material", "voice",
+        "question",
+        "argument",
+        "method",
+        "evidence",
+        "integrity",
+        "concept",
+        "coherence",
+        "execution",
+        "material",
+        "voice",
     ]
     score: int = Field(ge=0, le=100)
     reason: str = Field(min_length=4, max_length=2000)
@@ -105,9 +113,7 @@ async def apply_review_items(
         resource = by_id[item.resource_id]
         try:
             scores = [
-                DimensionScore(
-                    key=d.key, score=d.score, reason=d.reason, evidence=d.evidence
-                )
+                DimensionScore(key=d.key, score=d.score, reason=d.reason, evidence=d.evidence)
                 for d in item.dimensions
             ]
             evaluation = evaluate(scores, track=item.track, article_type=item.article_type)

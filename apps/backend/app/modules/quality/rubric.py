@@ -122,7 +122,10 @@ SCORE_ANCHORS: dict[str, tuple[tuple[int, str], ...]] = {
             95,
             "顶刊范本：该维度可直接作为同领域写作范例，审稿人找不到需要实质修改的地方；极少稿件能达到。",
         ),
-        (90, "顶刊门槛：完成度、证据强度与判断力达到顶刊同领域已发表论文水准，仅有个别编辑性问题。"),
+        (
+            90,
+            "顶刊门槛：完成度、证据强度与判断力达到顶刊同领域已发表论文水准，仅有个别编辑性问题。",
+        ),
         (80, "一区：五个判断面都站得住，有清晰增量；短板只在局部，不影响结论。"),
         (70, "二区：问题与论证成立，方法或证据有一处可指出的实质不足，修回后可成立。"),
         (60, "三区：能自圆其说，但方法透明度或证据链有明显缺口，需大修后重审。"),
@@ -502,28 +505,26 @@ def rubric_payload() -> dict[str, object]:
                 "dimensions": [
                     {
                         "key": k,
-                        "label": l,
+                        "label": label,
                         "hint": h,
                         "max_score": 100,
                         "weight": WEIGHTS["academic"][k],
                     }
-                    for k, l, h in ACADEMIC_DIMENSIONS
+                    for k, label, h in ACADEMIC_DIMENSIONS
                 ],
-                "score_anchors": [
-                    {"score": s, "meaning": m} for s, m in SCORE_ANCHORS["academic"]
-                ],
+                "score_anchors": [{"score": s, "meaning": m} for s, m in SCORE_ANCHORS["academic"]],
             },
             "absurd": {
                 "label": TRACK_LABELS["absurd"],
                 "dimensions": [
                     {
                         "key": k,
-                        "label": l,
+                        "label": label,
                         "hint": h,
                         "max_score": 100,
                         "weight": WEIGHTS["absurd"][k],
                     }
-                    for k, l, h in ABSURD_DIMENSIONS
+                    for k, label, h in ABSURD_DIMENSIONS
                 ],
                 "score_anchors": [{"score": s, "meaning": m} for s, m in SCORE_ANCHORS["absurd"]],
             },
@@ -531,12 +532,12 @@ def rubric_payload() -> dict[str, object]:
         "dimensions": [
             {
                 "key": k,
-                "label": l,
+                "label": label,
                 "hint": h,
                 "max_score": 100,
                 "weight": WEIGHTS["academic"][k],
             }
-            for k, l, h in ACADEMIC_DIMENSIONS
+            for k, label, h in ACADEMIC_DIMENSIONS
         ],
         "score_anchors": [{"score": s, "meaning": m} for s, m in SCORE_ANCHORS["academic"]],
         "profiles": {
@@ -579,10 +580,10 @@ def rubric_payload() -> dict[str, object]:
 
 
 __all__ = [
-    "ABSURD_DIMENSION_LABELS",
-    "ABSURD_DIMENSIONS",
     "ABSTRACT_MAX",
     "ABSTRACT_MIN",
+    "ABSURD_DIMENSIONS",
+    "ABSURD_DIMENSION_LABELS",
     "ACADEMIC_DIMENSIONS",
     "DIMENSIONS",
     "DIMENSIONS_BY_TRACK",

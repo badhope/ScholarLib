@@ -85,7 +85,7 @@ def _normalize_review_scores(scores: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(item, dict):
             raise HTTPException(status_code=422, detail=f"{key}: 维度评分必须是对象")
         try:
-            score = int(item.get("score"))
+            score = int(str(item.get("score")))
         except (TypeError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=f"{key}: score 必须是 0–100 整数") from exc
         if not 0 <= score <= 100:

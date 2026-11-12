@@ -153,7 +153,7 @@ def account_created(
     note_text = f"\n编辑留言：{note}\n" if note else ""
     note_html = (
         f'<div style="margin:14px 0;padding:10px 14px;background:{PAPER};'
-        f'border-left:3px solid {ACCENT};font-size:13px;color:{INK};'
+        f"border-left:3px solid {ACCENT};font-size:13px;color:{INK};"
         f'white-space:pre-wrap;">{escape(note)}</div>'
         if note
         else ""

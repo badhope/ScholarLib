@@ -220,7 +220,5 @@ async def test_admin_creates_invited_reviewer_account(
     )
     assert audit.scalars().first() is not None
 
-    duplicate = await client.post(
-        "/api/admin/users", json=body, headers=auth_headers(admin_user)
-    )
+    duplicate = await client.post("/api/admin/users", json=body, headers=auth_headers(admin_user))
     assert duplicate.status_code == 409

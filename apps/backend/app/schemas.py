@@ -287,15 +287,18 @@ class AdminUserCreate(BaseModel):
 
     email: EmailStr
     username: str = Field(min_length=3, max_length=100)
-    role: Literal[
-        "chief_editor",
-        "deputy_editor",
-        "board_editor",
-        "reviewer",
-        "senior_reviewer",
-        "editor",
-        "section_editor",
-    ] | None = None
+    role: (
+        Literal[
+            "chief_editor",
+            "deputy_editor",
+            "board_editor",
+            "reviewer",
+            "senior_reviewer",
+            "editor",
+            "section_editor",
+        ]
+        | None
+    ) = None
     note: str = Field(default="", max_length=300)
 
 

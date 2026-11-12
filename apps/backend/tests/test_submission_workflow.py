@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from conftest import auth_headers, review_scores, complete_two_reviews, register_user
+from conftest import auth_headers, complete_two_reviews, register_user, review_scores
 from httpx import AsyncClient
 from sqlalchemy import select
 
