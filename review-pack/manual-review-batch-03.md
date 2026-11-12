@@ -74,7 +74,9 @@
 
 ## 生产同步
 
-本批 10 篇的 `quality_score/quality_grade` 已按上表回写；旧分备份在 `resources_quality_backup_20261112_manual`。逐篇旧分/新分/动作见 `manual-review-score-diff.csv`。
+本批 10 篇的 `quality_score/quality_grade` 已按上表回写；旧分备份在 `resources_quality_backup_20261112_manual`（累计 20 行）。逐篇旧分/新分/动作见 `manual-review-score-diff.csv`。
+
+复验 `/api/catalog/{id}`：10 篇分数与等级全部命中。下载件复验发现 118 的 `/file` 在 30 秒处 SSL EOF；根因是 docx 生成时同步回请求同站 `/img/{n}`，单 worker 被自己阻塞。已改为把 `/api/catalog/{id}/img/{n}` 直接映射到 `<markdown_stem>.img/` 本地缓存再排版；118 下载恢复 200/469625B，docx 内 4 张正文图 + 1 张站标共 5 个 media。110/119 下载也复验 200。
 
 ## 累计进度
 
