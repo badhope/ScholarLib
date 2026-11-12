@@ -5,7 +5,7 @@ BASE="${BASE:-https://rubbish.argjiemi.cn}"
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 LOG="${LOG:-/home/ubuntu/rubbish-health.log}"
 fail=0
-note(){ printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
+note(){ printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 bad(){ fail=1; note "FAIL $*"; }
 
 code=000

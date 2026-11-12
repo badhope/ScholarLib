@@ -5,7 +5,7 @@ cd /home/ubuntu/rubbish
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 LOG="${LOG:-/home/ubuntu/rubbish-backup-verify.log}"
 DB=rubbish_restore_check
-note(){ printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
+note(){ printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 
 db=$(ls -1t "$BACKUP_DIR"/db-*.sql.gz | head -1)
 up=$(ls -1t "$BACKUP_DIR"/uploads-*.tar.gz | head -1)

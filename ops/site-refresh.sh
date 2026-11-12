@@ -3,7 +3,7 @@
 set -euo pipefail
 BASE="${BASE:-https://rubbish.argjiemi.cn}"
 LOG="${LOG:-/home/ubuntu/rubbish-refresh.log}"
-note(){ printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
+note(){ printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 
 for i in $(seq 1 30); do
   curl -fsS -m 5 "$BASE/api/health" >/dev/null 2>&1 && break

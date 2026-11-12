@@ -4,7 +4,7 @@ set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 LOG="${LOG:-/home/ubuntu/rubbish-offsite.log}"
 REMOTE="${RCLONE_REMOTE:-}"
-note(){ printf '[%s] %s\n' "$(date -Is)" "$*" | tee -a "$LOG"; }
+note(){ printf '[%s] %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 if [ -z "$REMOTE" ]; then note "SKIP rclone remote not configured"; exit 0; fi
 command -v rclone >/dev/null || { note "FAIL rclone missing"; exit 1; }
 db=$(ls -1t "$BACKUP_DIR"/db-*.sql.gz | head -1)
