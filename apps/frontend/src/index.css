@@ -1,14 +1,31 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* 站点字符子集：只包含 274 篇题录/摘要/UI 实际用到的 2417 个汉字与基础拉丁、标点。
+   由 OFL 的 Noto Serif CJK SC 生成，避免首页加载 46 个 unicode-range 分片。 */
+@font-face {
+  font-family: "Noto Serif SC Site";
+  src: url("./assets/fonts/noto-serif-sc-site-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Noto Serif SC Site";
+  src: url("./assets/fonts/noto-serif-sc-site-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
-  --font-serif: "Noto Serif SC Variable", "Noto Serif SC", "Source Han Serif SC",
+  --font-serif: "Noto Serif SC Site", "Songti SC", "Source Han Serif SC",
     ui-serif, Georgia, "DejaVu Serif", serif;
   /* 标题无衬线：走系统无衬线栈，不额外加载字体（中文字体包体代价高） */
   --font-heading: "Noto Sans SC", "Source Han Sans SC",
     ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Playfair Display Variable", "Noto Serif SC Variable",
-    "Noto Serif SC", Georgia, "DejaVu Serif", serif;
+  --font-display: "Playfair Display Variable", "Noto Serif SC Site",
+    "Songti SC", Georgia, "DejaVu Serif", serif;
   --font-mono: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace;
   --default-mono-font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", monospace;
 }
@@ -486,7 +503,7 @@ h4 {
 /* 书名号 / 中文引号：霞鹜文楷优先，未安装则回退思源宋体；不用西文斜体硬套中文。 */
 .markdown-body .md-book-title,
 .markdown-body .md-quote-cn {
-  font-family: "LXGW WenKai", "Noto Serif SC", "Source Han Serif SC", var(--font-serif);
+  font-family: "LXGW WenKai", "Noto Serif SC Site", "Source Han Serif SC", var(--font-serif);
   font-style: normal;
 }
 .markdown-body .md-book-title { color: var(--color-primary); }

@@ -69,7 +69,7 @@ export function EChart({
         animation: !reduce,
         animationDuration: reduce ? 0 : 700,
         animationEasing: 'cubicOut',
-        textStyle: { fontFamily: "'Noto Serif SC', 'DejaVu Serif', serif", fontSize: 12 },
+        textStyle: { fontFamily: "'Noto Serif SC Site', 'DejaVu Serif', serif", fontSize: 12 },
         grid: { left: 8, right: 12, top: 28, bottom: 8, containLabel: true },
         tooltip: { trigger: 'axis', confine: true },
         ...option,

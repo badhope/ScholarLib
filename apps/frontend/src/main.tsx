@@ -7,7 +7,6 @@ import { ThemeProvider } from './components/theme-provider'
 import { AppErrorBoundary } from './components/common/error-boundary'
 import { initMonitoring, installGlobalErrorHandlers } from './lib/monitoring'
 // 期刊衬线字体（自托管可变字重，中文按 unicode-range 分片按需加载）
-import '@fontsource-variable/noto-serif-sc'
 import './index.css'
 
 // window.onerror + unhandledrejection 兜底（ErrorBoundary 只覆盖渲染期错误）

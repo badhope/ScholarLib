@@ -62,7 +62,7 @@ export const Route = createFileRoute('/')({
 // prefers-reduced-motion。
 
 const DISPLAY_FONT =
-  "'Playfair Display Variable', Georgia, 'Noto Serif SC Variable', 'Noto Serif SC', 'DejaVu Serif', serif"
+  "'Playfair Display Variable', Georgia, 'Noto Serif SC Site', 'Songti SC', 'DejaVu Serif', serif"
 
 const TYPEWRITER_PHRASES = [
   '投稿 · 同行评审 · 开放出版',
