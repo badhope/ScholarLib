@@ -38,7 +38,7 @@ function AdminIssueDetailPage() {
   const { data, isLoading, isError, refetch } = useResources({
     volume,
     issue,
-    page_size: 200,
+    page_size: 100,
     sort: 'issue',
     order: 'asc',
   })
