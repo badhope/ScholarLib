@@ -38,31 +38,26 @@ from app.modules.quality.rubric import (
 router = APIRouter(prefix="/quality", tags=["quality"])
 logger = get_logger("rubbish.quality")
 
-_DIMENSION_KEYS = (
-    "problem",
-    "argument",
-    "method",
-    "evidence",
-    "novelty",
-    "integrity",
-    "presentation",
-)
+_ACADEMIC_KEYS = ("question", "argument", "method", "evidence", "integrity")
+_ABSURD_KEYS = ("concept", "coherence", "execution", "material", "voice")
 
 
 class DimensionInput(BaseModel):
-    """一个维度的评分输入。reason 必填——没理由的分数无法复核。"""
+    """一个维度的评分输入。理由与证据必填——没证据的分数不受理。"""
 
     key: Literal[
-        "problem", "argument", "method", "evidence", "novelty", "integrity", "presentation"
+        "question", "argument", "method", "evidence", "integrity",
+        "concept", "coherence", "execution", "material", "voice",
     ]
-    # v4.0 起每维 0–100（百分制）；旧口径 0–5 会让前端 v4 滑杆直接 422。
     score: int = Field(ge=0, le=100)
     reason: str = Field(min_length=4, max_length=2000)
+    evidence: str = Field(min_length=8, max_length=2000)
 
 
 class ScoreRequest(BaseModel):
+    track: Literal["academic", "absurd"] = "academic"
     article_type: Literal["research", "review", "essay", "note"] = "research"
-    dimensions: list[DimensionInput] = Field(min_length=7, max_length=7)
+    dimensions: list[DimensionInput] = Field(min_length=5, max_length=5)
     # 0–10 风格坐标（荒诞指数）：审核流程的必填事实。不进质量分、
     # 不参与排序（铁律）；这里可选——仅实时预览时可省略，落库必须给。
     absurdity_index: float | None = Field(default=None, ge=0, le=10)
@@ -72,6 +67,7 @@ class AnswersRequest(BaseModel):
     """只给检查项答案，由服务端折算建议分（作者自查 / AI 预跑用）。"""
 
     answers: dict[str, str]
+    track: Literal["academic", "absurd"] = "academic"
 
 
 class OverrideRequest(BaseModel):
@@ -86,21 +82,24 @@ async def get_rubric() -> dict[str, object]:
 
 
 @router.get("/form")
-async def get_review_form() -> dict[str, object]:
-    """审稿评分表单（公开）：七个维度下的逐条事实检查项。"""
-    return form_payload()
+async def get_review_form(
+    track: str = Query(default="academic", pattern=r"^(academic|absurd)$"),
+) -> dict[str, object]:
+    """审稿评分表单（公开）：按赛道返回五维下的逐条事实检查项。"""
+    return form_payload(track)
 
 
 @router.get("/prompt")
 async def get_ai_prompt(
     article_type: str = Query(default="research", pattern=r"^(research|review|essay|note)$"),
+    track: str = Query(default="academic", pattern=r"^(academic|absurd)$"),
 ) -> dict[str, object]:
     """给外部 AI 的完整判分规格。
 
     公开是刻意的：作者想知道"我的稿子会被怎么评"，第三方工具想复现我们的
     结论，都应该能拿到同一份规格。口径不公开的评分体系无法自证公正。
     """
-    return prompt_payload(article_type)
+    return prompt_payload(article_type, track)
 
 
 @router.post("/suggest")
@@ -110,7 +109,7 @@ async def suggest_scores(payload: AnswersRequest) -> dict[str, object]:
     审稿人先勾检查项，拿到建议分后再决定是否覆盖——先事实、后判断，
     比一上来就拖滑杆更不容易拍脑袋。此端点无需登录：作者自查也要能用。
     """
-    return {"dimensions": score_answers(payload.answers)}
+    return {"dimensions": score_answers(payload.answers, payload.track)}
 
 
 @router.post("/score")
@@ -125,9 +124,15 @@ async def compute_score(
     """
     try:
         scores = [
-            DimensionScore(key=d.key, score=d.score, reason=d.reason) for d in payload.dimensions
+            DimensionScore(
+                key=d.key,
+                score=d.score,
+                reason=d.reason,
+                evidence=d.evidence,
+            )
+            for d in payload.dimensions
         ]
-        result = evaluate(scores, article_type=payload.article_type)
+        result = evaluate(scores, track=payload.track, article_type=payload.article_type)
         result["absurdity_index"] = payload.absurdity_index
         return result
     except ValueError as exc:

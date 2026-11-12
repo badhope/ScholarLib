@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from conftest import auth_headers, complete_two_reviews, register_user
+from conftest import auth_headers, review_scores, complete_two_reviews, register_user
 from httpx import AsyncClient
 from sqlalchemy import select
 
@@ -157,7 +157,7 @@ async def test_legacy_self_assignment_cannot_accept_or_submit(
     await db_session.commit()
     submitted = await client.post(
         f"/api/review/assignments/{assignment.id}/submit",
-        json={"recommendation": "accept", "scores": {}, "comments_to_author": "ok"},
+        json={"recommendation": "accept", "scores": review_scores(), "comments_to_author": "ok"},
         headers=auth_headers(test_user),
     )
     assert submitted.status_code == 403

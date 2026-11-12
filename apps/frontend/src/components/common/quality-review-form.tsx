@@ -54,11 +54,13 @@ interface Props {
  * 不同"，而不是"我感觉这稿子值 3 分还是 4 分"——后者无法仲裁。
  */
 export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly }: Props) {
-  const formQ = useQualityForm()
+  const [track, setTrack] = useState<'academic' | 'absurd'>('academic')
+  const formQ = useQualityForm(track)
   const scoreMut = useComputeQualityScore()
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [overrides, setOverrides] = useState<Record<string, number>>({})
   const [reasons, setReasons] = useState<Record<string, string>>({})
+  const [evidences, setEvidences] = useState<Record<string, string>>({})
   const [activeDim, setActiveDim] = useState<string | null>(null)
 
   const form = formQ.data
@@ -84,9 +86,10 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
     const payload: DimensionScoreInput[] = dimensions.map((d) => ({
       key: d.key,
       score: Math.round(finalScore(d.key)),
-      reason: reasons[d.key]?.trim() || `按检查项折算建议分 ${suggested[d.key]} 分`,
+      reason: reasons[d.key]?.trim() ?? '',
+      evidence: evidences[d.key]?.trim() ?? '',
     }))
-    const result = await scoreMut.mutateAsync({ article_type: articleType, dimensions: payload })
+    const result = await scoreMut.mutateAsync({ track, article_type: articleType, dimensions: payload })
     onSubmit?.({ dimensions: payload, total: result.score, grade: result.grade })
   }
 
@@ -107,6 +110,28 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
           覆盖的理由会作为修改指引发给作者。
         </CardContent>
       </Card>
+
+      <div className="flex gap-1.5 rounded-lg border bg-muted/30 p-1.5">
+        {(['academic', 'absurd'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => {
+              setTrack(t)
+              setAnswers({})
+              setOverrides({})
+              setReasons({})
+              setEvidences({})
+            }}
+            className={cn(
+              'flex-1 rounded-md px-2 py-1.5 text-xs transition-colors',
+              track === t ? 'bg-primary text-primary-foreground' : 'hover:bg-background',
+            )}
+          >
+            {t === 'academic' ? '学术赛道' : '荒诞赛道'}
+          </button>
+        ))}
+      </div>
 
       {dimensions.map((dim) => {
         const open = activeDim === dim.key
@@ -186,13 +211,29 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
                     </span>
                   </div>
                   <Textarea
-                    placeholder="给这个分的理由（必填，引用正文具体位置）"
+                    placeholder="为什么给这个分（必填，至少 4 字）"
                     value={reasons[dim.key] ?? ''}
                     disabled={readOnly}
                     onChange={(e) => setReasons((p) => ({ ...p, [dim.key]: e.target.value }))}
                     rows={2}
                     className="text-xs"
+                    aria-label={`${dim.label} 评分理由`}
                   />
+                  <Textarea
+                    placeholder="正文证据（必填，至少 8 字）：章节/段落/图号/表号/引用编号/链接"
+                    value={evidences[dim.key] ?? ''}
+                    disabled={readOnly}
+                    onChange={(e) => setEvidences((p) => ({ ...p, [dim.key]: e.target.value }))}
+                    rows={2}
+                    className="text-xs"
+                    aria-label={`${dim.label} 正文证据`}
+                  />
+                  {(reasons[dim.key]?.trim().length ?? 0) < 4 ||
+                  (evidences[dim.key]?.trim().length ?? 0) < 8 ? (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                      该维度需同时补齐理由（≥4 字）与正文证据（≥8 字）才能计分。
+                    </p>
+                  ) : null}
                 </div>
               </CardContent>
             )}
@@ -204,9 +245,9 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
         <CardContent className="space-y-2 py-4">
           <p className="flex items-start gap-2 text-[11px] text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            学术诚信维度为 0 分时总分直接归零（一票否决），稿子按不合格处理。
-            低于 40 分的稿子不会直接拒稿，而是打回：编辑部会要求你补审或说明
-            理由，同时把修改要求发给作者。
+            学术赛道诚信维度为 0 分时总分归零（一票否决）。总分低于 50 分为退稿、
+            不入区；任一维度低于 60 分会封顶 79，低于 50 分会封顶 59。没有理由或
+            没有正文证据的维度不计分，也不允许用平均分抬档。
           </p>
           {scoreMut.data && (
             <p className="text-sm">
@@ -222,14 +263,29 @@ export function QualityReviewForm({ articleType = 'research', onSubmit, readOnly
           )}
           <Button
             className="w-full"
-            disabled={readOnly || scoreMut.isPending || answeredCount < totalItems}
+            disabled={
+              readOnly ||
+              scoreMut.isPending ||
+              answeredCount < totalItems ||
+              dimensions.some(
+                (d) =>
+                  (reasons[d.key]?.trim().length ?? 0) < 4 ||
+                  (evidences[d.key]?.trim().length ?? 0) < 8,
+              )
+            }
             onClick={submit}
           >
             {scoreMut.isPending
               ? '计算中…'
               : answeredCount < totalItems
                 ? `请完成全部检查项（${answeredCount}/${totalItems}）`
-                : '生成评分'}
+                : dimensions.some(
+                      (d) =>
+                        (reasons[d.key]?.trim().length ?? 0) < 4 ||
+                        (evidences[d.key]?.trim().length ?? 0) < 8,
+                    )
+                  ? '请补齐每维理由与证据'
+                  : '生成评分'}
           </Button>
         </CardContent>
       </Card>

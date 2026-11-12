@@ -99,18 +99,38 @@ const DECISION_OPTIONS: { value: EditorDecision; label: string; hint?: string }[
 // 旧四维 originality/methodology/clarity/significance 已废弃，编辑在新维度
 // key 上不再回退显示英文原文）
 const SCORE_LABELS: Record<string, string> = {
+  question: '选题与真问题',
+  argument: '论证与自洽',
+  method: '方法与可复现',
+  evidence: '证据与结论',
+  integrity: '规范与诚信',
+  concept: '荒诞设定与原创',
+  coherence: '内部自洽',
+  execution: '一本正经的执行',
+  material: '材料与梗的可核查',
+  voice: '文风与节奏',
   problem: '问题价值',
-  argument: '论证链完整性',
-  method: '方法透明度',
-  evidence: '证据强度',
   novelty: '创新与定位',
-  integrity: '学术诚信',
   presentation: '表达清晰度',
   // 历史数据兜底：老报告里存的旧四维 key 仍能显示中文
   originality: '原创性（旧）',
   methodology: '方法学（旧）',
   clarity: '清晰度（旧）',
   significance: '重要性（旧）',
+}
+
+
+type ReportDimensionView = { score?: number; reason?: string; evidence?: string }
+
+/** 兼容 v5 结构（scores.dimensions）与旧报告（scores 直接是数字）。 */
+function reportDimensionEntries(scores: Record<string, unknown>): [string, ReportDimensionView][] {
+  const dims = scores?.dimensions
+  if (dims && typeof dims === 'object' && !Array.isArray(dims)) {
+    return Object.entries(dims as Record<string, ReportDimensionView>)
+  }
+  return Object.entries(scores ?? {})
+    .filter(([, value]) => typeof value === 'number')
+    .map(([key, value]) => [key, { score: value as number }])
 }
 
 // 编辑工作台状态 tab：全部 + 7 种 submission status
@@ -513,16 +533,33 @@ function PendingSubmissionsPage() {
                         {new Date(r.submitted_at).toLocaleString()}
                       </span>
                     </div>
-                    {Object.keys(r.scores).length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {Object.entries(r.scores).map(([k, v]) => (
-                          <span
-                            key={k}
-                            className="rounded bg-muted px-2 py-0.5 text-xs"
-                          >
-                            {SCORE_LABELS[k] ?? k} {v}/100
-                          </span>
-                        ))}
+                    {reportDimensionEntries(r.scores).length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap gap-2">
+                          {reportDimensionEntries(r.scores).map(([k, v]) => (
+                            <span key={k} className="rounded bg-muted px-2 py-0.5 text-xs">
+                              {SCORE_LABELS[k] ?? k} {v.score ?? '未评'}/100
+                            </span>
+                          ))}
+                        </div>
+                        {typeof r.scores.score === 'number' && (
+                          <p className="text-xs font-medium tabular-nums">
+                            合计 {String(r.scores.score)} 分 · {String(r.scores.grade ?? '')} · 门槛封顶{' '}
+                            {String(r.scores.cap ?? '无')}
+                          </p>
+                        )}
+                        {reportDimensionEntries(r.scores).some(([, v]) => v.evidence) && (
+                          <details className="text-xs text-muted-foreground">
+                            <summary className="cursor-pointer">查看逐维证据</summary>
+                            <div className="mt-1 space-y-1">
+                              {reportDimensionEntries(r.scores).map(([k, v]) => (
+                                <p key={k}>
+                                  <strong>{SCORE_LABELS[k] ?? k}</strong>：{v.reason || '无理由'} · 证据：{v.evidence || '无'}
+                                </p>
+                              ))}
+                            </div>
+                          </details>
+                        )}
                       </div>
                     )}
                     {r.comments_to_editor && (
@@ -1342,18 +1379,22 @@ function ReportsDialog({
                   </span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {Object.entries(r.scores).map(([k, v]) => (
-                    <div
-                      key={k}
-                      className="rounded bg-muted p-1 text-center text-xs"
-                    >
-                      <div className="font-medium">
-                        {SCORE_LABELS[k] ?? k}
-                      </div>
-                      <div className="text-muted-foreground">{v}/100</div>
+                  {reportDimensionEntries(r.scores).map(([k, v]) => (
+                    <div key={k} className="rounded bg-muted p-1 text-center text-xs">
+                      <div className="font-medium">{SCORE_LABELS[k] ?? k}</div>
+                      <div className="text-muted-foreground">{v.score ?? '未评'}/100</div>
                     </div>
                   ))}
                 </div>
+                {reportDimensionEntries(r.scores).some(([, v]) => v.evidence) && (
+                  <div className="mt-2 space-y-1 rounded border bg-muted/20 p-2 text-xs">
+                    {reportDimensionEntries(r.scores).map(([k, v]) => (
+                      <p key={k}>
+                        <strong>{SCORE_LABELS[k] ?? k}</strong>：{v.reason || '无理由'} · 证据：{v.evidence || '无'}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {r.comments_to_author && (
                   <div className="mt-2">
                     <div className="text-xs text-muted-foreground">

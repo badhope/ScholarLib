@@ -10,6 +10,17 @@ import {
   Pencil,
 } from 'lucide-react'
 import type { Recommendation } from '@/lib/types'
+import {
+  RubricScoreFields,
+  TRACK_DIMENSIONS,
+  TRACK_LABELS,
+  dimensionLabel,
+  emptyDimensionReviews,
+  reviewAverage,
+  scoreReviewTotal,
+  type DimensionReviews,
+  type ReviewTrack,
+} from '@/components/review/rubric-score-fields'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,7 +45,8 @@ import { Input } from '@/components/ui/input'
 
 export interface ReviewFormValue {
   recommendation: Recommendation
-  scores: Record<string, number>
+  track: ReviewTrack
+  dimensions: DimensionReviews
   comments_to_editor: string
   comments_to_author: string
   special_issue: boolean
@@ -73,81 +85,10 @@ export const RECOMMENDATION_OPTIONS: {
   },
 ]
 
-export const SCORE_DIMENSIONS: {
-  key: string
-  label: string
-  hint: string
-  watch: string
-}[] = [
-  {
-    key: 'problem',
-    label: '问题价值',
-    hint: '研究问题是否真实、具体、值得回答',
-    watch: '看它有没有被写成可回答的问题，而不是只给一个主题；再看“为什么这个问题还没被回答”。',
-  },
-  {
-    key: 'argument',
-    label: '论证链',
-    hint: '从前提走到结论有无跳跃与循环论证',
-    watch: '逐段问：这个结论的前提在哪？有没有从 A 直接跳到 C，或用结论反过来证明前提？',
-  },
-  {
-    key: 'method',
-    label: '方法透明度',
-    hint: '他人能否照此复现',
-    watch: '数据来源、样本、筛选标准、关键参数、失败案例是否交代到别人能照着做。',
-  },
-  {
-    key: 'evidence',
-    label: '证据强度',
-    hint: '结论是否被证据支撑',
-    watch: '弱证据有没有被写成强结论；相关性有没有被说成因果；样本量够不够。',
-  },
-  {
-    key: 'novelty',
-    label: '创新与定位',
-    hint: '相对已有工作补了哪一块',
-    watch: '增量是否在正文里兑现，而不是只在摘要或引言里宣称；有没有说清与最近工作的差别。',
-  },
-  {
-    key: 'integrity',
-    label: '学术诚信',
-    hint: '引用真实可核、数据可追、声明完整',
-    watch: '抽查引用能否定位原文；数据/代码可用性、作者贡献、利益冲突、伦理审批是否齐全。0 分一票否决。',
-  },
-  {
-    key: 'presentation',
-    label: '表达与结构',
-    hint: '结构、图表与语言是否让读者读得下去',
-    watch: '按顺序读一遍：每一节是否回答上一节留下的问题；图表是否自解释；语言是否需要反复重读。',
-  },
-]
-
-const SCORE_ANCHORS: { min: number; text: string }[] = [
-  { min: 90, text: '范本级：核心环节完整，可作为同类稿件范本。' },
-  { min: 80, text: '优秀：结构完整，只有少量需要打磨。' },
-  { min: 70, text: '良好：达到本刊要求，仍有可见改进空间。' },
-  { min: 60, text: '合格：能站住，但证据或论证有明确短板。' },
-  { min: 50, text: '边缘：可以补救，必须实质修改后再看。' },
-  { min: 40, text: '及格线附近：核心环节有明显缺口。' },
-  { min: 0, text: '不合格：核心环节缺失，需要重做或换问题。' },
-]
-
-function scoreAnchor(score: number): string {
-  return SCORE_ANCHORS.find((band) => score >= band.min)?.text ?? SCORE_ANCHORS[SCORE_ANCHORS.length - 1].text
-}
-
 export const EMPTY_REVIEW_FORM: ReviewFormValue = {
   recommendation: 'minor_revision',
-  scores: {
-    problem: 70,
-    argument: 70,
-    method: 70,
-    evidence: 70,
-    novelty: 70,
-    integrity: 100,
-    presentation: 70,
-  },
+  track: 'academic',
+  dimensions: emptyDimensionReviews('academic'),
   comments_to_editor: '',
   comments_to_author: '',
   special_issue: false,
@@ -178,8 +119,8 @@ const EDITOR_TEMPLATE = `**给编辑的判断**
 - 是否存在伦理、引用或数据可信度疑点：……
 - 修改后需要编辑部重点核对：……`
 
-function reviewFieldLabel(key: string): string {
-  return SCORE_DIMENSIONS.find((d) => d.key === key)?.label ?? key
+function reviewFieldLabel(key: string, track: ReviewTrack = 'academic'): string {
+  return dimensionLabel(track, key)
 }
 
 function MarkdownPreview({ value, empty }: { value: string; empty: string }) {
@@ -283,10 +224,9 @@ export function ReviewReportFields({
   disabled?: boolean
 }) {
   const [previewOpen, setPreviewOpen] = useState(false)
-  const average = useMemo(() => {
-    const nums = SCORE_DIMENSIONS.map((d) => value.scores[d.key] ?? 70)
-    return (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)
-  }, [value.scores])
+  const average = useMemo(() => reviewAverage(value.track, value.dimensions), [value.track, value.dimensions])
+  const summary = useMemo(() => scoreReviewTotal(value.track, value.dimensions), [value.track, value.dimensions])
+  const dims = TRACK_DIMENSIONS[value.track]
   const selectedRecommendation =
     RECOMMENDATION_OPTIONS.find((o) => o.value === value.recommendation) ?? RECOMMENDATION_OPTIONS[1]
 
@@ -332,69 +272,37 @@ export function ReviewReportFields({
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <Label>评分（百分制 0–100）· 七个学术价值维度</Label>
-          <span className="text-[11px] text-muted-foreground tabular-nums">
-            当前均分 {average} / 100
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Label>评分赛道</Label>
+          <span className="text-[11px] text-muted-foreground">两套维度，不共用一把尺子</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5 rounded-lg border bg-muted/30 p-1.5">
+          {(['academic', 'absurd'] as ReviewTrack[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange({ ...value, track: t, dimensions: emptyDimensionReviews(t) })}
+              className={cn(
+                'rounded-md px-2 py-1.5 text-xs transition-colors',
+                value.track === t ? 'bg-primary text-primary-foreground' : 'hover:bg-background',
+              )}
+            >
+              {TRACK_LABELS[t]}
+            </button>
+          ))}
         </div>
         <p className="text-[11px] leading-5 text-muted-foreground">
-          评分不是印象分：每个维度按「看什么」逐项检查，再给 0–100 的整数。后端按权重合成总分（research / review / essay / note 四套权重）。
-          学术诚信 0 分一票否决；发现引用造假或数据不可追，请给 0 分并在给编辑的意见里写清。
+          {value.track === 'academic'
+            ? '学术赛道：选题、论证、方法、证据、诚信。90+ 才是顶刊级；缺方法/证据会封顶，不允许用平均分抬进一区。'
+            : '荒诞赛道：审设定、自洽、执行、材料、文风。允许无中生有，不按样本量与伦理审批扣分；但前后打架、堆梗不成篇会封顶。'}
         </p>
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          {SCORE_DIMENSIONS.map((dim) => {
-            const score = value.scores[dim.key] ?? 70
-            const setScore = (n: number) =>
-              onChange({
-                ...value,
-                scores: { ...value.scores, [dim.key]: Math.max(0, Math.min(100, Math.round(n))) },
-              })
-            return (
-              <div key={dim.key} className="rounded-lg border bg-card p-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium">{dim.label}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{dim.hint}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={score}
-                      disabled={disabled}
-                      onChange={(e) => setScore(Number(e.target.value))}
-                      aria-label={`${dim.label}分数（0–100）`}
-                      className="h-8 w-16 px-2 text-center text-xs tabular-nums"
-                    />
-                    <span className="text-[10px] text-muted-foreground">分</span>
-                  </div>
-                </div>
-                <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">{dim.watch}</p>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {[50, 60, 70, 80, 90, 100].map((n) => (
-                    <Button
-                      key={n}
-                      type="button"
-                      size="sm"
-                      variant={score === n ? 'default' : 'outline'}
-                      className="h-7 px-2 text-xs tabular-nums"
-                      onClick={() => setScore(n)}
-                      disabled={disabled}
-                    >
-                      {n}
-                    </Button>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
-                  {scoreAnchor(score)}
-                </p>
-              </div>
-            )
-          })}
-        </div>
+        <RubricScoreFields
+          track={value.track}
+          reviews={value.dimensions}
+          onChange={(dimensions) => onChange({ ...value, dimensions })}
+          disabled={disabled}
+        />
       </div>
 
       <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-500/20 dark:bg-amber-950/20">
@@ -486,15 +394,34 @@ export function ReviewReportFields({
           <div className="space-y-4 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <Badge>{selectedRecommendation.label}</Badge>
-              <span className="text-xs text-muted-foreground">平均分 {average} / 100</span>
+              <Badge variant="outline">{TRACK_LABELS[value.track]}</Badge>
+              <span className="text-xs text-muted-foreground">
+                合计 {summary.total} 分 · {summary.grade} {summary.gradeLabel}
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-              {SCORE_DIMENSIONS.map((d) => (
+              {dims.map((d) => (
                 <div key={d.key} className="rounded border px-2 py-1.5 text-xs">
                   <span className="text-muted-foreground">{d.label}</span>
-                  <span className="ml-1 font-medium tabular-nums">{value.scores[d.key] ?? 70}</span>
+                  <span className="ml-1 font-medium tabular-nums">
+                    {value.dimensions[d.key]?.score ?? '未评'}
+                  </span>
                 </div>
               ))}
+            </div>
+            <div className="space-y-1.5">
+              {dims.map((d) => {
+                const item = value.dimensions[d.key]
+                return (
+                  <div key={d.key} className="rounded border bg-muted/20 px-2 py-1.5 text-xs">
+                    <p className="font-medium">
+                      {d.label}：{item?.score ?? '未评'} 分
+                    </p>
+                    <p className="text-muted-foreground">理由：{item?.reason || '（未填）'}</p>
+                    <p className="text-muted-foreground">证据：{item?.evidence || '（未填）'}</p>
+                  </div>
+                )
+              })}
             </div>
             <div>
               <p className="mb-1 flex items-center gap-1.5 text-xs font-medium">
@@ -535,11 +462,10 @@ function ReviewFieldDivider() {
   return <div className="h-px bg-border" />
 }
 
-export function reviewFormAverage(scores: Record<string, number>): string {
-  const nums = SCORE_DIMENSIONS.map((d) => scores[d.key] ?? 70)
-  return (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)
+export function reviewFormAverage(track: ReviewTrack, dimensions: DimensionReviews): string {
+  return reviewAverage(track, dimensions)
 }
 
-export function reviewScoreLabel(key: string): string {
-  return reviewFieldLabel(key)
+export function reviewScoreLabel(key: string, track: ReviewTrack = 'academic'): string {
+  return reviewFieldLabel(key, track)
 }

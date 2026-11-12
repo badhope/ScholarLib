@@ -660,7 +660,7 @@ export interface AssignmentListResponse {
 
 export interface ReviewSubmit {
   recommendation: Recommendation
-  scores: Record<string, number>
+  scores: Record<string, unknown>
   comments_to_editor?: string | null
   comments_to_author?: string | null
   special_issue?: boolean
@@ -678,7 +678,7 @@ export interface ReviewReportResponse {
   id: number
   assignment_id: number
   recommendation: Recommendation
-  scores: Record<string, number>
+  scores: Record<string, unknown>
   comments_to_editor?: string | null
   comments_to_author?: string | null
   attachments?: ReviewAttachment[]
@@ -1081,11 +1081,14 @@ export interface DimensionScoreInput {
   key: string
   score: number
   reason: string
+  evidence: string
 }
 
 /** 评分结果（v3.0：rejected = <40 必须打回；borderline = 55–57 边缘稿） */
 export interface QualityScoreResult {
   rubric_version: string
+  track: 'academic' | 'absurd'
+  track_label: string
   article_type: string
   article_type_label: string
   score: number
@@ -1128,6 +1131,8 @@ export interface QualityFormDimension {
 }
 
 export interface QualityForm {
+  track: 'academic' | 'absurd'
+  track_label: string
   dimensions: QualityFormDimension[]
   answers: { value: string; label: string }[]
   score_anchors: { score: number; meaning: string }[]

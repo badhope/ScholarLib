@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from conftest import auth_headers
+from conftest import auth_headers, review_scores
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -291,7 +291,7 @@ async def test_reviewer_submit_report_without_accept_400(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "accept",
-            "scores": {"originality": 4},
+            "scores": review_scores(),
             "comments_to_author": "Good work",
         },
         headers=auth_headers(admin_user),
@@ -313,7 +313,7 @@ async def test_reviewer_submit_report_full(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "minor_revision",
-            "scores": {"originality": 4, "methodology": 3, "clarity": 4},
+            "scores": review_scores(72),
             "comments_to_editor": "Need minor revisions to methodology.",
             "comments_to_author": "Please clarify section 3.2.",
         },
@@ -345,7 +345,7 @@ async def test_reviewer_cannot_submit_twice(
     )
     body = {
         "recommendation": "accept",
-        "scores": {},
+        "scores": review_scores(),
         "comments_to_author": "OK",
     }
     first = await client.post(
@@ -556,7 +556,7 @@ async def test_author_sees_only_comments_to_author(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "major_revision",
-            "scores": {"clarity": 3},
+            "scores": review_scores(68),
             "comments_to_editor": "Confidential note to editor.",
             "comments_to_author": "Visible to author.",
         },
@@ -591,7 +591,7 @@ async def test_editor_sees_full_report(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "accept",
-            "scores": {"originality": 5},
+            "scores": review_scores(95),
             "comments_to_editor": "Editor-only confidential note.",
             "comments_to_author": "Great paper.",
         },
@@ -847,7 +847,7 @@ async def test_reviewer_view_submission_after_complete(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "accept",
-            "scores": {"originality": 4},
+            "scores": review_scores(),
             "comments_to_author": "Good",
         },
         headers=auth_headers(admin_user),

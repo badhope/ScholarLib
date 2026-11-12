@@ -198,7 +198,7 @@ async def complete_one_review(
             f"/api/review/assignments/{assignment_id}/submit",
             json={
                 "recommendation": "accept",
-                "scores": {"originality": 4, "clarity": 4},
+                "scores": review_scores(88),
                 "comments_to_author": "Sound work, ready for publication.",
             },
             headers=hdr,
@@ -300,6 +300,19 @@ async def admin_user(client: AsyncClient, db_session: AsyncSession) -> dict[str,
         "user_id": data["user_id"],
         "is_admin": data["is_admin"],
     }
+
+
+def review_scores(score: int = 82) -> dict[str, object]:
+    """v5.0 合法审稿评分：五维 + 理由 + 正文证据。"""
+    dimensions = {
+        key: {
+            "score": score,
+            "reason": f"{key} 维度按检查项逐条核对后给分",
+            "evidence": f"证据：正文 §3 第 2 段与表 1（{key}）",
+        }
+        for key in ("question", "argument", "method", "evidence", "integrity")
+    }
+    return {"rubric_version": "5.0", "track": "academic", "dimensions": dimensions}
 
 
 def auth_headers(user: dict[str, str | int | bool]) -> dict[str, str]:

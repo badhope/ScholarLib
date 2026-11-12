@@ -1,4 +1,4 @@
-"""评分 v3.0 端点与不合格稿打回流程的集成测试。
+"""评分 v5.0 端点与不合格稿打回流程的集成测试。
 
 覆盖用户的核心诉求：
 1. 审稿人评分端点按权重算分（服务端算，不可前端篡改）；
@@ -13,11 +13,14 @@ import pytest
 from conftest import auth_headers, complete_one_review, register_user
 from httpx import AsyncClient
 
-_DIMS = ("problem", "argument", "method", "evidence", "novelty", "integrity", "presentation")
+_DIMS = ("question", "argument", "method", "evidence", "integrity")
 
 
 def _all(value: int, reason: str = "理由：正文第 2 节可核") -> list[dict[str, object]]:
-    return [{"key": k, "score": value, "reason": reason} for k in _DIMS]
+    return [
+        {"key": k, "score": value, "reason": reason, "evidence": "证据：§2 第 3 段与表 1"}
+        for k in _DIMS
+    ]
 
 
 async def _make_reviewer(client: AsyncClient, admin: dict, name: str) -> dict:
@@ -36,7 +39,7 @@ async def test_score_endpoint_requires_reviewer(client: AsyncClient, test_user: 
     """普通作者不能调用评分端点——分数不能自己给自己。"""
     r = await client.post(
         "/api/quality/score",
-        json={"article_type": "research", "dimensions": _all(5)},
+        json={"track": "academic", "article_type": "research", "dimensions": _all(5)},
         headers=auth_headers(test_user),
     )
     assert r.status_code == 403
@@ -49,28 +52,28 @@ async def test_score_endpoint_computes_weighted_total(
     reviewer = await _make_reviewer(client, admin_user, "score_rev")
     r = await client.post(
         "/api/quality/score",
-        json={"article_type": "research", "dimensions": _all(100)},
+        json={"track": "academic", "article_type": "research", "dimensions": _all(100)},
         headers=auth_headers(reviewer),
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["score"] == 100.0
-    assert body["grade"] == "A+"
-    assert body["rubric_version"] == "4.0"
+    assert body["grade"] == "T1+"
+    assert body["rubric_version"] == "5.0"
 
 
 @pytest.mark.asyncio
 async def test_integrity_zero_vetoes_total(client: AsyncClient, admin_user: dict) -> None:
     """诚信 0 分 → 总分 0、D 级、必须打回（一票否决）。"""
     reviewer = await _make_reviewer(client, admin_user, "veto_rev")
-    dims = _all(5)
+    dims = _all(80)
     for d in dims:
         if d["key"] == "integrity":
             d["score"] = 0
             d["reason"] = "发现第 4 条参考文献无法定位，疑似编造"
     r = await client.post(
         "/api/quality/score",
-        json={"article_type": "research", "dimensions": dims},
+        json={"track": "academic", "article_type": "research", "dimensions": dims},
         headers=auth_headers(reviewer),
     )
     assert r.status_code == 200
@@ -86,7 +89,7 @@ async def test_score_rejects_missing_dimension(client: AsyncClient, admin_user: 
     reviewer = await _make_reviewer(client, admin_user, "miss_rev")
     r = await client.post(
         "/api/quality/score",
-        json={"article_type": "research", "dimensions": _all(4)[:-1]},
+        json={"track": "academic", "article_type": "research", "dimensions": _all(80)[:-1]},
         headers=auth_headers(reviewer),
     )
     assert r.status_code == 422

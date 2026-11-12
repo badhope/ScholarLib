@@ -29,6 +29,11 @@ import {
   ReviewReportFields,
   type ReviewFormValue,
 } from '@/components/review/review-report-fields'
+import {
+  TRACK_DIMENSIONS,
+  dimensionIssue,
+  scoreReviewTotal,
+} from '@/components/review/rubric-score-fields'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -148,9 +153,33 @@ function ReviewWorkbenchPage() {
       toast.error('勾选「特别篇」后必须填写不少于 10 字的理由')
       return
     }
+    const dims = TRACK_DIMENSIONS[reviewForm.track]
+    const incomplete = dims
+      .filter((d) => dimensionIssue(d, reviewForm.dimensions[d.key]) !== null)
+      .map((d) => `${d.label}（${dimensionIssue(d, reviewForm.dimensions[d.key])}）`)
+    if (incomplete.length) {
+      toast.error(`还有 ${incomplete.length} 个维度未完成：${incomplete.join('、')}`)
+      return
+    }
+    const summary = scoreReviewTotal(reviewForm.track, reviewForm.dimensions)
     const body: ReviewSubmit = {
       recommendation: reviewForm.recommendation,
-      scores: reviewForm.scores,
+      scores: {
+        rubric_version: '5.0',
+        track: reviewForm.track,
+        dimensions: Object.fromEntries(
+          dims.map((d) => [
+            d.key,
+            {
+              score: reviewForm.dimensions[d.key]?.score,
+              reason: reviewForm.dimensions[d.key]?.reason.trim(),
+              evidence: reviewForm.dimensions[d.key]?.evidence.trim(),
+            },
+          ]),
+        ),
+        score: summary.total,
+        grade: summary.grade,
+      },
       comments_to_editor: reviewForm.comments_to_editor || undefined,
       comments_to_author: reviewForm.comments_to_author || undefined,
       special_issue: reviewForm.special_issue || undefined,

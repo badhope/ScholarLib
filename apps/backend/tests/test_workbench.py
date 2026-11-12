@@ -12,7 +12,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
-from conftest import auth_headers
+from conftest import auth_headers, review_scores
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -150,15 +150,7 @@ async def test_reviewer_workbench_completed_column(
         f"/api/review/assignments/{assignment_id}/submit",
         json={
             "recommendation": "minor_revision",
-            "scores": {
-                "problem": 3,
-                "argument": 3,
-                "method": 3,
-                "evidence": 3,
-                "novelty": 3,
-                "integrity": 5,
-                "presentation": 3,
-            },
+            "scores": review_scores(70),
             "comments_to_author": "ok",
         },
         headers=auth_headers(reviewer),

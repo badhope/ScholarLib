@@ -5,7 +5,7 @@
 2026-11 起按 RQS v4.0 逐篇人工/AI 复核。本模块提供「一条 = 一篇」的
 批量落库通道：
 
-- 每条必须带**全部七个维度**的分数与理由（复用 ``evaluate``，缺维度 422）；
+- 每条必须带该赛道**全部五个维度**的分数、理由与正文证据（复用 ``evaluate``，缺维度/缺证据 422）；
 - ``absurdity_index``（0–10 风格坐标）**必填**——编辑部的口径是：审核时
   必须明确判定每篇的风格坐标（0 = 纯学术，7.5+ = 吐槽向），它不进质量
   分、不参与排序（铁律），但必须实打实记录；
@@ -39,16 +39,19 @@ Verdict = Literal["keep", "rewrite", "reject", "delete"]
 
 class BatchDimensionInput(BaseModel):
     key: Literal[
-        "problem", "argument", "method", "evidence", "novelty", "integrity", "presentation"
+        "question", "argument", "method", "evidence", "integrity",
+        "concept", "coherence", "execution", "material", "voice",
     ]
     score: int = Field(ge=0, le=100)
     reason: str = Field(min_length=4, max_length=2000)
+    evidence: str = Field(min_length=8, max_length=2000)
 
 
 class BatchItem(BaseModel):
     resource_id: int = Field(ge=1)
+    track: Literal["academic", "absurd"] = "academic"
     article_type: Literal["research", "review", "essay", "note"] = "research"
-    dimensions: list[BatchDimensionInput] = Field(min_length=7, max_length=7)
+    dimensions: list[BatchDimensionInput] = Field(min_length=5, max_length=5)
     # 0–10 风格坐标：审核必填项。不进质量分、不参与排序（铁律）。
     absurdity_index: float = Field(ge=0, le=10)
     content_category: ContentCategory | None = None
@@ -102,9 +105,12 @@ async def apply_review_items(
         resource = by_id[item.resource_id]
         try:
             scores = [
-                DimensionScore(key=d.key, score=d.score, reason=d.reason) for d in item.dimensions
+                DimensionScore(
+                    key=d.key, score=d.score, reason=d.reason, evidence=d.evidence
+                )
+                for d in item.dimensions
             ]
-            evaluation = evaluate(scores, article_type=item.article_type)
+            evaluation = evaluate(scores, track=item.track, article_type=item.article_type)
         except ValueError as exc:
             results.append({"resource_id": item.resource_id, "ok": False, "error": str(exc)[:300]})
             continue
@@ -148,6 +154,7 @@ async def apply_review_items(
                     "content_category": item.content_category,
                     "category_changed": category_changed,
                     "verdict": item.verdict,
+                    "track": item.track,
                     "article_type": item.article_type,
                     "note": item.note,
                     "rubric_version": evaluation["rubric_version"],

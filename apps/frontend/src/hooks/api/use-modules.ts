@@ -1561,10 +1561,10 @@ export function usePublishIssue() {
 
 // --- 质量评分 v3.0（审稿表单 / 算分 / 改分 / 打回） ---
 
-export function useQualityForm() {
+export function useQualityForm(track: 'academic' | 'absurd' = 'academic') {
   return useQuery<QualityForm>({
-    queryKey: [...keys.quality.rubric(), 'form'],
-    queryFn: async () => (await api.get<QualityForm>('/quality/form')).data,
+    queryKey: [...keys.quality.rubric(), 'form', track],
+    queryFn: async () => (await api.get<QualityForm>('/quality/form', { params: { track } })).data,
     staleTime: 30 * 60_000,
   })
 }
@@ -1585,7 +1585,7 @@ export function useComputeQualityScore() {
   return useMutation<
     QualityScoreResult,
     Error,
-    { article_type: string; dimensions: DimensionScoreInput[] }
+    { track: 'academic' | 'absurd'; article_type: string; dimensions: DimensionScoreInput[] }
   >({
     mutationFn: async (body) => (await api.post('/quality/score', body)).data,
   })

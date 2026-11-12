@@ -50,6 +50,7 @@ from app.modules.review.schemas import (
     ReviewReportResponse,
     ReviewSubmit,
 )
+from app.modules.quality.rubric import RUBRIC_VERSION, DimensionScore, evaluate, dimensions_for
 from app.modules.submission.models import Submission
 from app.modules.submission.schemas import SubmissionResponse
 
@@ -57,6 +58,69 @@ router = APIRouter(prefix="/review", tags=["review"])
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+
+
+def _normalize_review_scores(scores: dict[str, Any]) -> dict[str, Any]:
+    """校验并计算审稿评分：五维、逐维分数/理由/证据缺一不可。
+
+    旧版报告里的自由结构（originality: 4）不再受理新提交：没有正文证据的
+    分数无法复核，也会让“随手给高分”绕过口径。读取旧报告不受影响。
+    """
+    track = str(scores.get("track") or "academic")
+    if track not in ("academic", "absurd"):
+        raise HTTPException(status_code=422, detail="track must be 'academic' or 'absurd'")
+    raw = scores.get("dimensions")
+    if not isinstance(raw, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="评分必须按五维提交：scores.dimensions = {key: {score, reason, evidence}}",
+        )
+    required = [k for k, _, _ in dimensions_for(track)]
+    missing = [k for k in required if k not in raw]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"缺少维度评分：{', '.join(missing)}")
+    parsed: list[DimensionScore] = []
+    for key in required:
+        item = raw.get(key)
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=422, detail=f"{key}: 维度评分必须是对象")
+        try:
+            score = int(item.get("score"))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"{key}: score 必须是 0–100 整数") from exc
+        reason = str(item.get("reason") or "").strip()
+        evidence = str(item.get("evidence") or "").strip()
+        if len(reason) < 4:
+            raise HTTPException(status_code=422, detail=f"{key}: 必须写评分理由")
+        if len(evidence) < 8:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{key}: 必须附正文证据（章节/段落/图号/表号/引用编号/链接，至少 8 字）",
+            )
+        parsed.append(DimensionScore(key=key, score=score, reason=reason, evidence=evidence))
+    result = evaluate(parsed, track=track)
+    return {
+        "rubric_version": RUBRIC_VERSION,
+        "track": track,
+        "dimensions": {
+            d.key: {
+                "score": d.score,
+                "reason": d.reason,
+                "evidence": d.evidence,
+                "label": result["breakdown"][d.key]["label"],  # type: ignore[index]
+                "points": result["breakdown"][d.key]["points"],  # type: ignore[index]
+            }
+            for d in parsed
+        },
+        "score": result["score"],
+        "uncapped_score": result["uncapped_score"],
+        "cap": result["cap"],
+        "cap_notes": result["cap_notes"],
+        "grade": result["grade"],
+        "grade_label": result["grade_label"],
+        "rejected": result["rejected"],
+        "integrity_veto": result["integrity_veto"],
+    }
 
 
 def _to_assignment_response(
@@ -390,11 +454,12 @@ async def submit_review_report(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A report has already been submitted for this assignment",
         )
+    normalized_scores = _normalize_review_scores(body.scores)
     report = ReviewReport(
         tenant_id=current_user.tenant_id,
         assignment_id=a.id,
         recommendation=body.recommendation,
-        scores=body.scores,
+        scores=normalized_scores,
         comments_to_editor=body.comments_to_editor,
         comments_to_author=body.comments_to_author,
     )
