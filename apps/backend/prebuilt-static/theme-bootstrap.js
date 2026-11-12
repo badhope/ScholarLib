@@ -10,5 +10,11 @@
       (stored === 'system' &&
         window.matchMedia('(prefers-color-scheme: dark)').matches);
     if (dark) document.documentElement.classList.add('dark');
+    var palettes = ['jade', 'ink', 'clay', 'celadon'];
+    var palette = localStorage.getItem('palette');
+    document.documentElement.setAttribute(
+      'data-palette',
+      palettes.indexOf(palette) >= 0 ? palette : 'jade'
+    );
   } catch (e) {}
 })();

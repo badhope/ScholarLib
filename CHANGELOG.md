@@ -1274,17 +1274,17 @@
 
 ### Changed
 
-- 二次验证 otpauth:// 发布方回退名由旧名 ScholarHub 改为 Rubbish
+- 二次验证 otpauth:// 发布方回退名由旧名 旧项目名 改为 Rubbish
   （`app/api/two_factor.py` 的 `_issuer()`，该名称会显示在用户的验证器
   App 中）；`infra/Dockerfile.*` 注释同步清理。清理后
-  `grep -ri scholarhub` 仅剩本文件对 0.3.3 清理动作的历史记录。
+  `grep -ri 旧项目名` 仅剩本文件对 0.3.3 清理动作的历史记录。
 
 ## [0.3.3] — 2026-10-23
 
 ### Changed
 
 - 品牌残留清理：文档、环境变量示例、Docker/Caddy/wrangler 配置、媒体脚本与
-  SVG 资产中的旧项目名全部替换为 Rubbish（`grep -ri scholarhub` 已归零）。
+  SVG 资产中的旧项目名全部替换为 Rubbish（`grep -ri 旧项目名` 已归零）。
 - 官网（GitHub Pages）改为从页面同源加载截图/logo/演示视频；部署 workflow
   会把 `site/` 与 `docs/assets/` 合成 `_site` 再发布，不再依赖
   raw.githubusercontent.com（国内网络下经常不可达）。

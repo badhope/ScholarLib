@@ -504,6 +504,10 @@ _DATA_URI_IMG_RE = re.compile(r"!\[([^\]]*)\]\(data:image/([a-zA-Z0-9.+-]+);base
 # 阅读端按字节指纹识别并剔除；不碰原稿、不影响图片序号。
 JOURNAL_LOGO_SHA256 = "4e9299a816964e4844d5876fa391a79f64928f896ddf801ca9f62f641a204e8c"
 
+# 期刊刊头 logo 的 sha256。历史稿里它被当作“图表”插进正文（297/299/302），
+# 阅读端按字节指纹识别并剔除；不碰原稿、不影响图片序号。
+JOURNAL_LOGO_SHA256 = "4e9299a816964e4844d5876fa391a79f64928f896ddf801ca9f62f641a204e8c"
+
 
 @dataclass(frozen=True)
 class EmbeddedImage:

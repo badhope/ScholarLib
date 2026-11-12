@@ -1,0 +1,14 @@
+{
+  "name": "Rubbish 开放获取期刊",
+  "short_name": "Rubbish",
+  "description": "正经与荒诞兼容的开放获取学术期刊，免费投稿、开放阅读。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f5ee",
+  "theme_color": "#24344d",
+  "icons": [
+    { "src": "/brand-rubbish.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "maskable" }
+  ]
+}
