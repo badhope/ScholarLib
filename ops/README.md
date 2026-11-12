@@ -10,3 +10,14 @@
 | `install-automation.sh` | 一次性 | 幂等写 `/etc/cron.d/rubbish-automation` |
 
 日志：`/home/ubuntu/rubbish-health.log`、`rubbish-refresh.log`、`rubbish-backup-verify.log`。
+
+## 异地备份启用方式
+
+生产机已安装 `rclone`。拿到对象存储或另一台服务器的凭证后，在 `/home/ubuntu/rubbish/ops/offsite.env` 写：
+
+```bash
+RCLONE_REMOTE=rubbish-cos:rubbish-backups
+```
+
+并确保运行 `offsite-backup.sh` 的用户能读到该环境变量；脚本会复制最新 DB 与上传包并做 size 校验。
+未配置时每日 04:50 只记录 `SKIP`，不会伪装成已备份。
