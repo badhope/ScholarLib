@@ -162,11 +162,15 @@ export async function primeCookieConsent(page: Page): Promise<void> {
 // 通过 UI 走完整的注册→邮件→验证流程，返回已验证的用户凭据。
 /**
  * 注册页自建算术验证码：从 label 文本解析算式并填答案。
- * 后端在 E2E 里把 captcha_required 压成 false，但前端仍会渲染验证码，
- * 空着会被客户端拦下，所以所有走 UI 注册的用例都要先填。
+ * 后端在 E2E 里把 captcha_required 压成 false，此时前端不渲染验证码字段，
+ * 本函数直接返回；开启验证码时才解析并填写。
  */
 export async function fillCaptcha(page: Page): Promise<void> {
   const label = page.locator('label[for="captcha"]')
+  // CI 会把 captcha_required_for_registration 设为 false，此时注册页
+  // 不渲染验证码字段；本地/生产开启验证码时才需要解析算术题。
+  if ((await label.count()) === 0) return
+  if (!(await label.isVisible().catch(() => false))) return
   await label.waitFor({ state: 'visible', timeout: 10_000 })
   await expect
     .poll(

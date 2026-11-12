@@ -168,18 +168,20 @@ export function RegisterPage() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="captcha">验证码：{captcha?.question ?? '加载中…'}</Label>
-              <Input
-                id="captcha"
-                inputMode="numeric"
-                autoComplete="off"
-                value={captchaAnswer}
-                onChange={(e) => setCaptchaAnswer(e.target.value)}
-                placeholder="填计算结果，防批量注册"
-              />
-              <p className="text-xs text-muted-foreground">自建算术题，不接第三方验证码，不产生费用。</p>
-            </div>
+            {captchaRequired && (
+              <div className="space-y-2">
+                <Label htmlFor="captcha">验证码：{captcha?.question ?? '加载中…'}</Label>
+                <Input
+                  id="captcha"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={captchaAnswer}
+                  onChange={(e) => setCaptchaAnswer(e.target.value)}
+                  placeholder="填计算结果，防批量注册"
+                />
+                <p className="text-xs text-muted-foreground">自建算术题，不接第三方验证码，不产生费用。</p>
+              </div>
+            )}
             <Button type="submit" className="w-full" disabled={registerMut.isPending}>
               {registerMut.isPending ? '注册中…' : '注册'}
             </Button>
