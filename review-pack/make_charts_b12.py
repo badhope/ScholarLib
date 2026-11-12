@@ -78,7 +78,7 @@ for k,v,c in items:
     ax2.text(0.10,yy+0.035,f'{k}',fontsize=9.5,color='white' if v>=20 else DARK,va='center')
     ax2.text(0.90,yy+0.035,f'{v}',fontsize=9.5,color=DARK,va='center',ha='right',fontweight='bold')
     yy-=0.125
-ax2.text(0.08,0.10,'均分 71.5  ·  中位 70.1  ·  最高 86.0  ·  最低 55.0',fontsize=8.8,color=GREY,va='bottom')
+ax2.text(0.08,0.10,'均分 71.6  ·  中位 70.6  ·  最高 86.0  ·  最低 55.0',fontsize=8.8,color=GREY,va='bottom')
 ax2.text(0.08,0.035,'计分 70 篇，另复核 15 篇历史问题稿',fontsize=8.2,color=GREEN,va='bottom')
 strip=fig.add_axes([0.055,0.005,0.91,0.045]); strip.axis('off')
 strip.add_patch(FancyBboxPatch((0,0),1,1,transform=strip.transAxes,facecolor=DARK,edgecolor='none',boxstyle='square,pad=0'))

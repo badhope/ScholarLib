@@ -1,4 +1,5 @@
 id,old_score,old_grade,new_score,new_grade,action
+id,old_score,old_grade,new_score,new_grade,action
 100,62.2,C,,NA,不评级（完整性闸门）
 101,63.5,C,63.2,Q3,按人工审读分同步
 102,82.4,A,,NA,不评级（完整性闸门）
@@ -218,7 +219,7 @@ id,old_score,old_grade,new_score,new_grade,action
 41,69.4,C,68.1,Q3,改分
 42,77.9,B,70.1,Q2,改分
 43,79.5,B,76.1,Q2,改分
-44,75.2,B,70.1,Q2,改分
+44,75.2,B,75.2,Q2,复核确认
 45,66.9,C,67.1,Q3,改分
 46,82.3,A,83.0,Q1,改分
 47,66.8,C,65.1,Q3,改分
@@ -272,4 +273,4 @@ id,old_score,old_grade,new_score,new_grade,action
 95,59.8,D,62.0,Q3,改分
 96,,,,,维持 essay，分数/等级置空
 97,65.5,C,74.1,Q2,改分
-99,75.2,B,70.1,Q2,改分
+99,75.2,B,75.2,Q2,复核确认
