@@ -8,8 +8,8 @@
 | 已人工审读 | 274（100%） |
 | 论文轨 | 228 |
 | 副刊轨 | 46（作者随笔 35 + 编辑部页面 11） |
-| Q1 一区 | 44 |
-| Q2 二区 | 148 |
+| Q1 一区 | 43 |
+| Q2 二区 | 149 |
 | Q3 三区 | 34 |
 | Q4 四区 | 2 |
 | 已计分 | 228 |
@@ -20,7 +20,7 @@
 
 1. 第一轮：逐篇通读、五维打分，覆盖全站。
 2. 第二轮：高分稿复核 + 剩余 Q2 收口，抓出 11 篇“自述随笔却按论文计分”的稿子，全部转 `essay`。
-3. 第三轮：274 篇按五维原始分独立重算；211 篇加总一致，11 篇舍入差，5 篇硬冲突，158 因实质虚高从 82.4 Q1 降为 77.4 Q2。
+3. 第三轮：274 篇按五维原始分独立重算；211 篇加总一致，11 篇舍入差，5 篇硬冲突，158 因实质虚高从 82.4 Q1 降为 77.4 Q2；205 因执行 68 从 82.5 Q1 降为 79.5 Q2。
 
 ## 最后的实质修正
 
@@ -41,7 +41,7 @@
 
 ## 文件导航
 
-- 总报告：`manual-review-batch-14.md`、`15.md`、`16-third-pass.md`、`17-essays.md`
+- 总报告：`manual-review-batch-14.md`、`15.md`、`16-third-pass.md`、`17-essays.md`、`18-q1-compensation.md`
 - 逐篇表：`batch-14-audit.csv`、`batch-15-audit.csv`、`batch-16-third-pass-audit.csv`、`batch-17-essay-audit.csv`
 - 台账：`manual-review-ledger.csv`、`manual-review-score-diff.csv`、`manual-review-manifest.csv`
 - 图表：`batch-14-audit-90.png`、`batch-15-audit-109.png`、`batch-16-third-pass.png`、`batch-17-essays.png`、`site-overview-2026-11-12-b16.png`
