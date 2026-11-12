@@ -6,21 +6,21 @@ REPO="${REPO:-/home/ubuntu/rubbish}"
 cd "$(dirname "$0")/../apps/frontend"
 npm run build
 tar czf /tmp/rubbish-dist.tgz -C dist .
-scp -q /tmp/rubbish-dist.tgz "$HOST:/tmp/rubbish-dist.tgz"
+scp -q /tmp/rubbish-dist.tgz "$HOST:/home/ubuntu/rubbish-dist.tgz"
 ssh "$HOST" bash -s <<'REMOTE'
 set -euo pipefail
 REPO="${REPO:-/home/ubuntu/rubbish}"
 stamp=$(date +%Y%m%d-%H%M%S)
-rm -rf /tmp/rubbish-newstatic && mkdir -p /tmp/rubbish-newstatic
-tar xzf /tmp/rubbish-dist.tgz -C /tmp/rubbish-newstatic
+rm -rf /home/ubuntu/rubbish-newstatic && mkdir -p /home/ubuntu/rubbish-newstatic
+tar xzf /home/ubuntu/rubbish-dist.tgz -C /home/ubuntu/rubbish-newstatic
 docker exec rubbish-app-1 rm -rf "/app/static.bak-$stamp" || true
-docker cp rubbish-app-1:/app/static "/tmp/static-rollback-$stamp"
-docker cp /tmp/rubbish-newstatic/. rubbish-app-1:/app/static/
+docker cp rubbish-app-1:/app/static "/home/ubuntu/static-rollback-$stamp"
+docker cp /home/ubuntu/rubbish-newstatic/. rubbish-app-1:/app/static/
 docker restart rubbish-app-1 >/dev/null
 sleep 8
 if ! bash "$REPO/ops/site-health.sh"; then
   echo "health failed, rolling back"
-  docker cp "/tmp/static-rollback-$stamp/." rubbish-app-1:/app/static/
+  docker cp "/home/ubuntu/static-rollback-$stamp/." rubbish-app-1:/app/static/
   docker restart rubbish-app-1 >/dev/null
   exit 1
 fi
