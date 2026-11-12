@@ -37,19 +37,21 @@
 - `/papers`、`/fun` 列表页 200。
 - 158、135、264、111、105、176、142、112、305、315 详情页 `/catalog/{id}` 全部 200。
 - 同批 10 篇 PDF 导出全部 200。
-- 228 篇论文五维分与总分可对上；157 仅 0.1 舍入差。
+- 228 篇论文五维分与总分全部精确对上，无尾差。
 
 ## 文件导航
 
-- 总报告：`manual-review-batch-14.md`、`15.md`、`16-third-pass.md`、`17-essays.md`、`18-q1-compensation.md`
-- 逐篇表：`batch-14-audit.csv`、`batch-15-audit.csv`、`batch-16-third-pass-audit.csv`、`batch-17-essay-audit.csv`
+- 总报告：`manual-review-batch-14.md`、`15.md`、`16-third-pass.md`、`17-essays.md`、`18-q1-compensation.md`、`19-strict-closeout.md`
+- 逐篇表：`batch-14-audit.csv`、`batch-15-audit.csv`、`batch-16-third-pass-audit.csv`、`batch-17-essay-audit.csv`、`batch-18-q1-compensation-audit.csv`、`batch-19-303-pages.csv`、`batch-19-essay-structure.csv`
 - 台账：`manual-review-ledger.csv`、`manual-review-score-diff.csv`、`manual-review-manifest.csv`
 - 图表：`batch-14-audit-90.png`、`batch-15-audit-109.png`、`batch-16-third-pass.png`、`batch-17-essays.png`、`site-overview-2026-11-12-b16.png`
-- 历史批次：`manual-review-batch-01.md`–`17`、`editorial-completions-*.md`
+- 历史批次：`manual-review-batch-01.md`–`19`、`editorial-completions-*.md`
 - 库外存档：`manual-review-ledger-orphans.csv`
 
-## 仍然保留的判断
+## 严格验收结论
 
-- 44 篇 Q1 中有 12 篇单维低于 75 的补偿稿，保留原分，列入下一轮优先复核。
-- 157 的方法/证据维度偏低是真实短板，Q3 不抬。
+- 303 的 59 页已逐页验收：0 空白、0 溢出、0 断表，接受其 59 页篇幅。
+- 35 篇作者随笔已逐篇查字数、段落、标题与结尾：35/35 完整。
+- 157 尾差已清零，228 篇论文五维与总分全部精确对上。
+- Q1 补偿稿已终审：10 篇保留、205 降 Q2；不再挂“下一轮复核”。
 - 46 条 essay 中 11 个是编辑部页面，不按“短随笔”扩写。
