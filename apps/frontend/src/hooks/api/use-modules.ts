@@ -70,6 +70,8 @@ import type {
   ClaimStatusResponse,
   ClaimSubmitRequest,
   ClaimSubmitResponse,
+  ReleaseIssueSummary,
+  ReleaseManifest,
 } from '@/lib/types'
 
 // query key 工厂，避免散落字符串
@@ -129,6 +131,9 @@ export const keys = {
     issues: (volume: string) => ['admin', 'issues', volume] as const,
     journalSettings: () => ['admin', 'journal-settings'] as const,
     claims: (status: string) => ['admin', 'claims', status] as const,
+    releaseIssues: () => ['admin', 'releases', 'issues'] as const,
+    releaseManifests: (volume: string, issue: string) =>
+      ['admin', 'releases', 'manifests', volume, issue] as const,
   },
   claims: {
     status: (resourceId: number) => ['claims', 'status', resourceId] as const,
@@ -1570,6 +1575,82 @@ export function useIssuePlan() {
     staleTime: 60_000,
     // 当期条/归档页的「已上线篇数」随刊出实时变化，每分钟重取一次。
     refetchInterval: 60_000,
+  })
+}
+
+// --- Release Gate / Manifest ---
+
+export function useReleaseIssues(enabled = true) {
+  return useQuery<{ items: ReleaseIssueSummary[] }>({
+    queryKey: keys.admin.releaseIssues(),
+    queryFn: async () =>
+      (await api.get<{ items: ReleaseIssueSummary[] }>('/admin/releases/issues')).data,
+    enabled,
+    staleTime: 30_000,
+  })
+}
+
+export function useReleaseManifests(volume: string, issue: string, enabled = true) {
+  return useQuery<{ items: ReleaseManifest[] }>({
+    queryKey: keys.admin.releaseManifests(volume, issue),
+    queryFn: async () =>
+      (
+        await api.get<{ items: ReleaseManifest[] }>('/admin/releases/manifests', {
+          params: { volume, issue },
+        })
+      ).data,
+    enabled: enabled && Boolean(volume) && Boolean(issue),
+    staleTime: 15_000,
+  })
+}
+
+export function useCheckRelease() {
+  const qc = useQueryClient()
+  return useMutation<
+    ReleaseManifest,
+    unknown,
+    { volume: string; issue: string }
+  >({
+    mutationFn: async ({ volume, issue }) =>
+      (
+        await api.post('/admin/releases/check', {
+          volume,
+          issue,
+        })
+      ).data,
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.admin.releaseIssues() })
+      void qc.invalidateQueries({
+        queryKey: keys.admin.releaseManifests(vars.volume, vars.issue),
+      })
+    },
+  })
+}
+
+export function usePublishRelease() {
+  const qc = useQueryClient()
+  return useMutation<
+    ReleaseManifest,
+    unknown,
+    { volume: string; issue: string; manifestId: number; publishAt: string | null }
+  >({
+    mutationFn: async ({ volume, issue, manifestId, publishAt }) =>
+      (
+        await api.post('/admin/releases/publish', {
+          volume,
+          issue,
+          manifest_id: manifestId,
+          publish_at: publishAt,
+        })
+      ).data,
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['catalog'] })
+      void qc.invalidateQueries({ queryKey: keys.issuePlan() })
+      void qc.invalidateQueries({ queryKey: keys.admin.releaseIssues() })
+      void qc.invalidateQueries({
+        queryKey: keys.admin.releaseManifests(vars.volume, vars.issue),
+      })
+    },
   })
 }
 

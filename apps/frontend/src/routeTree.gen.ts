@@ -47,6 +47,7 @@ import { Route as AdminClaimsRouteImport } from './routes/admin/claims'
 import { Route as AdminCommentsRouteImport } from './routes/admin/comments'
 import { Route as AdminIssuesRouteImport } from './routes/admin/issues'
 import { Route as AdminJournalRouteImport } from './routes/admin/journal'
+import { Route as AdminReleasesRouteImport } from './routes/admin/releases'
 import { Route as AdminRoleApplicationsRouteImport } from './routes/admin/role-applications'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
@@ -263,6 +264,11 @@ const AdminJournalRoute = AdminJournalRouteImport.update({
   path: '/admin/journal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminReleasesRoute = AdminReleasesRouteImport.update({
+  id: '/admin/releases',
+  path: '/admin/releases',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoleApplicationsRoute = AdminRoleApplicationsRouteImport.update({
   id: '/admin/role-applications',
   path: '/admin/role-applications',
@@ -427,6 +433,7 @@ export interface FileRoutesByFullPath {
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
+  '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -492,6 +499,7 @@ export interface FileRoutesByTo {
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
+  '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -558,6 +566,7 @@ export interface FileRoutesById {
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/issues': typeof AdminIssuesRoute
   '/admin/journal': typeof AdminJournalRoute
+  '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -625,6 +634,7 @@ export interface FileRouteTypes {
     | '/admin/comments'
     | '/admin/issues'
     | '/admin/journal'
+    | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/users'
@@ -690,6 +700,7 @@ export interface FileRouteTypes {
     | '/admin/comments'
     | '/admin/issues'
     | '/admin/journal'
+    | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/users'
@@ -755,6 +766,7 @@ export interface FileRouteTypes {
     | '/admin/comments'
     | '/admin/issues'
     | '/admin/journal'
+    | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/users'
@@ -821,6 +833,7 @@ export interface RootRouteChildren {
   AdminCommentsRoute: typeof AdminCommentsRoute
   AdminIssuesRoute: typeof AdminIssuesRoute
   AdminJournalRoute: typeof AdminJournalRoute
+  AdminReleasesRoute: typeof AdminReleasesRoute
   AdminRoleApplicationsRoute: typeof AdminRoleApplicationsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
@@ -1117,6 +1130,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminJournalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/releases': {
+      id: '/admin/releases'
+      path: '/admin/releases'
+      fullPath: '/admin/releases'
+      preLoaderRoute: typeof AdminReleasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/role-applications': {
       id: '/admin/role-applications'
       path: '/admin/role-applications'
@@ -1333,6 +1353,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminCommentsRoute: AdminCommentsRoute,
   AdminIssuesRoute: AdminIssuesRoute,
   AdminJournalRoute: AdminJournalRoute,
+  AdminReleasesRoute: AdminReleasesRoute,
   AdminRoleApplicationsRoute: AdminRoleApplicationsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,

@@ -8,6 +8,7 @@ import {
   Layers,
   Megaphone,
   MessageSquare,
+  Rocket,
   ShieldCheck,
   Users,
 } from 'lucide-react'
@@ -39,6 +40,7 @@ const WORKFLOWS: { title: string; desc: string; to: string; icon: typeof Gavel }
   ],
   [
     { title: '期管理', desc: '组期 · 排期 · 一键刊出', to: '/admin/issues', icon: CalendarDays },
+    { title: '发布门禁', desc: '检查 · Manifest · 发布/排期', to: '/admin/releases', icon: Rocket },
     { title: '卷管理', desc: '卷结构与覆盖范围', to: '/admin/volumes', icon: Layers },
     { title: '公告管理', desc: '首屏公告板', to: '/admin/announcements', icon: Megaphone },
   ],

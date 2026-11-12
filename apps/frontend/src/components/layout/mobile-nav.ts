@@ -12,6 +12,7 @@ import {
   Building2,
   Lightbulb,
   PenLine,
+  Rocket,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -87,6 +88,7 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/audit-logs', label: '审计日志', icon: ShieldCheck, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/releases', label: '发布门禁', icon: Rocket, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/settings', label: '期刊设置', icon: Settings, auth: true, adminOnly: true, group: '站点管理' },
 ]
 

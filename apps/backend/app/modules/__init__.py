@@ -36,4 +36,5 @@ ENABLED_MODULES: list[str] = [
     "announcements",
     "quality",
     "forum",
+    "release",
 ]

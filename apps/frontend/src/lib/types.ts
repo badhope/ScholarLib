@@ -1173,3 +1173,69 @@ export interface IssuePlanResponse {
   now: string
   entries: IssuePlanEntry[]
 }
+
+// --- Release Gate ---
+export interface ReleaseCheck {
+  code: string
+  level: 'error' | 'warning' | 'info'
+  message: string
+  resource_id: number | null
+}
+
+export interface ReleaseResourceSnapshot {
+  id: number
+  slug: string | null
+  type: string
+  title: string
+  authors: string[]
+  year: number
+  volume: string | null
+  issue: string | null
+  publication_status: string
+  publish_at: string | null
+  content_category: string | null
+  discipline: string
+  updated_at: string | null
+  pdf: { path: string | null; exists: boolean; size: number; sha256: string | null }
+  markdown: { path: string | null; exists: boolean; size: number; sha256: string | null }
+}
+
+export interface ReleaseGatePayload {
+  gate_version: string
+  volume: string
+  issue: string
+  status: 'ready' | 'blocked'
+  content_hash: string
+  resource_count: number
+  error_count: number
+  warning_count: number
+  checks: ReleaseCheck[]
+  resources: ReleaseResourceSnapshot[]
+}
+
+export interface ReleaseManifest {
+  id: number
+  volume: string
+  issue: string
+  status: 'blocked' | 'ready' | 'scheduled' | 'published' | 'superseded'
+  content_hash: string
+  resource_count: number
+  error_count: number
+  warning_count: number
+  created_by: number | null
+  created_at: string | null
+  published_at: string | null
+  payload: ReleaseGatePayload
+  publish_at?: string
+}
+
+export interface ReleaseIssueSummary {
+  volume: string
+  issue: string
+  total: number
+  draft: number
+  published: number
+  scheduled: number
+  publish_at: string | null
+  state: 'draft' | 'live' | 'scheduled' | 'empty'
+}
