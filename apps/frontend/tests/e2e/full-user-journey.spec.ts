@@ -8,6 +8,7 @@ import {
   openSubmissionForm,
   fillSubmissionWizard,
   ensureReviewerRole,
+  fillAcademicReviewScores,
 } from './helpers'
 
 /**
@@ -193,9 +194,12 @@ test.describe('全流程用户旅程', () => {
       await expect(page.getByText('已接受审稿邀请')).toBeVisible({ timeout: 5_000 })
 
       await page.getByRole('button', { name: /填写审稿报告/ }).first().click()
-      await expect(page.getByRole('heading', { name: '填写审稿报告' })).toBeVisible()
+      const reviewDialog = page.getByRole('dialog')
+      await expect(reviewDialog).toBeVisible()
+      await expect(reviewDialog.getByRole('heading', { name: '审稿工作台' })).toBeVisible()
       await page.locator('button[role="combobox"]').first().click()
       await page.getByRole('option', { name: '接收（Accept）' }).click()
+      await fillAcademicReviewScores(page)
       await page.getByLabel('给作者的意见').fill('Solid work. Recommend accept.')
       await page.getByRole('button', { name: '提交审稿报告' }).click()
       await expect(page.getByText('审稿报告已提交')).toBeVisible({ timeout: 5_000 })

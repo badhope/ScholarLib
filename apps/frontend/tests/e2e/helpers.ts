@@ -188,6 +188,19 @@ export async function fillCaptcha(page: Page): Promise<void> {
 }
 
 /**
+ * 审稿表单现在要求五维全部有分数、理由和可定位证据；E2E 用固定文本快速填满，
+ * 避免只填意见时被前端校验拦下。
+ */
+export async function fillAcademicReviewScores(page: Page, score = 75): Promise<void> {
+  const dims = ['选题与真问题', '论证与自洽', '方法与可复现', '证据与结论', '规范与诚信']
+  for (const label of dims) {
+    await page.getByLabel(`${label}分数（0–100）`).fill(String(score))
+    await page.getByLabel(`${label}评分理由`).fill('该维度论证与证据能对应，未见明显断链。')
+    await page.getByLabel(`${label}正文证据`).fill('§3 第 2 段与表 2 数据一致，引用[7]可核。')
+  }
+}
+
+/**
  * 给指定用户补 reviewer 角色；不传 username 时处理当前登录用户。
  * 指派审稿人对话框只列持 reviewer 角色且启用的账号，默认 admin 不在候选中。
  */
