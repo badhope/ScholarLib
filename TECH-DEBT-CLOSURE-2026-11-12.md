@@ -93,3 +93,14 @@
 - 线上静态备份：`apps/backend/prebuilt-static-20261112`；
 - 数据备份：`resources_authors_meta_backup_20261112`、`resources_keywords_backup_20261112`；
 - 本地分支：`merge/server-debt`（`8b12d15`）、`server-snapshot-20261112`（`e291dd9`）、`feat/rqs-v5`（`3d4f63b`）。
+
+## 10. 2026-11-12 技术侧再收口（本轮）
+
+- **旧页面根因**：HTML 壳无 `Cache-Control`。已给非 API、非 `/assets/`、非 `/covers/` 统一加 `no-cache, must-revalidate`；线上 `/`、`/sitemap.xml` 已复验，静态资源仍 `immutable`。
+- **移动端视觉**：Cookie 条移到底部导航上方，`全部接受` 不再被反馈气泡遮挡（Cookie 未处理时反馈气泡 `display:none`）；首页 header/hero 加 `px-4 sm:px-6`，四张数据卡不再贴边。
+- **图表性能**：`echart.tsx` 改为运行时按需加载，首页不再请求 `core/charts/components` 约 520K；指标页图表仍正常渲染。
+- **字体性能**：按 274 篇题录/摘要 + 全部前端 UI 的 2417 个实际汉字生成单文件子集，`Noto Serif SC` 从首页 46 个分片、约 3.0MB 解码体积降到 2 个文件、约 1.4MB；线上首屏已复验，无缺字。
+- **发布链路**：`ops/deploy.sh` 实际跑通“构建→备份旧静态→替换→重启→健康→预热→失败回滚”，并修掉生产 `/tmp` tmpfs 配额坑，中转目录改到 `/home/ubuntu`。
+- **自动化**：健康检查 5 分钟、预热每日 04:10、恢复演练每周日 04:30、异地备份每日 04:50；2026-11-12 21:00 定时健康检查实际触发并通过。
+- **异地备份边界**：生产已装 `rclone`，`ops/offsite-backup.sh` 与 cron 已就位；无 `RCLONE_REMOTE` 时明确 `SKIP`。当前仍缺对象存储/第二台机器的目标与凭证，不能宣称异地已备份。
+- **剩余客观项**：应用冷启动首次 TTFB 约 4.16s，发布脚本已用健康检查+预热兜住真实用户；字体子集未覆盖的极生僻字会回退系统衬线，属预期降级。
