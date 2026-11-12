@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -55,7 +56,12 @@ async def analytics_summary(
     db: AsyncSession = Depends(get_db),
     _admin: Any = Depends(require_admin),
 ) -> dict[str, object]:
-    since = datetime.now(UTC) - timedelta(days=days)
+    # 以中国时区的自然日切分，避免“近 7 天”在 UTC 17:00 后跨日错位。
+    local_now = datetime.now(ZoneInfo("Asia/Shanghai"))
+    start_local = (local_now - timedelta(days=days - 1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    since = start_local.astimezone(UTC)
     total = (
         await db.execute(
             select(func.count(PageView.id)).where(
@@ -64,6 +70,35 @@ async def analytics_summary(
             )
         )
     ).scalar_one()
+    unique_paths = (
+        await db.execute(
+            select(func.count(func.distinct(PageView.path))).where(
+                PageView.tenant_id == get_current_tenant_id(),
+                PageView.created_at >= since,
+            )
+        )
+    ).scalar_one()
+    # 按自然日分桶；没有访问的日期补 0，前端才能画出连续的轴。
+    local_day = func.date(func.timezone("Asia/Shanghai", PageView.created_at)).label("day")
+    daily_rows = (
+        await db.execute(
+            select(local_day, func.count(PageView.id).label("views"))
+            .where(
+                PageView.tenant_id == get_current_tenant_id(),
+                PageView.created_at >= since,
+            )
+            .group_by(local_day)
+            .order_by(local_day)
+        )
+    ).all()
+    daily_map = {str(day): int(views) for day, views in daily_rows}
+    daily = [
+        {
+            "date": (start_local.date() + timedelta(days=offset)).isoformat(),
+            "views": daily_map.get((start_local.date() + timedelta(days=offset)).isoformat(), 0),
+        }
+        for offset in range(days)
+    ]
     top_paths = (
         await db.execute(
             select(PageView.path, func.count(PageView.id).label("views"))
@@ -85,6 +120,8 @@ async def analytics_summary(
     return {
         "days": days,
         "total": total,
+        "unique_paths": unique_paths,
+        "daily": daily,
         "paths": [{"path": p, "views": c} for p, c in top_paths],
         "referrers": [{"referrer": r, "views": c} for r, c in top_refs],
     }

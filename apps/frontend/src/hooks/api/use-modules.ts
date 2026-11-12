@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { downloadBlob } from '@/lib/utils'
 import type {
+  AdminAnalytics,
   Announcement,
   AssignableRole,
   AssignmentCreate,
@@ -184,6 +185,16 @@ export function useJournalMetrics() {
   return useQuery<JournalMetrics>({
     queryKey: ['catalog', 'journal-metrics'],
     queryFn: async () => (await api.get<JournalMetrics>('/catalog/journal-metrics')).data,
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useAdminAnalytics(days = 7) {
+  return useQuery<AdminAnalytics>({
+    queryKey: ['admin', 'analytics', days],
+    queryFn: async () =>
+      (await api.get<AdminAnalytics>('/admin/analytics/summary', { params: { days } })).data,
     staleTime: 60_000,
     refetchInterval: 60_000,
   })

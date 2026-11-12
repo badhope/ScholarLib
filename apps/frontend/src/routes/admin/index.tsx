@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { usePendingClaimsCount } from '@/hooks/api/use-modules'
 import { useAdminCommentCounts } from '@/hooks/api/use-comments'
 import { PageHeader } from '@/components/common/page-header'
+import { AdminAnalyticsPanel } from '@/components/admin/analytics-panel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
@@ -65,6 +66,8 @@ function AdminDashboard() {
   return (
     <div className="w-full max-w-6xl space-y-8">
       <PageHeader title="站点总览" description={`欢迎，${user?.username ?? '管理员'}。按工作流找入口。`} />
+
+      <AdminAnalyticsPanel />
 
       <Card>
         <CardHeader className="pb-2">

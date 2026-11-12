@@ -384,6 +384,15 @@ export interface JournalMetrics {
   self_citation_rate: number
 }
 
+export interface AdminAnalytics {
+  days: number
+  total: number
+  unique_paths: number
+  daily: { date: string; views: number }[]
+  paths: { path: string; views: number }[]
+  referrers: { referrer: string; views: number }[]
+}
+
 export interface ResourceListResponse {
   data: ResourceResponse[]
   meta: PaginationMeta
