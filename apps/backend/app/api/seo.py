@@ -138,6 +138,7 @@ async def robots(request: Request) -> Response:
     for bot in AI_CRAWLERS:
         lines.extend([f"User-agent: {bot}", *CRAWLER_RULES, ""])
     lines.append(f"Sitemap: {_root(request)}/sitemap.xml")
+    lines.append(f"# OAI-PMH: {_root(request)}/oai")
     lines.append(f"# LLM guide: {_root(request)}/llms.txt")
     body = "\n".join(lines) + "\n"
     return Response(
@@ -227,6 +228,8 @@ async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
         f"- [期刊政策]({root}/policies)",
         f"- [期刊指标]({root}/journal-metrics)",
         f"- [RSS]({root}/rss.xml)",
+        f"- [OAI-PMH]({root}/oai)",
+        f"- [Sitemap]({root}/sitemap.xml)",
         "",
         "## 栏目",
         *[
