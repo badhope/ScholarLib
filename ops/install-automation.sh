@@ -8,6 +8,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 */5 * * * * ubuntu /home/ubuntu/rubbish/ops/site-health.sh >> /home/ubuntu/rubbish-health.log 2>&1
 10 4 * * * ubuntu /home/ubuntu/rubbish/ops/site-refresh.sh >> /home/ubuntu/rubbish-refresh.log 2>&1
 30 4 * * 0 ubuntu /home/ubuntu/rubbish/ops/backup-verify.sh >> /home/ubuntu/rubbish-backup-verify.log 2>&1
+50 4 * * * ubuntu /home/ubuntu/rubbish/ops/offsite-backup.sh >> /home/ubuntu/rubbish-offsite.log 2>&1
 CRON
 sudo chmod 644 /etc/cron.d/rubbish-automation
 sudo touch /home/ubuntu/rubbish-health.log /home/ubuntu/rubbish-refresh.log /home/ubuntu/rubbish-backup-verify.log
