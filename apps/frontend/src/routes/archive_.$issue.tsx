@@ -267,7 +267,10 @@ function IssuePage() {
               <Button variant="outline" size="sm" onClick={() => window.print()}>
                 <Printer className="mr-1 h-3.5 w-3.5" /> 打印本期版面
               </Button>
-              <a href={`/api/catalog/issues/1-${issue}/export?format=pdf&v=20`} className="inline-flex">
+              <a
+                href={`/api/catalog/issues/${issueVolume ?? '1'}-${issue}/export?format=pdf&v=20`}
+                className="inline-flex"
+              >
                 <Button variant="outline" size="sm">
                   <Download className="mr-1 h-3.5 w-3.5" /> 整期下载
                 </Button>

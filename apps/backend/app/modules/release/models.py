@@ -39,6 +39,17 @@ class ReleaseManifest(Base, TenantScopedMixin):
         DateTime(timezone=True), default=utcnow, nullable=False
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # A ready manifest is not publishable until an editor explicitly approves
+    # the exact content hash.  The signature binds id + issue + hash + actor
+    # + time, so a manifest cannot be silently re-pointed at other content.
+    approved_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    approval_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    approval_signature: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rollback_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (
         Index("ix_release_manifests_tenant_issue", "tenant_id", "volume", "issue"),

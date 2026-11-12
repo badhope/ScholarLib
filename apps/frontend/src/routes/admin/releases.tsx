@@ -6,14 +6,18 @@ import {
   CheckCircle2,
   Clock3,
   FileWarning,
+  PenLine,
   RefreshCw,
   Rocket,
+  RotateCcw,
   ShieldCheck,
 } from 'lucide-react'
 import { requireAdminGuard } from '@/lib/route-guards'
 import {
+  useApproveRelease,
   useCheckRelease,
   usePublishRelease,
+  useRollbackRelease,
   useReleaseIssues,
   useReleaseManifests,
 } from '@/hooks/api/use-modules'
@@ -84,6 +88,7 @@ function AdminReleasesPage() {
   const [issue, setIssue] = useState('')
   const [checked, setChecked] = useState<ReleaseManifest | null>(null)
   const [scheduleAt, setScheduleAt] = useState('')
+  const [approvalNote, setApprovalNote] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
 
   const issues = useMemo(() => data?.items ?? [], [data])
@@ -104,6 +109,8 @@ function AdminReleasesPage() {
   const latest = checked ?? history.data?.items[0] ?? null
   const check = useCheckRelease()
   const publish = usePublishRelease()
+  const approve = useApproveRelease()
+  const rollback = useRollbackRelease()
 
   const chooseVolume = (next: string) => {
     setVolume(next)
@@ -123,6 +130,49 @@ function AdminReleasesPage() {
       const manifest = await check.mutateAsync({ volume, issue })
       setChecked(manifest)
       setNotice(manifest.status === 'ready' ? '门禁通过，可以发布。' : `门禁未通过：${manifest.error_count} 个错误。`)
+    } catch (error) {
+      setNotice(detailMessage(error))
+    }
+  }
+
+  const doApprove = async () => {
+    if (!latest) return
+    setNotice(null)
+    try {
+      const manifest = await approve.mutateAsync({
+        volume,
+        issue,
+        manifestId: latest.id,
+        note: approvalNote.trim() || null,
+      })
+      setChecked(manifest)
+      setApprovalNote('')
+      setNotice('已批准。批准签名绑定本次内容哈希；内容再变，旧 Manifest 与批准一起失效。')
+    } catch (error) {
+      setNotice(detailMessage(error))
+    }
+  }
+
+  const doRollback = async (target: ReleaseManifest) => {
+    const reason = window.prompt(
+      `回滚到 Manifest #${target.id} 会恢复这一期当时的发布时间线。请输入原因（至少 3 个字）：`,
+      '恢复上一版发布时间线',
+    )
+    if (reason === null) return
+    if (reason.trim().length < 3) {
+      setNotice('回滚原因至少 3 个字。')
+      return
+    }
+    setNotice(null)
+    try {
+      const manifest = await rollback.mutateAsync({
+        volume,
+        issue,
+        manifestId: target.id,
+        reason: reason.trim(),
+      })
+      setChecked(manifest)
+      setNotice(`已回滚到 Manifest #${target.id}，恢复 ${manifest.restored ?? 0} 篇的发布时间线。`)
     } catch (error) {
       setNotice(detailMessage(error))
     }
@@ -301,6 +351,52 @@ function AdminReleasesPage() {
                     </div>
                   )}
 
+                  <div className="rounded-lg border bg-muted/20 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="flex items-center gap-2 text-sm font-medium">
+                          <PenLine className="h-4 w-4" /> 编辑批准
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          门禁通过只是“可交付”，批准才是“我确认这一期可以发”。批准签名绑定 Manifest #{latest.id} 与内容哈希。
+                        </p>
+                      </div>
+                      {latest.approved_at ? (
+                        <Badge variant="outline" className="border-emerald-500/30 text-emerald-700">
+                          已批准 · {new Date(latest.approved_at).toLocaleString()}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">待批准</Badge>
+                      )}
+                    </div>
+                    {latest.approved_at ? (
+                      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                        <p>批准人 ID：{latest.approved_by ?? '—'}</p>
+                        <p>签名：<code>{latest.approval_signature?.slice(0, 20)}…</code></p>
+                        {latest.approval_note ? <p>备注：{latest.approval_note}</p> : null}
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="w-full sm:max-w-md">
+                          <label className="mb-1 block text-xs font-medium text-muted-foreground">批准备注（可选）</label>
+                          <Input
+                            value={approvalNote}
+                            onChange={(event) => setApprovalNote(event.target.value)}
+                            placeholder="例如：已核对目录、版权页与本期编后记"
+                            maxLength={500}
+                          />
+                        </div>
+                        <Button
+                          onClick={() => void doApprove()}
+                          disabled={latest.status !== 'ready' || approve.isPending}
+                        >
+                          <PenLine className="mr-1.5 h-4 w-4" />
+                          {approve.isPending ? '签署中…' : '批准这份 Manifest'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                     <div className="w-full sm:w-64">
                       <label className="mb-1 block text-xs font-medium text-muted-foreground">排期时间（留空即立即发布）</label>
@@ -312,13 +408,13 @@ function AdminReleasesPage() {
                     </div>
                     <Button
                       onClick={() => void doPublish()}
-                      disabled={latest.status !== 'ready' || publish.isPending}
+                      disabled={latest.status !== 'ready' || !latest.approved_at || publish.isPending}
                     >
                       {scheduleAt ? <Clock3 className="mr-1.5 h-4 w-4" /> : <Rocket className="mr-1.5 h-4 w-4" />}
                       {publish.isPending ? '提交中…' : scheduleAt ? '排期发布' : '立即发布'}
                     </Button>
                     <p className="text-xs text-muted-foreground sm:pb-2">
-                      只对 <code>published</code> 资源写入 publish_at，不动草稿。
+                      只对 <code>published</code> 资源写入 publish_at，不动草稿。未批准的 Manifest 不能发布。
                     </p>
                   </div>
                 </CardContent>
@@ -411,7 +507,9 @@ function AdminReleasesPage() {
                           <TableHead>状态</TableHead>
                           <TableHead>资源</TableHead>
                           <TableHead>错误</TableHead>
+                          <TableHead>批准</TableHead>
                           <TableHead>时间</TableHead>
+                          <TableHead className="text-right">操作</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -422,7 +520,25 @@ function AdminReleasesPage() {
                             <TableCell className="text-xs">{item.resource_count}</TableCell>
                             <TableCell className="text-xs">{item.error_count}</TableCell>
                             <TableCell className="text-xs text-muted-foreground">
+                              {item.approved_at ? new Date(item.approved_at).toLocaleString() : '未批准'}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
                               {item.created_at ? new Date(item.created_at).toLocaleString() : '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {item.status === 'published' ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void doRollback(item)}
+                                  disabled={rollback.isPending}
+                                >
+                                  <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                                  回滚到这份
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

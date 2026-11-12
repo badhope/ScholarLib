@@ -101,14 +101,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not settings.is_test:
         # 后台维护任务（审稿催办）：单节点进程内调度，随应用生命周期启停。
         from app.core.scheduler import start_scheduler
+        from app.modules.release.scheduler import start_release_scheduler
 
         start_scheduler()
+        start_release_scheduler()
 
     yield
 
     if not settings.is_test:
         from app.core.scheduler import stop_scheduler
+        from app.modules.release.scheduler import stop_release_scheduler
 
+        await stop_release_scheduler()
         await stop_scheduler()
         # Close the rate-limiter store (releases the Redis client) before
         # tearing down the engine / other resources that may depend on it.

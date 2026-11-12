@@ -1654,6 +1654,56 @@ export function usePublishRelease() {
   })
 }
 
+export function useApproveRelease() {
+  const qc = useQueryClient()
+  return useMutation<
+    ReleaseManifest,
+    unknown,
+    { volume: string; issue: string; manifestId: number; note?: string | null }
+  >({
+    mutationFn: async ({ manifestId, note }) =>
+      (
+        await api.post('/admin/releases/approve', {
+          manifest_id: manifestId,
+          note: note || null,
+        })
+      ).data,
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: keys.admin.releaseIssues() })
+      void qc.invalidateQueries({
+        queryKey: keys.admin.releaseManifests(vars.volume, vars.issue),
+      })
+    },
+  })
+}
+
+export function useRollbackRelease() {
+  const qc = useQueryClient()
+  return useMutation<
+    ReleaseManifest,
+    unknown,
+    { volume: string; issue: string; manifestId: number; reason: string }
+  >({
+    mutationFn: async ({ volume, issue, manifestId, reason }) =>
+      (
+        await api.post('/admin/releases/rollback', {
+          volume,
+          issue,
+          manifest_id: manifestId,
+          reason,
+        })
+      ).data,
+    onSuccess: (_data, vars) => {
+      void qc.invalidateQueries({ queryKey: ['catalog'] })
+      void qc.invalidateQueries({ queryKey: keys.issuePlan() })
+      void qc.invalidateQueries({ queryKey: keys.admin.releaseIssues() })
+      void qc.invalidateQueries({
+        queryKey: keys.admin.releaseManifests(vars.volume, vars.issue),
+      })
+    },
+  })
+}
+
 export function usePublishIssue() {
   const qc = useQueryClient()
   return useMutation<

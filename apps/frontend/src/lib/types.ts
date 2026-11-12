@@ -1225,8 +1225,16 @@ export interface ReleaseManifest {
   created_by: number | null
   created_at: string | null
   published_at: string | null
+  approved_by: number | null
+  approved_at: string | null
+  approval_note: string | null
+  approval_signature: string | null
+  scheduled_for: string | null
+  rollback_of: number | null
   payload: ReleaseGatePayload
   publish_at?: string
+  restored?: number
+  missing?: number[]
 }
 
 export interface ReleaseIssueSummary {

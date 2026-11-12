@@ -60,6 +60,24 @@ async def test_release_check_publish_and_audit(
     assert manifest["resource_count"] == 2
     assert manifest["error_count"] == 0
 
+    publish_without_approval = await client.post(
+        "/api/admin/releases/publish",
+        json={"volume": "12", "issue": "9", "manifest_id": manifest["id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert publish_without_approval.status_code == 409
+    assert publish_without_approval.json()["detail"]["code"] == "not_approved"
+
+    approve = await client.post(
+        "/api/admin/releases/approve",
+        json={"manifest_id": manifest["id"], "note": "editorial sign-off"},
+        headers=auth_headers(admin_user),
+    )
+    assert approve.status_code == 200, approve.text
+    approved = approve.json()
+    assert approved["approved_by"] is not None
+    assert len(approved["approval_signature"]) == 64
+
     publish = await client.post(
         "/api/admin/releases/publish",
         json={"volume": "12", "issue": "9", "manifest_id": manifest["id"]},
@@ -101,6 +119,12 @@ async def test_release_refuses_stale_manifest(
     )
     manifest = check.json()
     assert manifest["status"] == "ready"
+    approve = await client.post(
+        "/api/admin/releases/approve",
+        json={"manifest_id": manifest["id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert approve.status_code == 200, approve.text
 
     row = (
         await db_session.execute(
@@ -145,3 +169,55 @@ async def test_release_blocks_draft_resource(
         headers=auth_headers(admin_user),
     )
     assert publish.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_release_rollback_restores_published_snapshot(
+    client: AsyncClient, admin_user: dict, db_session: AsyncSession
+) -> None:
+    tenant = await _tenant(db_session)
+    db_session.add(_resource(tenant.id, volume="15", issue="3", slug="rollback-a"))
+    await db_session.commit()
+
+    check = await client.post(
+        "/api/admin/releases/check",
+        json={"volume": "15", "issue": "3"},
+        headers=auth_headers(admin_user),
+    )
+    manifest = check.json()
+    await client.post(
+        "/api/admin/releases/approve",
+        json={"manifest_id": manifest["id"]},
+        headers=auth_headers(admin_user),
+    )
+    publish = await client.post(
+        "/api/admin/releases/publish",
+        json={"volume": "15", "issue": "3", "manifest_id": manifest["id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert publish.status_code == 200, publish.text
+    published = publish.json()
+
+    row = (
+        await db_session.execute(
+            select(Resource).where(Resource.tenant_id == tenant.id, Resource.slug == "rollback-a")
+        )
+    ).scalar_one()
+    row.publish_at = None
+    await db_session.commit()
+
+    rollback = await client.post(
+        "/api/admin/releases/rollback",
+        json={
+            "volume": "15",
+            "issue": "3",
+            "manifest_id": published["id"],
+            "reason": "restore issue timeline",
+        },
+        headers=auth_headers(admin_user),
+    )
+    assert rollback.status_code == 200, rollback.text
+    body = rollback.json()
+    assert body["status"] == "published"
+    assert body["rollback_of"] == published["id"]
+    assert body["restored"] == 1

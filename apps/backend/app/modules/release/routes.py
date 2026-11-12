@@ -13,7 +13,9 @@ must be re-checked; that is the whole point of a manifest.
 
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+import hmac
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -23,6 +25,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_admin, require_tenant_id
+from app.core.config import settings
 from app.core.db import get_db
 from app.core.time import utcnow
 from app.models import AuditLog, User
@@ -53,6 +56,56 @@ class ReleasePublishRequest(BaseModel):
     publish_at: datetime | None = None
 
 
+class ReleaseApproveRequest(BaseModel):
+    manifest_id: int
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ReleaseRollbackRequest(BaseModel):
+    volume: str = Field(min_length=1, max_length=50)
+    issue: str = Field(min_length=1, max_length=50)
+    manifest_id: int
+    reason: str = Field(min_length=3, max_length=500)
+
+
+def _utc_second(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).replace(microsecond=0)
+
+
+def _approval_payload(
+    manifest: ReleaseManifest,
+    approved_by: int,
+    approved_at: datetime,
+) -> str:
+    # Approval time is stored at second precision and normalized to UTC so
+    # the signature survives SQLite/Postgres round-trips unchanged.
+    return (
+        f"{manifest.id}|{manifest.volume}|{manifest.issue}|{manifest.content_hash}|"
+        f"{approved_by}|{_utc_second(approved_at).isoformat()}"
+    )
+
+
+def _sign_approval(
+    manifest: ReleaseManifest,
+    approved_by: int,
+    approved_at: datetime,
+) -> str:
+    return hmac.new(
+        settings.secret_key.encode("utf-8"),
+        _approval_payload(manifest, approved_by, approved_at).encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _approval_valid(manifest: ReleaseManifest) -> bool:
+    if not manifest.approved_at or not manifest.approved_by or not manifest.approval_signature:
+        return False
+    expected = _sign_approval(manifest, manifest.approved_by, manifest.approved_at)
+    return hmac.compare_digest(expected, manifest.approval_signature)
+
+
 def _serialize(manifest: ReleaseManifest) -> dict[str, Any]:
     return {
         "id": manifest.id,
@@ -66,6 +119,12 @@ def _serialize(manifest: ReleaseManifest) -> dict[str, Any]:
         "created_by": manifest.created_by,
         "created_at": manifest.created_at.isoformat() if manifest.created_at else None,
         "published_at": manifest.published_at.isoformat() if manifest.published_at else None,
+        "approved_by": manifest.approved_by,
+        "approved_at": manifest.approved_at.isoformat() if manifest.approved_at else None,
+        "approval_note": manifest.approval_note,
+        "approval_signature": manifest.approval_signature,
+        "scheduled_for": manifest.scheduled_for.isoformat() if manifest.scheduled_for else None,
+        "rollback_of": manifest.rollback_of,
         "payload": manifest.payload,
     }
 
@@ -263,6 +322,60 @@ async def create_release_check(
     return _serialize(manifest)
 
 
+@router.post("/approve")
+async def approve_release(
+    payload: ReleaseApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Approve one ready manifest by its exact content hash.
+
+    A new check after any content change creates a new manifest; the old
+    approval is therefore invalidated together with the old manifest.
+    """
+    tenant_id = require_tenant_id()
+    manifest = (
+        await db.execute(
+            select(ReleaseManifest).where(
+                ReleaseManifest.id == payload.manifest_id,
+                ReleaseManifest.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Release manifest not found")
+    if manifest.status != "ready":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Manifest is {manifest.status}; only a ready manifest can be approved",
+        )
+    if manifest.approved_at is not None:
+        raise HTTPException(status_code=409, detail="Manifest is already approved")
+
+    approved_at = _utc_second(utcnow())
+    manifest.approved_by = current_admin.id
+    manifest.approved_at = approved_at
+    manifest.approval_note = payload.note
+    manifest.approval_signature = _sign_approval(manifest, current_admin.id, approved_at)
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="release.approve",
+            target_type="issue",
+            target_id=f"{manifest.volume}/{manifest.issue}",
+            payload={
+                "manifest_id": manifest.id,
+                "content_hash": manifest.content_hash,
+                "note": payload.note,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(manifest)
+    return _serialize(manifest)
+
+
 @router.post("/publish")
 async def publish_release(
     payload: ReleasePublishRequest,
@@ -287,6 +400,15 @@ async def publish_release(
         raise HTTPException(
             status_code=409,
             detail=f"Manifest is {manifest.status}; only a ready manifest can publish",
+        )
+    if not _approval_valid(manifest):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "not_approved",
+                "message": "这份 Manifest 还没有编辑批准，或批准签名已失效",
+                "manifest_id": manifest.id,
+            },
         )
 
     current = await check_issue(db, tenant_id, payload.volume, payload.issue)
@@ -334,7 +456,8 @@ async def publish_release(
     if next_status not in MANIFEST_TRANSITIONS[manifest.status]:
         raise HTTPException(status_code=409, detail="Illegal manifest transition")
     manifest.status = next_status
-    manifest.published_at = utcnow()
+    manifest.scheduled_for = target if next_status == "scheduled" else None
+    manifest.published_at = utcnow() if next_status == "published" else None
     db.add(
         AuditLog(
             tenant_id=tenant_id,
@@ -354,4 +477,114 @@ async def publish_release(
     await db.refresh(manifest)
     result = _serialize(manifest)
     result["publish_at"] = target.isoformat()
+    return result
+
+
+@router.post("/rollback")
+async def rollback_release(
+    payload: ReleaseRollbackRequest,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+) -> dict[str, Any]:
+    """Re-publish an earlier published issue snapshot.
+
+    Rollback restores the *issue timeline* (each resource's publish_at does
+    not invent new content.  It deliberately bypasses the current gate:
+    the target manifest was already published; reusing it is the point of a
+    rollback.  A new manifest records who rolled back what and why.
+    """
+    tenant_id = require_tenant_id()
+    target = (
+        await db.execute(
+            select(ReleaseManifest).where(
+                ReleaseManifest.id == payload.manifest_id,
+                ReleaseManifest.tenant_id == tenant_id,
+                ReleaseManifest.volume == payload.volume,
+                ReleaseManifest.issue == payload.issue,
+            )
+        )
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Rollback target manifest not found")
+    if target.status != "published":
+        raise HTTPException(
+            status_code=409, detail="Only a published manifest can be rolled back to"
+        )
+
+    snapshot = target.payload.get("resources") or []
+    wanted: dict[int, datetime | None] = {}
+    for item in snapshot:
+        try:
+            rid = int(item["id"])
+            raw = item.get("publish_at")
+            wanted[rid] = datetime.fromisoformat(raw) if raw else None
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not wanted:
+        raise HTTPException(status_code=409, detail="Rollback target has no resource snapshot")
+
+    rows = await _issue_rows(db, tenant_id, payload.volume, payload.issue)
+    restored = 0
+    missing: list[int] = []
+    for resource in rows:
+        if resource.id not in wanted:
+            continue
+        if resource.publication_status != "published":
+            continue
+        resource.publish_at = wanted[resource.id]
+        restored += 1
+    if restored == 0:
+        raise HTTPException(status_code=409, detail="None of the target resources still exist")
+    for rid in wanted:
+        if rid not in {r.id for r in rows}:
+            missing.append(rid)
+
+    now = _utc_second(utcnow())
+    manifest = ReleaseManifest(
+        tenant_id=tenant_id,
+        volume=payload.volume,
+        issue=payload.issue,
+        status="published",
+        content_hash=target.content_hash,
+        resource_count=target.resource_count,
+        error_count=target.error_count,
+        warning_count=target.warning_count,
+        payload={
+            **target.payload,
+            "rollback_of": target.id,
+            "rollback_reason": payload.reason,
+            "rollback_restored": restored,
+            "rollback_missing": missing,
+        },
+        created_by=current_admin.id,
+        published_at=now,
+        approved_by=current_admin.id,
+        approved_at=now,
+        approval_note=f"rollback to #{target.id}: {payload.reason}",
+        rollback_of=target.id,
+    )
+    db.add(manifest)
+    await db.flush()
+    manifest.approval_signature = _sign_approval(manifest, current_admin.id, now)
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_admin.id,
+            action="release.rollback",
+            target_type="issue",
+            target_id=f"{payload.volume}/{payload.issue}",
+            payload={
+                "manifest_id": manifest.id,
+                "rollback_of": target.id,
+                "restored": restored,
+                "missing": missing,
+                "reason": payload.reason,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(manifest)
+    result = _serialize(manifest)
+    result["restored"] = restored
+    result["missing"] = missing
     return result
