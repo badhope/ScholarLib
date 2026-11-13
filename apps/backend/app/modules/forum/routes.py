@@ -116,6 +116,7 @@ async def get_forum_image(filename: str) -> Response:
     }[filename.rsplit(".", 1)[1]]
     return Response(content=contents, media_type=mime, headers=_FORUM_IMAGE_HEADERS)
 
+
 # 五个平铺版块：论文沙龙 / 方法与写作 / 学术生存 / 组队招募 / 站务公告。
 # 旧分类保留为兼容别名（历史帖子和既有测试仍可直接写入），列表查询按版块聚合。
 ForumCategory = Literal[

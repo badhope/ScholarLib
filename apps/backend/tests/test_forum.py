@@ -394,9 +394,7 @@ async def test_admin_report_list_includes_reporter(
 
 
 @pytest.mark.asyncio
-async def test_forum_image_upload_and_public_read(
-    client: AsyncClient, test_user: dict
-) -> None:
+async def test_forum_image_upload_and_public_read(client: AsyncClient, test_user: dict) -> None:
     """论坛图片：登录可上传，公开可读，未登录不能传。"""
     png = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
