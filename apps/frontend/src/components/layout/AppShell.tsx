@@ -43,7 +43,7 @@ import { AmbientBackdrop } from '@/components/common/ambient-backdrop'
 import { filterNav, resolveActiveNavPath, type NavItem } from '@/lib/nav'
 import { ModuleErrorBoundary } from '@/components/common/error-boundary'
 import { PageTransition } from '@/components/common/page-transition'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -94,7 +94,7 @@ const NAV: NavItem[] = [
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin', label: '站点总览', icon: Gavel, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/shop', label: 'R 币商城', icon: ShoppingBag, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/shop', label: 'R 币商城', icon: ShoppingBag, auth: true, roles: ['chief_editor', 'deputy_editor', 'shop_manager'], group: '站点管理' },
   { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
@@ -114,6 +114,7 @@ export function AppShell() {
   const [cmdOpen, setCmdOpen] = useState(false)
   const [cmdQ, setCmdQ] = useState('')
   const { isAuthenticated, isAdmin, user, logout } = useAuth()
+  const displayName = user?.display_name || user?.username || ''
   const navigate = useNavigate()
   const location = useLocation()
   const logoutMut = useLogout()
@@ -291,10 +292,11 @@ export function AppShell() {
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2.5">
                 <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback>{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                  <AvatarImage src={user.avatar_url ?? undefined} alt="" />
+                  <AvatarFallback>{displayName.slice(0, 2).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium">{user.username}</p>
+                  <p className="truncate text-xs font-medium">{displayName}</p>
                   <p className="truncate text-[10px] text-sidebar-foreground/55">
                     {user.roles?.includes('chief_editor') ? '主编' : user.roles?.includes('reviewer') ? '审稿人' : '作者 / 读者'}
                   </p>
@@ -346,13 +348,14 @@ export function AppShell() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2" aria-label="账号菜单">
                     <Avatar className="h-7 w-7">
-                      <AvatarFallback>{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={user.avatar_url ?? undefined} alt="" />
+                      <AvatarFallback>{displayName.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="hidden text-sm sm:inline">{user.username}</span>
+                    <span className="hidden text-sm sm:inline">{displayName}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>{user.username}</DropdownMenuLabel>
+                  <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link to="/shop">

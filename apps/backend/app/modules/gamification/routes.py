@@ -12,7 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_admin, require_role, require_tenant_id
+from app.api.deps import (
+    get_current_user,
+    require_admin,
+    require_role,
+    require_tenant_id,
+    user_has_role,
+)
 from app.api.levels import CURRENT_RULES_VERSION
 from app.core.db import get_db, paginate
 from app.core.schemas import PaginationMeta
@@ -27,6 +33,27 @@ from app.modules.gamification.ladder import (
 from app.modules.gamification.models import CoinPolicy, CoinRule, CoinShopItem, RoleApplication
 
 router = APIRouter(prefix="/gamification", tags=["gamification"])
+
+
+async def require_shop_manager(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """商城后台专用：主编/副主编，或被单独授予 shop_manager 的账号。"""
+    if current_user.is_admin:
+        return current_user
+    if await user_has_role(db, current_user, "editor_in_chief") or await user_has_role(
+        db, current_user, "shop_manager"
+    ):
+        return current_user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "insufficient_permission",
+            "required_role": "shop_manager",
+            "message": "需要商城主编权限。",
+        },
+    )
 
 
 class LevelGrantRequest(BaseModel):
@@ -694,7 +721,7 @@ async def get_my_purchases(
 
 @router.get("/admin/coin/config")
 async def get_coin_config(
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     policy = await currency._load_policy(db, current_user)
@@ -723,7 +750,7 @@ async def get_coin_config(
 async def patch_coin_rule(
     reason: str,
     body: CoinRulePatch,
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     rule = (
@@ -763,7 +790,7 @@ async def patch_coin_rule(
 @router.patch("/admin/coin/policy")
 async def patch_coin_policy(
     body: CoinPolicyPatch,
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     policy = (
@@ -787,7 +814,7 @@ async def patch_coin_policy(
 
 @router.get("/admin/shop/items")
 async def admin_list_shop_items(
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     items = await shop.list_items(db, current_user.tenant_id, include_inactive=True)
@@ -797,7 +824,7 @@ async def admin_list_shop_items(
 @router.post("/admin/shop/items")
 async def admin_create_shop_item(
     body: ShopItemIn,
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     item = await shop.create_item(
@@ -819,7 +846,7 @@ async def admin_create_shop_item(
 async def admin_update_shop_item(
     item_id: int,
     body: ShopItemPatch,
-    current_user: User = Depends(require_role("editor_in_chief")),
+    current_user: User = Depends(require_shop_manager),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     item = (

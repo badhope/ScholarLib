@@ -75,7 +75,11 @@ export function usePublicProfile(username: string, enabled = true) {
       await api.get<PublicProfile>(`/users/${encodeURIComponent(username)}/public`)
     ).data,
     enabled: enabled && Boolean(username),
-    staleTime: 30_000,
+    // 主页资料是“活的”：别人刚改完头像/名字，公开页不能靠 30 秒缓存装看不见。
+    // 本页打开期间 15 秒轻量轮询一次；保存后还会主动失效，本人立即看到。
+    staleTime: 5_000,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     retry: false,
   })
 }

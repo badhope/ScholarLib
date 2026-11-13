@@ -30,6 +30,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         useAuthStore.getState().setUser({
           id: res.id,
           username: res.username,
+          display_name: res.display_name ?? null,
+          avatar_url: res.avatar_url ?? null,
           is_admin: res.is_admin,
           roles: res.roles ?? [],
         } satisfies AuthUser)

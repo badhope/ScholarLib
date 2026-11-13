@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { CheckCircle2, MessageSquareText, Pin, RefreshCw } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -16,10 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export const Route = createFileRoute('/feedback')({
-  // 反馈墙已并入论坛「站务公告」版块；旧入口跳转过去，保留书签可达。
-  beforeLoad: () => {
-    throw redirect({ to: '/forum', search: { category: 'meta' } })
-  },
+  // 反馈墙是独立入口：提交反馈的人要能回来看到编辑部的公开回复与处理结果。
+  // 之前的 redirect 把整个反馈墙藏掉了，反馈入口点进去只会跳到论坛。
   component: FeedbackBoardPage,
 })
 

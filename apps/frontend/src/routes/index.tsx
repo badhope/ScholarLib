@@ -617,7 +617,7 @@ function ForumPulse() {
     category: string
     reply_count: number
     last_reply_at: string | null
-    author: { username: string } | null
+    author: { username: string; display_name?: string | null; avatar_url?: string | null } | null
   }>
   if (topics.length === 0) return null
 
@@ -666,7 +666,7 @@ function ForumPulse() {
             <span className="min-w-0 flex-1">
               <span className="line-clamp-1 text-sm font-medium">{t.title}</span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                {t.author?.username ?? '匿名'} · {t.reply_count} 回复
+                {t.author?.display_name || t.author?.username || '匿名'} · {t.reply_count} 回复
                 {t.last_reply_at ? ` · 最后活跃 ${rel(t.last_reply_at)}` : ''}
               </span>
             </span>

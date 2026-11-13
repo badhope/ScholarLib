@@ -50,7 +50,7 @@ interface ForumTopic {
   reply_count: number
   created_at: string
   last_reply_at: string | null
-  author: { id: number; username: string } | null
+  author: { id: number; username: string; display_name?: string | null; avatar_url?: string | null } | null
   reactions?: Record<string, number>
   viewer_reactions?: string[]
 }
@@ -61,7 +61,7 @@ interface ForumReply {
   parent_id: number | null
   body: string
   created_at: string
-  author: { id: number; username: string } | null
+  author: { id: number; username: string; display_name?: string | null; avatar_url?: string | null } | null
   reactions?: Record<string, number>
   viewer_reactions?: string[]
 }
@@ -187,8 +187,11 @@ function ReplyCard({
               </p>
             )}
             <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+              {reply.author?.avatar_url ? (
+                <img src={reply.author.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+              ) : null}
               <span className="font-medium text-foreground">
-                {reply.author?.username ?? '已注销用户'}
+                {reply.author?.display_name || reply.author?.username || '已注销用户'}
               </span>
               {isTopicAuthor && (
                 <Badge variant="outline" className="h-4 px-1 text-[10px]">
@@ -372,8 +375,11 @@ function ForumTopicPage() {
             )}
           </div>
           <h1 className="text-xl font-semibold leading-snug">{topic.title}</h1>
-          <p className="text-[11px] text-muted-foreground">
-            {topic.author?.username ?? '已注销用户'} ·{' '}
+          <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {topic.author?.avatar_url ? (
+              <img src={topic.author.avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+            ) : null}
+            {topic.author?.display_name || topic.author?.username || '已注销用户'} ·{' '}
             {new Date(topic.created_at).toLocaleString('zh-CN')}
           </p>
           {/* 主楼按 Markdown 渲染；react-markdown 默认转义原始 HTML，XSS 面为零。 */}

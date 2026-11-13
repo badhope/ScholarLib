@@ -39,6 +39,7 @@ ROLE_REVIEWER = "reviewer"
 ROLE_BOARD_EDITOR = "board_editor"
 ROLE_DEPUTY_EDITOR = "deputy_editor"
 ROLE_CHIEF_EDITOR = "chief_editor"
+ROLE_SHOP_MANAGER = "shop_manager"
 
 
 async def _ensure_bootstrap_tenant(session: AsyncSession) -> Tenant:
@@ -143,6 +144,7 @@ async def _ensure_review_roles(session: AsyncSession, tenant: Tenant) -> None:
         (ROLE_BOARD_EDITOR, "Editorial board (screening, assigning reviewers, recommendation)"),
         (ROLE_EDITOR, "Editor (assign reviewers + desk screening)"),
         (ROLE_REVIEWER, "Peer reviewer (accept/decline invitations + submit reports)"),
+        (ROLE_SHOP_MANAGER, "Shop manager (R-coin shop catalog, pricing and issuance rules)"),
     ):
         existing = (
             await session.execute(

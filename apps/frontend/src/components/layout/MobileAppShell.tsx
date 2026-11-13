@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useLogout } from '@/hooks/api/use-auth'
 import { useUnreadCount } from '@/hooks/api/use-modules'
 import { cn } from '@/lib/utils'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -68,6 +68,7 @@ function MobileTabButton({
 
 export function MobileAppShell() {
   const { isAuthenticated, isAdmin, user } = useAuth()
+  const displayName = user?.display_name || user?.username || ''
   const navigate = useNavigate()
   const location = useLocation()
   const logoutMut = useLogout()
@@ -238,10 +239,11 @@ export function MobileAppShell() {
                 <>
                   <div className="flex items-center gap-2 px-2 py-1.5">
                     <Avatar className="h-7 w-7">
-                      <AvatarFallback>{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={user.avatar_url ?? undefined} alt="" />
+                      <AvatarFallback>{displayName.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{user.username}</div>
+                      <div className="truncate text-sm font-medium">{displayName}</div>
                     </div>
                   </div>
                   <DropdownMenuSeparator />

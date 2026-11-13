@@ -169,6 +169,8 @@ class ReplyCreate(BaseModel):
 class AuthorBrief(BaseModel):
     id: int
     username: str
+    display_name: str | None = None
+    avatar_url: str | None = None
 
 
 class TopicOut(BaseModel):
@@ -211,8 +213,22 @@ async def _author_map(db: AsyncSession, user_ids: set[int]) -> dict[int, AuthorB
     """批量查作者，避免列表页 N+1。"""
     if not user_ids:
         return {}
-    rows = (await db.execute(select(User.id, User.username).where(User.id.in_(user_ids)))).all()
-    return {r[0]: AuthorBrief(id=r[0], username=r[1]) for r in rows}
+    rows = (
+        await db.execute(
+            select(User.id, User.username, User.display_name, User.avatar_url).where(
+                User.id.in_(user_ids)
+            )
+        )
+    ).all()
+    return {
+        r[0]: AuthorBrief(
+            id=r[0],
+            username=r[1],
+            display_name=r[2],
+            avatar_url=r[3],
+        )
+        for r in rows
+    }
 
 
 async def _reaction_summary(
@@ -482,7 +498,12 @@ async def create_topic(
         paper_id=payload.paper_id,
     )
     db.add(topic)
-    author = AuthorBrief(id=current_user.id, username=current_user.username)
+    author = AuthorBrief(
+        id=current_user.id,
+        username=current_user.username,
+        display_name=current_user.display_name,
+        avatar_url=current_user.avatar_url,
+    )
     await db.commit()
     await db.refresh(topic)
     # 社区活跃奖励：发主题按后台规则（默认 1 R 币）；失败不影响发帖本身。
@@ -552,7 +573,12 @@ async def create_reply(
         body=payload.body.strip(),
         parent_id=parent_id,
     )
-    author = AuthorBrief(id=current_user.id, username=current_user.username)
+    author = AuthorBrief(
+        id=current_user.id,
+        username=current_user.username,
+        display_name=current_user.display_name,
+        avatar_url=current_user.avatar_url,
+    )
     db.add(reply)
     # 反冗余计数与最近活跃时间在同一事务里更新
     topic.reply_count += 1

@@ -59,6 +59,7 @@ ASSIGNABLE_ROLES = {
     "board_editor",
     "deputy_editor",
     "chief_editor",
+    "shop_manager",
 }
 
 ROLE_LABELS = {
@@ -69,6 +70,7 @@ ROLE_LABELS = {
     "board_editor": "编委",
     "deputy_editor": "副主编",
     "chief_editor": "主编",
+    "shop_manager": "商城主编",
 }
 
 

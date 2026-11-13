@@ -15,6 +15,7 @@ export interface AuthUser {
   is_email_verified?: boolean
   // 个人资料（设置页编辑后由 /users/me 回填；旧缓存可能没有）。
   display_name?: string | null
+  avatar_url?: string | null
   real_name?: string | null
   affiliation?: string | null
   department?: string | null

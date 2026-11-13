@@ -289,6 +289,7 @@ class RoleAssign(BaseModel):
         "senior_reviewer",
         "editor",
         "section_editor",
+        "shop_manager",
         "author",
         "reader",
     ]

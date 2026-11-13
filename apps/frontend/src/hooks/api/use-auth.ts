@@ -149,10 +149,29 @@ export function useUpdateBio() {
   const qc = useQueryClient()
   return useMutation<UserResponse, Error, { bio: string | null }>({
     mutationFn: async (body) => (await api.patch<UserResponse>('/users/me', body)).data,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })
+    onSuccess: (data) => {
+      syncProfileCaches(qc, data)
     },
   })
+}
+
+/** 资料保存后，把 /me、公开主页和全局侧栏身份卡一起刷新，避免“只有自己看得到”。 */
+function syncProfileCaches(
+  qc: ReturnType<typeof useQueryClient>,
+  data: UserResponse,
+) {
+  qc.setQueryData([...AUTH_KEY, 'me', 'profile'], data)
+  void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })
+  void qc.invalidateQueries({ queryKey: ['public-profile'] })
+  const current = useAuthStore.getState().user
+  if (current) {
+    useAuthStore.getState().setUser({
+      ...current,
+      username: data.username,
+      display_name: data.display_name ?? null,
+      avatar_url: data.avatar_url ?? null,
+    })
+  }
 }
 
 // 完整资料：PATCH /users/me。仅提交本次改动的字段，未提交的字段保持原值。
@@ -160,8 +179,8 @@ export function useUpdateProfile() {
   const qc = useQueryClient()
   return useMutation<UserResponse, Error, UserProfileUpdate>({
     mutationFn: async (body) => (await api.patch<UserResponse>('/users/me', body)).data,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: [...AUTH_KEY, 'me'] })
+    onSuccess: (data) => {
+      syncProfileCaches(qc, data)
     },
   })
 }

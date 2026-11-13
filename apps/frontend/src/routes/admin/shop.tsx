@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Coins, Package, Plus, Save, ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
-import { requireChiefGuard } from '@/lib/route-guards'
+import { requireShopManagerGuard } from '@/lib/route-guards'
 import {
   useAdminShopItems,
   useCoinConfig,
@@ -23,7 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
 export const Route = createFileRoute('/admin/shop')({
-  beforeLoad: () => requireChiefGuard(),
+  beforeLoad: () => requireShopManagerGuard(),
   component: AdminShopPage,
 })
 

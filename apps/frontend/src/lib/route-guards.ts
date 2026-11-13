@@ -25,3 +25,16 @@ export function requireChiefGuard(): void {
     throw redirect({ to: '/403' })
   }
 }
+
+/** 商城后台：主编/副主编，或单独授予 shop_manager 的账号。 */
+export function requireShopManagerGuard(): void {
+  const state = getAuthState()
+  if (!state.isAuthenticated) throw redirect({ to: '/login' })
+  const roles = state.user?.roles ?? []
+  if (
+    !state.isAdmin &&
+    !roles.some((r) => ['chief_editor', 'deputy_editor', 'shop_manager'].includes(r))
+  ) {
+    throw redirect({ to: '/403' })
+  }
+}

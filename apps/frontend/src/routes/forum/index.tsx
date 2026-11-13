@@ -54,7 +54,7 @@ interface ForumTopic {
   created_at: string
   last_reply_at: string | null
   paper_id: number | null
-  author: { id: number; username: string } | null
+  author: { id: number; username: string; display_name?: string | null; avatar_url?: string | null } | null
 }
 
 const CATEGORIES = [
@@ -410,7 +410,7 @@ function ForumListPage() {
                     className="mt-1 line-clamp-2 text-[13px] leading-6 text-muted-foreground"
                   />
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {t.author?.username ?? '已注销用户'} · 最后活跃{' '}
+                    {t.author?.display_name || t.author?.username || '已注销用户'} · 最后活跃{' '}
                     {fmtRelative(t.last_reply_at ?? t.created_at)}
                   </p>
                 </div>
