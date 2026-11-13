@@ -166,7 +166,7 @@ function AdminShopPage() {
                 <Input type="number" min={1} value={policy.coin_per_yuan} onChange={(e) => setPolicy({ ...policy, coin_per_yuan: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5">
-                <Label>单用户每日上限（R）</Label>
+                <Label>日常收入每日上限（R）</Label>
                 <Input type="number" min={1} value={policy.daily_earn_cap} onChange={(e) => setPolicy({ ...policy, daily_earn_cap: Number(e.target.value) })} />
               </div>
               <div className="space-y-1.5">

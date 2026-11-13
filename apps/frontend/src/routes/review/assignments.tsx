@@ -418,7 +418,7 @@ function ReviewWorkbenchPage() {
                     disabled={submitMut.isPending}
                   />
                 </div>
-                <DialogFooter className="sticky bottom-0 border-t bg-background px-4 py-3">
+                <DialogFooter className="sticky bottom-0 flex-col border-t bg-background px-4 py-3 sm:flex-row">
                   <Button
                     type="button"
                     variant="outline"

@@ -7,7 +7,7 @@
 - 连续 7 天额外 2 R
 - 论坛发主题 1 R / 天，回帖默认 0
 - 认领 10 R、审稿 5 R、录用 20 R、裁决 3 R
-- 单用户每日最多 5 R；全站每月最多 5000 R
+- 单用户日常收入每日最多 5 R；审稿、录用、认领、裁决等一次性劳务奖励不受此限，但计入全站月发行上限
 
 事实源是 ``point_events.identity='coin'`` 的 append-only 流水；余额在
 ``users.coin_balance`` 做快照。所有发放都先过规则、每日上限、月度发行上限
@@ -30,6 +30,10 @@ COIN_IDENTITY = "coin"
 COIN_PER_YUAN_DEFAULT = 100
 DAILY_EARN_CAP_DEFAULT = 5
 MONTHLY_ISSUE_CAP_DEFAULT = 5000
+# 一次性劳务奖励不能因为当天签到过就被 5 R 日常上限吞掉；它们仍受月发行上限约束。
+DAILY_CAP_EXEMPT_REASONS = frozenset(
+    {"claim.approve", "review.completed", "submission.accepted", "editor.decision"}
+)
 ACCENT_PRICE = 100
 
 # 代码内兜底；生产以 coin_rules 表为准（主编可改）。
@@ -170,7 +174,7 @@ async def award(
         return False
 
     policy = await _load_policy(db, user)
-    if await _daily_earned(db, user) + value > policy.daily_earn_cap:
+    if reason not in DAILY_CAP_EXEMPT_REASONS and await _daily_earned(db, user) + value > policy.daily_earn_cap:
         return False
     if await monthly_issued(db, user.tenant_id) + value > policy.monthly_issue_cap:
         return False

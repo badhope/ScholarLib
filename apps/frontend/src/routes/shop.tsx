@@ -53,7 +53,7 @@ function ShopPage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            每日最多赚 {wallet.data?.daily_earn_cap ?? 5} R；本月全站已发 {wallet.data?.monthly_issued ?? 0} /
+            日常收入每日最多赚 {wallet.data?.daily_earn_cap ?? 5} R；本月全站已发 {wallet.data?.monthly_issued ?? 0} /
             {wallet.data?.monthly_issue_cap ?? 5000} R
           </p>
         </CardContent>

@@ -133,7 +133,8 @@ export function WalletCard() {
 
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           <span>
-            发行锚：{data.coin_per_yuan} R = ¥1；单用户每日最多 {data.daily_earn_cap} R，全站本月已发{' '}
+            发行锚：{data.coin_per_yuan} R = ¥1；日常收入每日最多 {data.daily_earn_cap}{' '}
+            R（签到/发帖），审稿、录用、认领等一次性劳务另计；全站本月已发{' '}
             {data.monthly_issued}/{data.monthly_issue_cap} R。
           </span>
           <Link to="/shop" className="inline-flex items-center gap-1 text-primary hover:underline">

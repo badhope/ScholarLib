@@ -379,7 +379,7 @@ export function ReviewReportFields({
       </div>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-h-[86vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none p-4 sm:h-auto sm:max-h-[86vh] sm:w-auto sm:max-w-2xl sm:rounded-lg sm:p-6">
           <DialogHeader>
             <DialogTitle>审稿报告预览</DialogTitle>
             <DialogDescription>
@@ -446,7 +446,7 @@ export function ReviewReportFields({
               </p>
             ) : null}
           </div>
-          <DialogFooter>
+          <DialogFooter className="sticky bottom-0 border-t bg-background pt-3 sm:border-0">
             <Button type="button" onClick={() => setPreviewOpen(false)}>
               回到编辑
             </Button>
