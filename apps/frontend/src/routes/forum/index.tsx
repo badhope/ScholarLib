@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Coffee, Flag, Lock, Megaphone, MessageSquare, PenLine, Pin, Plus, Users } from 'lucide-react'
+import { BookOpen, Clock3, Coffee, Flame, Flag, Lock, Megaphone, MessageSquare, PenLine, Pin, Plus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { extractError } from '@/lib/utils'
@@ -150,9 +150,12 @@ function ForumListPage() {
     page?: number
     paperId?: number | string
     paperTitle?: string
+    sort?: string
   }
   const category = search.category ?? 'all'
   const page = search.page ?? 1
+  const sort = search.sort === 'hot' ? 'hot' : 'latest'
+
   const paperId = search.paperId ? Number(search.paperId) : null
   const paperTitle = search.paperTitle ?? ''
 
@@ -173,11 +176,11 @@ function ForumListPage() {
   )
 
   const listQ = useQuery({
-    queryKey: ['forum', 'topics', category, page],
+    queryKey: ['forum', 'topics', category, page, sort],
     queryFn: async () =>
       (
         await api.get('/forum/topics', {
-          params: { category: category === 'all' ? undefined : category, page, page_size: 20 },
+          params: { category: category === 'all' ? undefined : category, page, page_size: 20, sort },
         })
       ).data,
   })
@@ -294,15 +297,49 @@ function ForumListPage() {
         })}
       </div>
 
-      {category === 'all' ? null : (
-        <button
-          type="button"
-          onClick={() => updateSearch({ category: undefined, page: 1 })}
-          className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-        >
-          ← 看全部版块
-        </button>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {category === 'all' ? (
+          <span className="text-xs text-muted-foreground">
+            五个版块，{sort === 'hot' ? '按回复数排' : '按最近活跃排'}
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => updateSearch({ category: undefined, page: 1 })}
+            className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+          >
+            ← 看全部版块
+          </button>
+        )}
+        <div className="flex items-center gap-0.5 rounded-full border bg-muted/40 p-0.5">
+          <button
+            type="button"
+            onClick={() => updateSearch({ sort: 'latest', page: 1 })}
+            className={cn(
+              'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+              sort === 'latest'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Clock3 className="h-3 w-3" />
+            最新
+          </button>
+          <button
+            type="button"
+            onClick={() => updateSearch({ sort: 'hot', page: 1 })}
+            className={cn(
+              'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors',
+              sort === 'hot'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Flame className="h-3 w-3" />
+            热度
+          </button>
+        </div>
+      </div>
 
       {listQ.isLoading ? (
         <Loading />

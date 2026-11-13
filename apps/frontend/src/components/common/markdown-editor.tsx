@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { EmojiStickerPicker } from '@/components/common/emoji-sticker-picker'
 import { cn } from '@/lib/utils'
 
 /**
@@ -120,6 +121,20 @@ export function MarkdownEditor({
     })
   }
 
+  const insertText = (text: string) => {
+    const area = areaRef.current
+    if (disabled) return
+    const start = area?.selectionStart ?? value.length
+    const end = area?.selectionEnd ?? value.length
+    const next = value.slice(0, start) + text + value.slice(end)
+    onChange(next)
+    requestAnimationFrame(() => {
+      area?.focus()
+      const caret = start + text.length
+      area?.setSelectionRange(caret, caret)
+    })
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
       const key = e.key.toLowerCase()
@@ -141,6 +156,7 @@ export function MarkdownEditor({
         <ToolButton tool={ITALIC} disabled={disabled} onPick={applyTool} />
         <ToolMenu label="段落" tools={PARAGRAPH_TOOLS} disabled={disabled} onPick={applyTool} />
         <ToolMenu label="插入" tools={INSERT_TOOLS} disabled={disabled} onPick={applyTool} />
+        <EmojiStickerPicker onInsert={insertText} disabled={disabled} />
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" data-testid="md-char-count">

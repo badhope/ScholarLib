@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     ROLE_EDITOR,
     get_current_user,
+    get_current_user_optional,
     require_admin,
     require_tenant_id,
     user_has_role,
@@ -32,7 +33,7 @@ from app.api.deps import (
 from app.core.db import get_db, paginate
 from app.core.time import utcnow
 from app.models import AuditLog, User
-from app.modules.forum.models import ForumReply, ForumReport, ForumTopic
+from app.modules.forum.models import ForumReaction, ForumReply, ForumReport, ForumTopic
 
 router = APIRouter(prefix="/forum", tags=["forum"])
 
@@ -77,8 +78,12 @@ class TopicCreate(BaseModel):
     paper_id: int | None = Field(default=None, ge=1)
 
 
+REACTION_KINDS = ("agree", "helpful", "bookmark")
+
+
 class ReplyCreate(BaseModel):
     body: str = Field(min_length=1, max_length=10000)
+    parent_id: int | None = Field(default=None, ge=1)
 
 
 class AuthorBrief(BaseModel):
@@ -100,6 +105,8 @@ class TopicOut(BaseModel):
     last_reply_at: datetime | None
     paper_id: int | None = None
     author: AuthorBrief | None = None
+    reactions: dict[str, int] = Field(default_factory=dict)
+    viewer_reactions: list[str] = Field(default_factory=list)
 
 
 class TopicListOut(BaseModel):
@@ -112,9 +119,12 @@ class ReplyOut(BaseModel):
 
     id: int
     topic_id: int
+    parent_id: int | None = None
     body: str
     created_at: datetime
     author: AuthorBrief | None = None
+    reactions: dict[str, int] = Field(default_factory=dict)
+    viewer_reactions: list[str] = Field(default_factory=list)
 
 
 async def _author_map(db: AsyncSession, user_ids: set[int]) -> dict[int, AuthorBrief]:
@@ -125,7 +135,55 @@ async def _author_map(db: AsyncSession, user_ids: set[int]) -> dict[int, AuthorB
     return {r[0]: AuthorBrief(id=r[0], username=r[1]) for r in rows}
 
 
-def _topic_out(t: ForumTopic, authors: dict[int, AuthorBrief]) -> TopicOut:
+async def _reaction_summary(
+    db: AsyncSession,
+    *,
+    target_type: str,
+    target_ids: list[int],
+    viewer_id: int | None,
+) -> tuple[dict[int, dict[str, int]], dict[int, list[str]]]:
+    """批量取反馈计数和当前用户已选状态，避免详情页 N+1。"""
+    counts: dict[int, dict[str, int]] = {i: {k: 0 for k in REACTION_KINDS} for i in target_ids}
+    viewers: dict[int, list[str]] = {i: [] for i in target_ids}
+    if not target_ids:
+        return counts, viewers
+    rows = (
+        await db.execute(
+            select(ForumReaction.target_id, ForumReaction.kind, func.count())
+            .where(
+                ForumReaction.tenant_id == require_tenant_id(),
+                ForumReaction.target_type == target_type,
+                ForumReaction.target_id.in_(target_ids),
+            )
+            .group_by(ForumReaction.target_id, ForumReaction.kind)
+        )
+    ).all()
+    for tid, kind, count in rows:
+        if tid in counts and kind in counts[tid]:
+            counts[tid][kind] = int(count)
+    if viewer_id is not None:
+        viewer_rows = (
+            await db.execute(
+                select(ForumReaction.target_id, ForumReaction.kind).where(
+                    ForumReaction.tenant_id == require_tenant_id(),
+                    ForumReaction.user_id == viewer_id,
+                    ForumReaction.target_type == target_type,
+                    ForumReaction.target_id.in_(target_ids),
+                )
+            )
+        ).all()
+        for tid, kind in viewer_rows:
+            if tid in viewers:
+                viewers[tid].append(kind)
+    return counts, viewers
+
+
+def _topic_out(
+    t: ForumTopic,
+    authors: dict[int, AuthorBrief],
+    reactions: dict[str, int] | None = None,
+    viewer_reactions: list[str] | None = None,
+) -> TopicOut:
     return TopicOut(
         id=t.id,
         title=t.title,
@@ -138,16 +196,26 @@ def _topic_out(t: ForumTopic, authors: dict[int, AuthorBrief]) -> TopicOut:
         last_reply_at=t.last_reply_at,
         paper_id=t.paper_id,
         author=authors.get(t.author_id),
+        reactions=reactions or {k: 0 for k in REACTION_KINDS},
+        viewer_reactions=viewer_reactions or [],
     )
 
 
-def _reply_out(r: ForumReply, authors: dict[int, AuthorBrief]) -> ReplyOut:
+def _reply_out(
+    r: ForumReply,
+    authors: dict[int, AuthorBrief],
+    reactions: dict[str, int] | None = None,
+    viewer_reactions: list[str] | None = None,
+) -> ReplyOut:
     return ReplyOut(
         id=r.id,
         topic_id=r.topic_id,
+        parent_id=r.parent_id,
         body=r.body,
         created_at=r.created_at,
         author=authors.get(r.author_id),
+        reactions=reactions or {k: 0 for k in REACTION_KINDS},
+        viewer_reactions=viewer_reactions or [],
     )
 
 
@@ -160,9 +228,10 @@ async def list_topics(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     paper_id: int | None = Query(default=None, ge=1),
+    sort: Literal["latest", "hot"] = Query(default="latest"),
     db: AsyncSession = Depends(get_db),
 ) -> TopicListOut:
-    """帖子列表：置顶优先，其次按最近活跃。"""
+    """帖子列表：置顶优先。latest 按最近活跃，hot 按回复数再按活跃。"""
     tenant_id = require_tenant_id()
     stmt = select(ForumTopic).where(
         ForumTopic.tenant_id == tenant_id,
@@ -178,11 +247,20 @@ async def list_topics(
         stmt,
         page=page,
         page_size=page_size,
-        # 置顶优先：desc(True) > desc(False)，然后最近活跃
+        # 置顶优先：desc(True) > desc(False)。hot 用回复数做热度信号，
+        # 不引入浏览数/时间衰减——小型学术社区不需要黑箱热榜。
         order_by=(
-            desc(ForumTopic.is_pinned),
-            desc(func.coalesce(ForumTopic.last_reply_at, ForumTopic.created_at)),
-            ForumTopic.id.desc(),
+            (
+                desc(ForumTopic.is_pinned),
+                desc(ForumTopic.reply_count),
+                desc(ForumTopic.last_reply_at),
+            )
+            if sort == "hot"
+            else (
+                desc(ForumTopic.is_pinned),
+                desc(func.coalesce(ForumTopic.last_reply_at, ForumTopic.created_at)),
+                ForumTopic.id.desc(),
+            )
         ),
     )
     authors = await _author_map(db, {r.author_id for r in rows})
@@ -238,7 +316,11 @@ async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
 
 
 @router.get("/topics/{topic_id}", response_model=TopicOut)
-async def get_topic(topic_id: int, db: AsyncSession = Depends(get_db)) -> TopicOut:
+async def get_topic(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> TopicOut:
     tenant_id = require_tenant_id()
     topic = (
         await db.execute(
@@ -252,13 +334,20 @@ async def get_topic(topic_id: int, db: AsyncSession = Depends(get_db)) -> TopicO
     if topic is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
     authors = await _author_map(db, {topic.author_id})
-    return _topic_out(topic, authors)
+    counts, viewers = await _reaction_summary(
+        db,
+        target_type="topic",
+        target_ids=[topic.id],
+        viewer_id=current_user.id if current_user else None,
+    )
+    return _topic_out(topic, authors, counts.get(topic.id), viewers.get(topic.id))
 
 
 @router.get("/topics/{topic_id}/replies", response_model=list[ReplyOut])
 async def list_replies(
     topic_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> list[ReplyOut]:
     """回帖按时间正序（讨论要按上下文读，倒序会读不懂）。"""
     tenant_id = require_tenant_id()
@@ -279,7 +368,13 @@ async def list_replies(
         .all()
     )
     authors = await _author_map(db, {r.author_id for r in rows})
-    return [_reply_out(r, authors) for r in rows]
+    counts, viewers = await _reaction_summary(
+        db,
+        target_type="reply",
+        target_ids=[r.id for r in rows],
+        viewer_id=current_user.id if current_user else None,
+    )
+    return [_reply_out(r, authors, counts.get(r.id), viewers.get(r.id)) for r in rows]
 
 
 @router.post("/topics", response_model=TopicOut, status_code=status.HTTP_201_CREATED)
@@ -340,11 +435,29 @@ async def create_reply(
     if topic.is_locked:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该帖已锁定，无法回复")
 
+    parent_id = payload.parent_id
+    if parent_id is not None:
+        parent = (
+            await db.execute(
+                select(ForumReply).where(
+                    ForumReply.id == parent_id,
+                    ForumReply.topic_id == topic_id,
+                    ForumReply.tenant_id == tenant_id,
+                    ForumReply.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="被回复的楼层不存在")
+        # 只保留两级：回复子楼时归到根楼，既保留上下文，又不会出现无限缩进。
+        parent_id = parent.parent_id or parent.id
+
     reply = ForumReply(
         tenant_id=tenant_id,
         topic_id=topic_id,
         author_id=current_user.id,
         body=payload.body.strip(),
+        parent_id=parent_id,
     )
     db.add(reply)
     # 反冗余计数与最近活跃时间在同一事务里更新
@@ -353,7 +466,10 @@ async def create_reply(
     await db.commit()
     await db.refresh(reply)
     return _reply_out(
-        reply, {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)}
+        reply,
+        {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)},
+        {k: 0 for k in REACTION_KINDS},
+        [],
     )
 
 
@@ -435,6 +551,103 @@ async def delete_topic(
         )
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# 多维反馈（forum_reactions）
+# ---------------------------------------------------------------------------
+
+
+class ReactionToggle(BaseModel):
+    target_type: Literal["topic", "reply"]
+    target_id: int = Field(ge=1)
+    kind: Literal["agree", "helpful", "bookmark"]
+
+
+class ReactionOut(BaseModel):
+    target_type: str
+    target_id: int
+    kind: str
+    active: bool
+    counts: dict[str, int]
+
+
+@router.post("/reactions/toggle", response_model=ReactionOut)
+async def toggle_reaction(
+    payload: ReactionToggle,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReactionOut:
+    """赞同 / 有帮助 / 收藏：再点一次取消。
+
+    不做“反对/踩”。知乎的多维反馈里，赞同与感谢是两件事：前者是
+    “我同意”，后者是“这对我有用”；收藏则是“以后还要回看”。这三件事
+    对学术讨论都有意义，且不会把少数意见踩下去。
+    """
+    tenant_id = require_tenant_id()
+    if payload.target_type == "topic":
+        target = (
+            await db.execute(
+                select(ForumTopic).where(
+                    ForumTopic.id == payload.target_id,
+                    ForumTopic.tenant_id == tenant_id,
+                    ForumTopic.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+    else:
+        target = (
+            await db.execute(
+                select(ForumReply).where(
+                    ForumReply.id == payload.target_id,
+                    ForumReply.tenant_id == tenant_id,
+                    ForumReply.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="反馈对象不存在")
+
+    existing = (
+        await db.execute(
+            select(ForumReaction).where(
+                ForumReaction.tenant_id == tenant_id,
+                ForumReaction.user_id == current_user.id,
+                ForumReaction.target_type == payload.target_type,
+                ForumReaction.target_id == payload.target_id,
+                ForumReaction.kind == payload.kind,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(
+            ForumReaction(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                target_type=payload.target_type,
+                target_id=payload.target_id,
+                kind=payload.kind,
+            )
+        )
+        active = True
+    else:
+        await db.delete(existing)
+        active = False
+    await db.commit()
+
+    counts, _ = await _reaction_summary(
+        db,
+        target_type=payload.target_type,
+        target_ids=[payload.target_id],
+        viewer_id=None,
+    )
+    return ReactionOut(
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        kind=payload.kind,
+        active=active,
+        counts=counts.get(payload.target_id, {k: 0 for k in REACTION_KINDS}),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -577,7 +790,7 @@ async def list_reports(
             reason=r.reason,
             status=r.status,
             created_at=r.created_at,
-            author=authors.get(r.reporter_id),
+            reporter=authors.get(r.reporter_id),
         )
         for r in rows
     ]

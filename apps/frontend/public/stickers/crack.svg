@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <rect x="6" y="6" width="228" height="228" rx="28" fill="#f7f3e8" stroke="#24334d" stroke-width="4"/>
+  <rect x="16" y="16" width="208" height="208" rx="20" fill="none" stroke="#dfd8c8" stroke-width="2"/>
+  <g transform="translate(0,-8)">
+    <circle cx="120" cy="104" r="58" fill="#e8dfcf" stroke="#24334d" stroke-width="5"/>
+    <path d="M120 48 L112 78 L126 88 L114 112 L128 120 L118 150" stroke="#24334d" stroke-width="6" fill="none"/>
+    <circle cx="98" cy="96" r="5" fill="#24334d"/><circle cx="142" cy="96" r="5" fill="#24334d"/>
+    <path d="M92 132 Q104 122 116 132" stroke="#24334d" stroke-width="5" fill="none"/>
+  </g>
+<text x="120" y="204" text-anchor="middle" font-size="26" font-weight="700" fill="#24334d" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif">裂开</text>
+</svg>

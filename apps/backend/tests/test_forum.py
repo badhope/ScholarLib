@@ -252,3 +252,142 @@ async def test_report_reply_and_admin_list(
     admin_list = await client.get("/api/forum/reports", headers=auth_headers(admin_user))
     assert admin_list.status_code == 200, admin_list.text
     assert any(item["reply_id"] == reply["id"] for item in admin_list.json())
+
+
+@pytest.mark.asyncio
+async def test_reaction_toggle_counts_and_viewer_state(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
+    """赞同/有帮助/收藏：再点一次取消，详情页带当前用户状态。"""
+    topic = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "多维反馈测试", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+
+    first = await client.post(
+        "/api/forum/reactions/toggle",
+        json={"target_type": "topic", "target_id": topic["id"], "kind": "agree"},
+        headers=auth_headers(admin_user),
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["active"] is True
+    assert first.json()["counts"]["agree"] == 1
+
+    detail = await client.get(f"/api/forum/topics/{topic['id']}", headers=auth_headers(admin_user))
+    assert detail.json()["reactions"]["agree"] == 1
+    assert "agree" in detail.json()["viewer_reactions"]
+
+    # 再点一次：取消，而不是累加
+    second = await client.post(
+        "/api/forum/reactions/toggle",
+        json={"target_type": "topic", "target_id": topic["id"], "kind": "agree"},
+        headers=auth_headers(admin_user),
+    )
+    assert second.json()["active"] is False
+    assert second.json()["counts"]["agree"] == 0
+
+
+@pytest.mark.asyncio
+async def test_reaction_requires_login(client: AsyncClient, test_user: dict) -> None:
+    topic = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "未登录反馈", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    r = await client.post(
+        "/api/forum/reactions/toggle",
+        json={"target_type": "topic", "target_id": topic["id"], "kind": "helpful"},
+    )
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_nested_reply_flattens_to_two_levels(client: AsyncClient, test_user: dict) -> None:
+    """回复子楼时归到根楼，只保留两级，避免无限缩进。"""
+    topic = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "楼中楼测试", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    root = (
+        await client.post(
+            f"/api/forum/topics/{topic['id']}/replies",
+            json={"body": "根回复"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    assert root["parent_id"] is None
+
+    child = (
+        await client.post(
+            f"/api/forum/topics/{topic['id']}/replies",
+            json={"body": "子回复", "parent_id": root["id"]},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    assert child["parent_id"] == root["id"]
+
+    grandchild = (
+        await client.post(
+            f"/api/forum/topics/{topic['id']}/replies",
+            json={"body": "回复子楼", "parent_id": child["id"]},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    assert grandchild["parent_id"] == root["id"], "第三层必须归到根楼"
+
+
+@pytest.mark.asyncio
+async def test_hot_sort_puts_replied_topic_first(client: AsyncClient, test_user: dict) -> None:
+    quiet = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "没人回的帖", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    hot = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "有回复的帖", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    await client.post(
+        f"/api/forum/topics/{hot['id']}/replies",
+        json={"body": "顶一下"},
+        headers=auth_headers(test_user),
+    )
+    listing = (await client.get("/api/forum/topics?sort=hot")).json()["data"]
+    assert listing[0]["id"] == hot["id"]
+    assert listing[1]["id"] == quiet["id"]
+
+
+@pytest.mark.asyncio
+async def test_admin_report_list_includes_reporter(
+    client: AsyncClient, test_user: dict, admin_user: dict
+) -> None:
+    """举报队列必须带举报人，不能因为字段名映射丢掉。"""
+    topic = (
+        await client.post(
+            "/api/forum/topics",
+            json={"title": "举报人字段", "body": "正文"},
+            headers=auth_headers(test_user),
+        )
+    ).json()
+    await client.post(
+        "/api/forum/reports",
+        json={"topic_id": topic["id"], "reason": "垃圾广告"},
+        headers=auth_headers(test_user),
+    )
+    admin_list = (await client.get("/api/forum/reports", headers=auth_headers(admin_user))).json()
+    row = next(item for item in admin_list if item["topic_id"] == topic["id"])
+    assert row["reporter"] is not None
+    assert row["reporter"]["username"] == test_user["username"]

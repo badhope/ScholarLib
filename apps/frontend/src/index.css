@@ -543,6 +543,13 @@ h4 {
   /* 白底只给图本身，暗色主题下不刺眼 */
   background: white;
 }
+/* 站内学术表情包：不按正文配图占满整行，保持“表情”的尺度。 */
+.markdown-body img[src*="/stickers/"] {
+  width: 148px;
+  margin: 0.65em 0;
+  border: 0;
+  background: transparent;
+}
 /* 图注：`*图 1　…*` 整段斜体；表注：`*表 1　…*` / `**表 1　…**`。 */
 .markdown-body .md-caption {
   max-width: 94%;

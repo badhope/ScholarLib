@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.time import utcnow
@@ -78,6 +78,13 @@ class ForumReply(Base, TenantScopedMixin):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # 楼中楼：回复某条回复时带 parent_id；只保留两级，回复子楼时归到根楼。
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("forum_replies.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -85,6 +92,40 @@ class ForumReply(Base, TenantScopedMixin):
 
     __table_args__ = (
         Index("ix_forum_replies_tenant_topic_created", "tenant_id", "topic_id", "created_at"),
+    )
+
+
+class ForumReaction(Base, TenantScopedMixin):
+    """帖子/回复的多维反馈：赞同、有帮助、收藏。
+
+    不做“反对/踩”：期刊社区要讨论问题，不是把异见踩下去。
+    用 target_type + target_id 而不是两个可空 FK，是为了让唯一约束在
+    PostgreSQL 下真正生效（可空列会让 UNIQUE 放过多条 NULL）。
+    """
+
+    __tablename__ = "forum_reactions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_type: Mapped[str] = mapped_column(String(8), nullable=False)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "target_type",
+            "target_id",
+            "kind",
+            name="uq_forum_reaction_once",
+        ),
+        Index("ix_forum_reactions_tenant_target", "tenant_id", "target_type", "target_id"),
     )
 
 
