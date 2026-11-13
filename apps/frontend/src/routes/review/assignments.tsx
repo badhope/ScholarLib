@@ -370,22 +370,22 @@ function ReviewWorkbenchPage() {
         open={reviewTargetId !== null}
         onOpenChange={(o) => !o && setReviewTargetId(null)}
       >
-        <DialogContent className="h-[96vh] max-h-[96vh] w-[96vw] max-w-none overflow-hidden p-0">
-          <div className="flex h-full flex-col">
-            <DialogHeader className="border-b px-5 py-4">
+        <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-hidden rounded-none p-0 sm:h-[96vh] sm:max-h-[96vh] sm:w-[96vw] sm:rounded-lg">
+          <div className="flex h-full min-h-0 flex-col">
+            <DialogHeader className="shrink-0 border-b px-5 py-4">
               <DialogTitle>审稿工作台</DialogTitle>
               <DialogDescription>
                 左侧为完整稿件，右侧为评审表单；两栏同时滚动，边读边打分。
               </DialogDescription>
             </DialogHeader>
-            <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-1">
-              <div className="min-h-0 overflow-y-auto border-b px-5 py-4 lg:border-b-0 lg:border-r">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:overflow-hidden">
+              <div className="shrink-0 border-b px-5 py-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
                 {reviewTargetId !== null && (
                   <ReviewManuscriptPane assignmentId={reviewTargetId} />
                 )}
               </div>
-              <form onSubmit={onSubmitReview} className="flex min-h-0 flex-col">
-                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+              <form onSubmit={onSubmitReview} className="flex flex-col lg:min-h-0">
+                <div className="space-y-4 px-4 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   <ReviewReportFields
                     value={reviewForm}
                     onChange={setReviewForm}
@@ -397,7 +397,7 @@ function ReviewWorkbenchPage() {
                     disabled={submitMut.isPending}
                   />
                 </div>
-                <DialogFooter className="border-t px-4 py-3">
+                <DialogFooter className="sticky bottom-0 border-t bg-background px-4 py-3">
                   <Button
                     type="button"
                     variant="outline"
@@ -658,7 +658,7 @@ function SubmissionDetailDialog({
         ) : isError ? (
           <ErrorState message={extractError(error, '加载稿件失败')} />
         ) : !data ? null : (
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1 text-sm">
+          <div className="space-y-4 pr-1 text-sm">
             <div>
               <h3 className="text-base font-semibold">{data.title}</h3>
               <div className="mt-1 flex flex-wrap gap-1">
