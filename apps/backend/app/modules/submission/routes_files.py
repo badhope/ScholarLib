@@ -837,12 +837,42 @@ async def create_submission_download_ticket(
             detail="You do not have access to this submission file",
         )
     ticket = _make_download_ticket(entry.id, current_user.id, file_format)
+    # 路径必须以 .pdf/.docx 结尾：微信内置浏览器按扩展名判断能否
+    # 交给文件查看器/下载器；只靠 ?format=pdf 它经常当成网页不处理。
     return {
         "url": (
-            f"/api/submissions/{entry.id}/files?format={file_format}"
-            f"&inline={str(inline).lower()}&ticket={ticket}"
+            f"/api/submissions/{entry.id}/files/{entry.id}.{file_format}"
+            f"?inline={str(inline).lower()}&ticket={ticket}"
         )
     }
+
+
+@router.get("/{submission_id}/files/{filename}")
+async def download_submission_file_named(
+    submission_id: int,
+    filename: str,
+    request: Request,
+    ticket: str | None = Query(default=None),
+    inline: bool = Query(default=False),
+    current_user: User | None = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """带扩展名的同一下载口，专供微信识别 .pdf/.docx 文件。"""
+    suffix = os.path.splitext(filename)[1].lower()
+    if suffix not in (".pdf", ".docx"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Unsupported file suffix",
+        )
+    return await download_submission_file(
+        submission_id=submission_id,
+        request=request,
+        file_format=suffix[1:],
+        ticket=ticket,
+        inline=inline,
+        current_user=current_user,
+        db=db,
+    )
 
 
 @router.get("/{submission_id}/files")

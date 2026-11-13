@@ -204,6 +204,8 @@ async def test_download_ticket_allows_mobile_without_auth_header(
     assert ticket.status_code == 200
     url = ticket.json()["url"]
     assert "ticket=" in url
+    # 微信按扩展名识别文件，路径必须落在 .pdf 上。
+    assert url.split("?", 1)[0].endswith(".pdf")
 
     # 模拟系统浏览器/下载器：只有 URL，没有 Bearer 头。
     downloaded = await client.get(url)
