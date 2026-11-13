@@ -106,6 +106,7 @@ function ReviewWorkbenchPage() {
   const uploadAttachmentMut = useUploadReviewAttachment()
 
   const [reviewTargetId, setReviewTargetId] = useState<number | null>(null)
+  const [mobilePane, setMobilePane] = useState<'manuscript' | 'form'>('manuscript')
   const [reviewForm, setReviewForm] = useState<ReviewFormValue>(EMPTY_REVIEW_FORM)
   const [reviewAttachments, setReviewAttachments] = useState<File[]>([])
   const [declineTargetId, setDeclineTargetId] = useState<number | null>(null)
@@ -144,6 +145,7 @@ function ReviewWorkbenchPage() {
   const openReviewForm = (id: number) => {
     setReviewForm(EMPTY_REVIEW_FORM)
     setReviewAttachments([])
+    setMobilePane('manuscript')
     setReviewTargetId(id)
   }
 
@@ -370,21 +372,40 @@ function ReviewWorkbenchPage() {
         open={reviewTargetId !== null}
         onOpenChange={(o) => !o && setReviewTargetId(null)}
       >
-        <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-hidden rounded-none p-0 sm:h-[96vh] sm:max-h-[96vh] sm:w-[96vw] sm:rounded-lg">
+        <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none overflow-hidden rounded-none p-0 sm:h-[96vh] sm:max-h-[96vh] sm:w-[96vw] sm:max-w-[96vw] sm:rounded-lg">
           <div className="flex h-full min-h-0 flex-col">
             <DialogHeader className="shrink-0 border-b px-5 py-4">
               <DialogTitle>审稿工作台</DialogTitle>
               <DialogDescription>
-                左侧为完整稿件，右侧为评审表单；两栏同时滚动，边读边打分。
+                电脑端左侧读稿、右侧打分；手机端在下方切换「读稿件 / 写评审」。
               </DialogDescription>
             </DialogHeader>
+            <Tabs
+              value={mobilePane}
+              onValueChange={(v) => setMobilePane(v as 'manuscript' | 'form')}
+              className="shrink-0 border-b px-4 py-2 lg:hidden"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="manuscript">读稿件</TabsTrigger>
+                <TabsTrigger value="form">写评审</TabsTrigger>
+              </TabsList>
+            </Tabs>
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_440px] lg:overflow-hidden">
-              <div className="shrink-0 border-b px-5 py-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+              <div
+                className={`shrink-0 border-b px-5 py-4 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r ${
+                  mobilePane === 'form' ? 'hidden lg:block' : ''
+                }`}
+              >
                 {reviewTargetId !== null && (
                   <ReviewManuscriptPane assignmentId={reviewTargetId} />
                 )}
               </div>
-              <form onSubmit={onSubmitReview} className="flex flex-col lg:min-h-0">
+              <form
+                onSubmit={onSubmitReview}
+                className={`flex flex-col lg:min-h-0 ${
+                  mobilePane === 'manuscript' ? 'hidden lg:flex' : ''
+                }`}
+              >
                 <div className="space-y-4 px-4 py-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                   <ReviewReportFields
                     value={reviewForm}
