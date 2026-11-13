@@ -151,7 +151,12 @@ export function Comments({ resourceId }: { resourceId: number }) {
               return (
                 <li key={c.id} className="rounded-lg border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium">{c.author_name}</p>
+                    <div className="flex items-center gap-2">
+                      {c.author_avatar_url ? (
+                        <img src={c.author_avatar_url} alt="" className="h-5 w-5 rounded-full object-cover" />
+                      ) : null}
+                      <p className="text-sm font-medium">{c.author_name}</p>
+                    </div>
                     <div className="flex items-center gap-2">
                       <time className="text-xs text-muted-foreground">
                         {formatDateTime(c.created_at)}

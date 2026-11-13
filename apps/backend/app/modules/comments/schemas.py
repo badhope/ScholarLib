@@ -29,6 +29,7 @@ class CommentResponse(BaseModel):
     resource_id: int
     user_id: int
     author_name: str
+    author_avatar_url: str | None = None
     body: str
     created_at: datetime
 

@@ -7,6 +7,7 @@ export interface CommentItem {
   resource_id: number
   user_id: number
   author_name: string
+  author_avatar_url?: string | null
   body: string
   created_at: string
 }

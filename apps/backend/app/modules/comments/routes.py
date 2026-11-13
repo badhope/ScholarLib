@@ -32,18 +32,27 @@ async def _serialize(db: AsyncSession, rows: list[Comment]) -> list[CommentRespo
     from app.models import User as UserModel
 
     user_ids = list({r.user_id for r in rows})
-    names: dict[int, str] = {}
+    profiles: dict[int, tuple[str, str | None]] = {}
     if user_ids:
         result = await db.execute(
-            select(UserModel.id, UserModel.username).where(UserModel.id.in_(user_ids))
+            select(
+                UserModel.id,
+                UserModel.username,
+                UserModel.display_name,
+                UserModel.avatar_url,
+            ).where(UserModel.id.in_(user_ids))
         )
-        names = {uid: uname for uid, uname in result.all()}
+        profiles = {
+            uid: (display_name or uname, avatar_url)
+            for uid, uname, display_name, avatar_url in result.all()
+        }
     return [
         CommentResponse(
             id=r.id,
             resource_id=r.resource_id,
             user_id=r.user_id,
-            author_name=names.get(r.user_id, "已注销用户"),
+            author_name=profiles.get(r.user_id, ("已注销用户", None))[0],
+            author_avatar_url=profiles.get(r.user_id, ("已注销用户", None))[1],
             body=r.body,
             created_at=r.created_at,
         )
