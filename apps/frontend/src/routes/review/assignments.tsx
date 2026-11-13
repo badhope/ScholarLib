@@ -471,9 +471,6 @@ function SubmissionDownloadLinks({
   const pdfTicket = useSubmissionDownloadTicket(submissionId, 'pdf')
   const docxTicket = useSubmissionDownloadTicket(submissionId, 'docx')
   const isWeChat = /MicroMessenger/i.test(navigator.userAgent)
-  const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(
-    navigator.userAgent,
-  )
   const [wechatUrl, setWechatUrl] = useState<string | null>(null)
 
   const copyLink = async (url: string) => {
@@ -504,8 +501,9 @@ function SubmissionDownloadLinks({
     return (
       <a
         href={ticket ?? '#'}
-        // 桌面端强制保存；移动端/微信不加 download，让系统直接打开 PDF。
-        download={!isMobile}
+        // 浏览器（含手机浏览器）一律按文件保存；只有微信不加 download，
+        // 因为它不支持直接落盘，改走“浏览器打开”引导。
+        download={!isWeChat}
         rel="noopener"
         className={className}
         onClick={(e) => {
