@@ -1366,7 +1366,7 @@ function ReportsDialog({
         ) : !data || data.length === 0 ? (
           <EmptyState title="暂无已完成的审稿报告" />
         ) : (
-          <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+          <div className="space-y-4">
             {data.map((r: ReviewReportResponse) => (
               <div key={r.id} className="rounded border p-3 text-sm">
                 <div className="flex flex-wrap items-center gap-2">

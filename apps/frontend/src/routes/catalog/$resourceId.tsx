@@ -586,7 +586,7 @@ function CatalogDetailPage() {
           )}
 
           <Dialog open={pdfPreviewOpen} onOpenChange={setPdfPreviewOpen}>
-            <DialogContent className="flex h-[86vh] max-w-5xl flex-col overflow-hidden p-0">
+            <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden rounded-none p-0 sm:h-[86vh] sm:max-h-[86vh] sm:w-full sm:max-w-5xl sm:rounded-lg">
               <DialogHeader className="border-b px-4 py-3">
                 <DialogTitle className="text-sm">PDF 版式预览 · 与下载件同源</DialogTitle>
               </DialogHeader>
