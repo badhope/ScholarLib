@@ -16,13 +16,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { api } from '@/lib/api'
+import { uploadForumImage } from '@/lib/forum'
 import { extractError } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { MarkdownEditor } from '@/components/common/markdown-editor'
+import { MarkdownContent } from '@/components/common/markdown-content'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -225,9 +225,7 @@ function ReplyCard({
           )}
         </div>
 
-        <div className="markdown-body text-sm leading-relaxed">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{reply.body}</ReactMarkdown>
-        </div>
+        <MarkdownContent text={reply.body} className="text-sm leading-relaxed" />
 
         <div className="flex items-center gap-1 border-t pt-1.5">
           <ReactionBar
@@ -380,7 +378,7 @@ function ForumTopicPage() {
           </p>
           {/* 主楼按 Markdown 渲染；react-markdown 默认转义原始 HTML，XSS 面为零。 */}
           <div className="markdown-body text-sm leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{topic.body}</ReactMarkdown>
+            <MarkdownContent text={topic.body} />
           </div>
 
           <div className="flex flex-wrap items-center gap-1 border-t pt-2">
@@ -511,6 +509,7 @@ function ForumTopicPage() {
                 <MarkdownEditor
                   value={reply}
                   onChange={setReply}
+                  onUploadImage={uploadForumImage}
                   minHeight={160}
                   placeholder={
                     replyTo

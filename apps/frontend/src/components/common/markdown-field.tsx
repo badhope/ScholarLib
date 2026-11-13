@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { ClipboardList, Eye, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { MarkdownContent } from '@/components/common/markdown-content'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -93,9 +92,7 @@ export function MarkdownField({
       ) : (
         <div className="min-h-[9rem] rounded-md border bg-muted/20 px-3 py-2.5">
           {value.trim() ? (
-            <div className="markdown-body text-sm">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
-            </div>
+            <MarkdownContent text={value} className="text-sm" />
           ) : (
             <p className="text-sm text-muted-foreground">还没有填写，切换到「继续编辑」开始写。</p>
           )}

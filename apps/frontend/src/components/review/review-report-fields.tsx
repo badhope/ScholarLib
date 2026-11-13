@@ -1,6 +1,4 @@
 import { useMemo, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -22,6 +20,7 @@ import {
   type ReviewTrack,
 } from '@/components/review/rubric-score-fields'
 import { cn } from '@/lib/utils'
+import { MarkdownContent } from '@/components/common/markdown-content'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -127,9 +126,7 @@ function MarkdownPreview({ value, empty }: { value: string; empty: string }) {
     return <p className="text-sm text-muted-foreground">{empty}</p>
   }
   return (
-    <div className="markdown-body text-sm">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
-    </div>
+    <MarkdownContent text={value} className="text-sm" />
   )
 }
 

@@ -4,11 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Clock3, Coffee, Flame, Flag, Lock, Megaphone, MessageSquare, PenLine, Pin, Plus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { uploadForumImage } from '@/lib/forum'
 import { extractError } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { PageHeader } from '@/components/common/page-header'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { MarkdownEditor } from '@/components/common/markdown-editor'
+import { MarkdownExcerpt } from '@/components/common/markdown-content'
 import { Pagination } from '@/components/common/pagination'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -403,7 +405,10 @@ function ForumListPage() {
                       {t.title}
                     </Link>
                   </div>
-                  <p className="mt-1 line-clamp-2 text-[13px] leading-6 text-muted-foreground">{t.body}</p>
+                  <MarkdownExcerpt
+                    text={t.body}
+                    className="mt-1 line-clamp-2 text-[13px] leading-6 text-muted-foreground"
+                  />
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
                     {t.author?.username ?? '已注销用户'} · 最后活跃{' '}
                     {fmtRelative(t.last_reply_at ?? t.created_at)}
@@ -490,6 +495,7 @@ function ForumListPage() {
               <MarkdownEditor
                 value={form.body}
                 onChange={(body) => setForm((p) => ({ ...p, body }))}
+                onUploadImage={uploadForumImage}
                 minHeight={180}
                 placeholder="支持 Markdown。说清背景、你的判断、以及希望得到什么回应。"
               />

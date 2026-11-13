@@ -391,3 +391,33 @@ async def test_admin_report_list_includes_reporter(
     row = next(item for item in admin_list if item["topic_id"] == topic["id"])
     assert row["reporter"] is not None
     assert row["reporter"]["username"] == test_user["username"]
+
+
+@pytest.mark.asyncio
+async def test_forum_image_upload_and_public_read(
+    client: AsyncClient, test_user: dict
+) -> None:
+    """论坛图片：登录可上传，公开可读，未登录不能传。"""
+    png = (
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+        b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8"
+        b"\xcf\xc0\x00\x00\x03\x01\x01\x00\x18\xdd\x8d\xb0\x00\x00\x00\x00IEND"
+        b"\xaeB`\x82"
+    )
+    assert (
+        await client.post(
+            "/api/forum/images",
+            files={"file": ("a.png", png, "image/png")},
+        )
+    ).status_code == 401
+    uploaded = await client.post(
+        "/api/forum/images",
+        files={"file": ("a.png", png, "image/png")},
+        headers=auth_headers(test_user),
+    )
+    assert uploaded.status_code == 201
+    url = uploaded.json()["url"]
+    fetched = await client.get(url)
+    assert fetched.status_code == 200
+    assert fetched.headers["content-type"] == "image/png"
+    assert fetched.content == png

@@ -15,9 +15,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Literal
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,11 +33,88 @@ from app.api.deps import (
     user_has_role,
 )
 from app.core.db import get_db, paginate
+from app.core.storage import get_storage
 from app.core.time import utcnow
 from app.models import AuditLog, User
 from app.modules.forum.models import ForumReaction, ForumReply, ForumReport, ForumTopic
 
 router = APIRouter(prefix="/forum", tags=["forum"])
+
+# 论坛图片：只接受浏览器能直接显示的四种位图。SVG 不能收——SVG 可带
+# 脚本，和 Markdown 正文一样属于用户内容，不能给它同源执行权限。
+_FORUM_IMAGE_MAX = 5 * 1024 * 1024
+_FORUM_IMAGE_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+_FORUM_IMAGE_NAME = re.compile(r"^[0-9a-f]{32}\.(png|jpg|gif|webp)$")
+_FORUM_IMAGE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
+
+
+def _forum_image_magic_ok(contents: bytes, mime: str) -> bool:
+    if mime == "image/png":
+        return contents.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime == "image/jpeg":
+        return contents.startswith(b"\xff\xd8\xff")
+    if mime == "image/gif":
+        return contents.startswith((b"GIF87a", b"GIF89a"))
+    if mime == "image/webp":
+        return contents.startswith(b"RIFF") and contents[8:12] == b"WEBP"
+    return False
+
+
+@router.post("/images", status_code=status.HTTP_201_CREATED)
+async def upload_forum_image(
+    file: UploadFile = File(...),
+    _user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """上传一张论坛图片，返回可公开访问的短链。
+
+    正文仍只存 Markdown；图片单独落对象存储，不把二进制塞进帖子表。
+    """
+    mime = (file.content_type or "").lower()
+    ext = _FORUM_IMAGE_MIME.get(mime)
+    if ext is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只支持 PNG / JPEG / GIF / WebP 图片",
+        )
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="图片为空")
+    if len(contents) > _FORUM_IMAGE_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="图片不能超过 5MB",
+        )
+    if not _forum_image_magic_ok(contents, mime):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="图片内容与格式不符",
+        )
+    name = f"{uuid4().hex}{ext}"
+    await get_storage().save(f"forum/{name}", contents, content_type=mime)
+    return {"url": f"/api/forum/images/{name}"}
+
+
+@router.get("/images/{filename}")
+async def get_forum_image(filename: str) -> Response:
+    """公开读取论坛图片；文件名是 128 位随机串，不可枚举。"""
+    if not _FORUM_IMAGE_NAME.match(filename):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="图片不存在")
+    try:
+        contents = await get_storage().load(f"forum/{filename}")
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="图片不存在") from None
+    mime = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "gif": "image/gif",
+        "webp": "image/webp",
+    }[filename.rsplit(".", 1)[1]]
+    return Response(content=contents, media_type=mime, headers=_FORUM_IMAGE_HEADERS)
 
 # 五个平铺版块：论文沙龙 / 方法与写作 / 学术生存 / 组队招募 / 站务公告。
 # 旧分类保留为兼容别名（历史帖子和既有测试仍可直接写入），列表查询按版块聚合。

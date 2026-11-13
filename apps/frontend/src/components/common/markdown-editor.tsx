@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ImagePlus } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -13,7 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmojiStickerPicker } from '@/components/common/emoji-sticker-picker'
-import { cn } from '@/lib/utils'
+import { MarkdownContent } from '@/components/common/markdown-content'
+import { cn, extractError } from '@/lib/utils'
 
 /**
  * 在线 Word 级 Markdown 编辑器。
@@ -30,6 +30,8 @@ export interface MarkdownEditorProps {
   minHeight?: number
   disabled?: boolean
   testId?: string
+  /** 传入后显示「图片」按钮；返回可直接放进 Markdown 的 URL。 */
+  onUploadImage?: (file: File) => Promise<string>
 }
 
 interface ToolAction {
@@ -78,9 +80,12 @@ export function MarkdownEditor({
   minHeight = 320,
   disabled,
   testId,
+  onUploadImage,
 }: MarkdownEditorProps) {
   const areaRef = useRef<HTMLTextAreaElement | null>(null)
+  const imageRef = useRef<HTMLInputElement | null>(null)
   const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   const charCount = useMemo(() => value.replace(/\s/g, '').length, [value])
 
@@ -135,6 +140,25 @@ export function MarkdownEditor({
     })
   }
 
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !onUploadImage) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('图片不能超过 5MB')
+      return
+    }
+    setUploadingImage(true)
+    try {
+      const url = await onUploadImage(file)
+      insertText(`\n![图片](${url})\n`)
+    } catch (err) {
+      toast.error(extractError(err, '图片上传失败'))
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
       const key = e.key.toLowerCase()
@@ -157,6 +181,29 @@ export function MarkdownEditor({
         <ToolMenu label="段落" tools={PARAGRAPH_TOOLS} disabled={disabled} onPick={applyTool} />
         <ToolMenu label="插入" tools={INSERT_TOOLS} disabled={disabled} onPick={applyTool} />
         <EmojiStickerPicker onInsert={insertText} disabled={disabled} />
+        {onUploadImage && (
+          <>
+            <input
+              ref={imageRef}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={onPickImage}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={disabled || uploadingImage}
+              onClick={() => imageRef.current?.click()}
+              className="h-7 gap-1 px-1.5 text-xs font-medium text-muted-foreground"
+              title="上传图片（PNG / JPEG / GIF / WebP，最大 5MB）"
+            >
+              <ImagePlus className="h-3.5 w-3.5" />
+              {uploadingImage ? '上传中…' : '图片'}
+            </Button>
+          </>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs tabular-nums text-muted-foreground" data-testid="md-char-count">
@@ -193,9 +240,7 @@ export function MarkdownEditor({
           data-testid="md-preview"
         >
           {value.trim() ? (
-            <div className="markdown-body text-sm">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
-            </div>
+            <MarkdownContent text={value} className="text-sm" />
           ) : (
             <p className="text-sm text-muted-foreground">暂无内容</p>
           )}
