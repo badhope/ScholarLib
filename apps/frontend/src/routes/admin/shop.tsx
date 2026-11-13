@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Coins, Package, Plus, Save, ShoppingBag } from 'lucide-react'
+import { Coins, Package, Plus, QrCode, Save, ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
 import { requireShopManagerGuard } from '@/lib/route-guards'
 import {
@@ -8,11 +8,13 @@ import {
   useCoinConfig,
   useCreateShopItem,
   useUpdateCoinPolicy,
+  useUpdateCoinExchange,
   useUpdateCoinRule,
   useUpdateShopItem,
   type ShopItem,
 } from '@/hooks/api/use-shop'
 import { extractError } from '@/lib/utils'
+import { uploadForumImage } from '@/lib/forum'
 import { PageHeader } from '@/components/common/page-header'
 import { Loading } from '@/components/common/state'
 import { Badge } from '@/components/ui/badge'
@@ -43,8 +45,18 @@ function AdminShopPage() {
   const updateItem = useUpdateShopItem()
   const updateRule = useUpdateCoinRule()
   const updatePolicy = useUpdateCoinPolicy()
+  const updateExchange = useUpdateCoinExchange()
 
   const [policy, setPolicy] = useState({ coin_per_yuan: 100, daily_earn_cap: 5, monthly_issue_cap: 5000 })
+  const [exchange, setExchange] = useState({
+    enabled: false,
+    method: '',
+    qr_url: null as string | null,
+    account: null as string | null,
+    note: null as string | null,
+    min_coin: 100,
+  })
+  const [uploadingQr, setUploadingQr] = useState(false)
   const [ruleEdits, setRuleEdits] = useState<Record<string, { amount: number; daily_cap: number; is_active: boolean }>>({})
   const [newItem, setNewItem] = useState(emptyItem)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -53,12 +65,43 @@ function AdminShopPage() {
   useEffect(() => {
     if (!config.data) return
     setPolicy(config.data.policy)
+    setExchange({
+      enabled: config.data.exchange.enabled,
+      method: config.data.exchange.method,
+      qr_url: config.data.exchange.qr_url,
+      account: config.data.exchange.account,
+      note: config.data.exchange.note,
+      min_coin: config.data.exchange.min_coin,
+    })
     const next: Record<string, { amount: number; daily_cap: number; is_active: boolean }> = {}
     for (const rule of config.data.rules) {
       next[rule.reason] = { amount: rule.amount, daily_cap: rule.daily_cap, is_active: rule.is_active }
     }
     setRuleEdits(next)
   }, [config.data])
+
+  const saveExchange = async () => {
+    try {
+      await updateExchange.mutateAsync(exchange)
+      toast.success(exchange.enabled ? '兑换方式已保存并公开' : '兑换入口已关闭')
+    } catch (err) {
+      toast.error(extractError(err, '保存失败'))
+    }
+  }
+
+  const uploadQr = async (file: File | undefined) => {
+    if (!file) return
+    setUploadingQr(true)
+    try {
+      const url = await uploadForumImage(file)
+      setExchange({ ...exchange, qr_url: url })
+      toast.success('收款码已上传，保存后才会公开')
+    } catch (err) {
+      toast.error(extractError(err, '上传失败'))
+    } finally {
+      setUploadingQr(false)
+    }
+  }
 
   const savePolicy = async () => {
     try {
@@ -147,7 +190,7 @@ function AdminShopPage() {
     <div className="space-y-8">
       <PageHeader
         title="R 币商城与发行"
-        description="R 币是本位稀缺的站内货币：100 R = 1 元购买力。你可以在这里改汇率、每日/月度发行上限、每个动作发多少，以及上架/下架货品。"
+        description="R 币是本位稀缺的站内货币：100 R = 1 元购买力。你可以在这里改汇率、每日/月度发行上限、每个动作发多少、用户看到的兑换/收款方式，以及上架/下架货品。"
       />
 
       {config.isLoading ? <Loading /> : null}
@@ -184,6 +227,65 @@ function AdminShopPage() {
               </p>
               <Button size="sm" onClick={() => void savePolicy()} disabled={updatePolicy.isPending}>
                 <Save className="h-4 w-4" /> 保存发行口径
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {config.data ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <QrCode className="h-4 w-4" /> R 币兑换 / 收款方式
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              这里填的内容会原样展示给用户；平台不自动打款，具体由你按说明人工处理。不填或关闭时，前台只显示“暂未开放”，不会暴露任何账号。
+            </p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={exchange.enabled} onChange={(e) => setExchange({ ...exchange, enabled: e.target.checked })} />
+              开放 R 币兑换入口
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>收款 / 兑换方式</Label>
+                <Input value={exchange.method} onChange={(e) => setExchange({ ...exchange, method: e.target.value })} placeholder="例如：微信、支付宝、银行转账（自己填）" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>最低兑换（R）</Label>
+                <Input type="number" min={1} value={exchange.min_coin} onChange={(e) => setExchange({ ...exchange, min_coin: Number(e.target.value) })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>收款账户 / 联系人</Label>
+              <Input value={exchange.account ?? ''} onChange={(e) => setExchange({ ...exchange, account: e.target.value || null })} placeholder="只填你愿意公开给用户的信息" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>兑换说明</Label>
+              <Textarea rows={4} value={exchange.note ?? ''} onChange={(e) => setExchange({ ...exchange, note: e.target.value || null })} placeholder="写清用户该怎么操作、多久到账、遇到问题找谁。不要写密码或验证码。" />
+            </div>
+            <div className="space-y-2">
+              <Label>收款码 / 联系二维码（可选）</Label>
+              <div className="flex flex-wrap items-center gap-3">
+                {exchange.qr_url ? (
+                  <img src={exchange.qr_url} alt="收款码预览" className="h-28 w-28 rounded-lg border object-contain bg-white p-1" />
+                ) : (
+                  <div className="flex h-28 w-28 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">未上传</div>
+                )}
+                <div className="space-y-2">
+                  <Input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={uploadingQr} onChange={(e) => void uploadQr(e.target.files?.[0])} />
+                  {exchange.qr_url ? (
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setExchange({ ...exchange, qr_url: null })}>移除收款码</Button>
+                  ) : null}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">支持 PNG / JPEG / WebP / GIF，最大 5MB；上传后先预览，点保存才公开。</p>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => void saveExchange()} disabled={updateExchange.isPending || uploadingQr}>
+                <Save className="h-4 w-4" /> 保存兑换方式
               </Button>
             </div>
           </CardContent>

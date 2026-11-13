@@ -22,10 +22,21 @@ export interface ShopPurchase {
   created_at: string
 }
 
+export interface CoinExchange {
+  enabled: boolean
+  method: string
+  qr_url: string | null
+  account: string | null
+  note: string | null
+  min_coin: number
+  coin_per_yuan: number
+}
+
 export interface CoinConfig {
   policy: { coin_per_yuan: number; daily_earn_cap: number; monthly_issue_cap: number }
   rules: Array<{ reason: string; label: string; amount: number; daily_cap: number; is_active: boolean }>
   monthly_issued: number
+  exchange: CoinExchange
 }
 
 export function useShopItems() {
@@ -109,6 +120,35 @@ export function useUpdateCoinPolicy() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['shop', 'admin', 'config'] })
       void qc.invalidateQueries({ queryKey: ['gamification', 'wallet'] })
+    },
+  })
+}
+
+export function useShopExchange() {
+  return useQuery({
+    queryKey: ['shop', 'exchange'],
+    queryFn: async () => (await api.get<CoinExchange>('/gamification/shop/exchange')).data,
+    staleTime: 15_000,
+  })
+}
+
+export function useUpdateCoinExchange() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (payload: Omit<CoinExchange, 'coin_per_yuan'>) =>
+      (
+        await api.patch<CoinExchange>('/gamification/admin/coin/exchange', {
+          exchange_enabled: payload.enabled,
+          exchange_method: payload.method,
+          exchange_qr_url: payload.qr_url,
+          exchange_account: payload.account,
+          exchange_note: payload.note,
+          exchange_min_coin: payload.min_coin,
+        })
+      ).data,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shop', 'admin', 'config'] })
+      void qc.invalidateQueries({ queryKey: ['shop', 'exchange'] })
     },
   })
 }

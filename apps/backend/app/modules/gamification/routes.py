@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -646,6 +647,29 @@ class CoinPolicyPatch(BaseModel):
     monthly_issue_cap: int = Field(ge=1, le=100000000)
 
 
+class CoinExchangePatch(BaseModel):
+    """主编自己填的 R 币兑换/收款入口；平台不自动打款。"""
+
+    exchange_enabled: bool = False
+    exchange_method: str = Field(default="", max_length=80)
+    exchange_qr_url: str | None = Field(default=None, max_length=500)
+    exchange_account: str | None = Field(default=None, max_length=200)
+    exchange_note: str | None = Field(default=None, max_length=1000)
+    exchange_min_coin: int = Field(default=100, ge=1, le=1000000)
+
+
+def _exchange_out(policy: CoinPolicy) -> dict[str, object]:
+    return {
+        "enabled": policy.exchange_enabled,
+        "method": policy.exchange_method,
+        "qr_url": policy.exchange_qr_url,
+        "account": policy.exchange_account,
+        "note": policy.exchange_note,
+        "min_coin": policy.exchange_min_coin,
+        "coin_per_yuan": policy.coin_per_yuan,
+    }
+
+
 def _shop_item_out(item: CoinShopItem) -> dict[str, object]:
     return {
         "id": item.id,
@@ -743,6 +767,7 @@ async def get_coin_config(
             for r in sorted(rules.values(), key=lambda x: x.id)
         ],
         "monthly_issued": await currency.monthly_issued(db, current_user.tenant_id),
+        "exchange": _exchange_out(policy),
     }
 
 
@@ -810,6 +835,52 @@ async def patch_coin_policy(
         "daily_earn_cap": policy.daily_earn_cap,
         "monthly_issue_cap": policy.monthly_issue_cap,
     }
+
+
+@router.patch("/admin/coin/exchange")
+async def patch_coin_exchange(
+    body: CoinExchangePatch,
+    current_user: User = Depends(require_shop_manager),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    policy = (
+        await db.execute(select(CoinPolicy).where(CoinPolicy.tenant_id == current_user.tenant_id))
+    ).scalar_one_or_none()
+    if policy is None:
+        policy = CoinPolicy(tenant_id=current_user.tenant_id, updated_by=current_user.id)
+        db.add(policy)
+    policy.exchange_enabled = body.exchange_enabled
+    policy.exchange_method = body.exchange_method.strip()
+    policy.exchange_qr_url = (body.exchange_qr_url or "").strip() or None
+    policy.exchange_account = (body.exchange_account or "").strip() or None
+    policy.exchange_note = (body.exchange_note or "").strip() or None
+    policy.exchange_min_coin = body.exchange_min_coin
+    policy.updated_by = current_user.id
+    await db.commit()
+    await db.refresh(policy)
+    return _exchange_out(policy)
+
+
+@router.get("/shop/exchange")
+async def get_shop_exchange(
+    db: AsyncSession = Depends(get_db),
+    tenant_id: UUID = Depends(require_tenant_id),
+) -> dict[str, object]:
+    """公开读取兑换入口；只返回主编配置，不含任何内部账号信息。"""
+    policy = (
+        await db.execute(select(CoinPolicy).where(CoinPolicy.tenant_id == tenant_id))
+    ).scalar_one_or_none()
+    if policy is None:
+        return {
+            "enabled": False,
+            "method": "",
+            "qr_url": None,
+            "account": None,
+            "note": None,
+            "min_coin": 100,
+            "coin_per_yuan": 100,
+        }
+    return _exchange_out(policy)
 
 
 @router.get("/admin/shop/items")

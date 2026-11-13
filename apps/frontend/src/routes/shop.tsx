@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Coins, ShoppingBag, Sparkles } from 'lucide-react'
+import { Coins, QrCode, ShoppingBag, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { useMyPurchases, usePurchaseItem, useShopItems } from '@/hooks/api/use-shop'
+import { useMyPurchases, usePurchaseItem, useShopExchange, useShopItems } from '@/hooks/api/use-shop'
 import { useWallet } from '@/hooks/api/use-currency'
 import { extractError } from '@/lib/utils'
 import { PageHeader } from '@/components/common/page-header'
@@ -16,6 +16,7 @@ export const Route = createFileRoute('/shop')({
 
 function ShopPage() {
   const items = useShopItems()
+  const exchange = useShopExchange()
   const wallet = useWallet()
   const purchases = useMyPurchases()
   const buy = usePurchaseItem()
@@ -33,7 +34,7 @@ function ShopPage() {
     <div className="space-y-8">
       <PageHeader
         title="R 币商城"
-        description="R 币是稀缺的站内货币，100 R = 1 元购买力。不充值、不提现、不转账；只能兑换下列货品。"
+        description="R 币是稀缺的站内货币，100 R = 1 元购买力。可按主编配置的兑换方式申请兑换，也可以直接兑换下列货品。"
       />
 
       <Card>
@@ -58,6 +59,41 @@ function ShopPage() {
           </p>
         </CardContent>
       </Card>
+
+      {exchange.data?.enabled ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <QrCode className="h-4 w-4" /> R 币兑换
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+              <span className="text-muted-foreground">
+                兑换比例 <strong className="text-foreground">{exchange.data.coin_per_yuan} R = ¥1</strong>
+              </span>
+              <span className="text-muted-foreground">
+                最低 <strong className="text-foreground">{exchange.data.min_coin} R</strong> 起兑
+              </span>
+              {exchange.data.method ? <span className="text-muted-foreground">方式：{exchange.data.method}</span> : null}
+            </div>
+            {exchange.data.note ? (
+              <p className="whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-sm leading-relaxed">{exchange.data.note}</p>
+            ) : null}
+            {exchange.data.account ? (
+              <p className="text-sm">收款账户 / 联系人：<span className="font-medium">{exchange.data.account}</span></p>
+            ) : null}
+            {exchange.data.qr_url ? (
+              <div className="flex flex-wrap items-start gap-4">
+                <img src={exchange.data.qr_url} alt="主编配置的收款码" className="h-40 w-40 rounded-lg border bg-white object-contain p-2" />
+                <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
+                  这是主编在后台配置的收款码，付款前请核对页面上的方式和账户。不要向任何人提供验证码、密码或银行卡信息。
+                </p>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {items.isLoading ? <Loading /> : null}
       {!items.isLoading && (items.data?.length ?? 0) === 0 ? (

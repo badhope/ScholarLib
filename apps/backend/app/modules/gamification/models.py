@@ -235,6 +235,13 @@ class CoinPolicy(Base, TenantScopedMixin):
     coin_per_yuan: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     daily_earn_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     monthly_issue_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
+    # 兑换 / 收款方式（主编配置，前台展示；不自动打款）
+    exchange_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    exchange_method: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    exchange_qr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    exchange_account: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    exchange_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    exchange_min_coin: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
