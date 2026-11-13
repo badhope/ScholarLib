@@ -9,6 +9,7 @@ import {
   useDeclineAssignment,
   useMyReviewAssignments,
   useReviewSubmissionDetail,
+  useSubmissionDownloadTicket,
   useSubmitReview,
   useUploadReviewAttachment,
 } from '@/hooks/api/use-modules'
@@ -460,6 +461,57 @@ function ReviewWorkbenchPage() {
   )
 }
 
+function SubmissionDownloadLinks({
+  submissionId,
+  compact = false,
+}: {
+  submissionId: number
+  compact?: boolean
+}) {
+  const pdfTicket = useSubmissionDownloadTicket(submissionId, 'pdf')
+  const docxTicket = useSubmissionDownloadTicket(submissionId, 'docx')
+  const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(
+    navigator.userAgent,
+  )
+
+  const link = (
+    format: 'docx' | 'pdf',
+    ticket: string | undefined,
+  ) => {
+    const label = format === 'pdf' ? '下载 PDF' : '下载 Word'
+    const className = compact
+      ? 'inline-flex shrink-0 items-center gap-1 text-primary hover:underline'
+      : 'inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium hover:bg-muted'
+    return (
+      <a
+        href={ticket ?? '#'}
+        // 桌面端强制保存；移动端/微信不加 download，让系统直接打开 PDF。
+        download={!isMobile}
+        rel="noopener"
+        className={className}
+        onClick={(e) => {
+          // 票据还没取到/取失败时回退到带 Authorization 的 Blob 下载；
+          // 票据存在时走原生 <a> 同步跳转，微信 WebView 不会拦截。
+          if (!ticket) {
+            e.preventDefault()
+            void downloadSubmissionFile(submissionId, format)
+          }
+        }}
+      >
+        <Download className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        {label}
+      </a>
+    )
+  }
+
+  return (
+    <>
+      {link('docx', docxTicket.data)}
+      {link('pdf', pdfTicket.data)}
+    </>
+  )
+}
+
 function ReviewManuscriptPane({ assignmentId }: { assignmentId: number }) {
   const { data, isLoading, isError, error } = useReviewSubmissionDetail(assignmentId)
   if (isLoading) return <LoadingSkeleton rows={6} />
@@ -517,22 +569,7 @@ function ReviewManuscriptPane({ assignmentId }: { assignmentId: number }) {
         </div>
       )}
       <div className="flex flex-wrap gap-2 border-t pt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void downloadSubmissionFile(data.id, 'docx')}
-        >
-          <Download className="h-4 w-4" /> 下载 Word
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void downloadSubmissionFile(data.id, 'pdf')}
-        >
-          <Download className="h-4 w-4" /> 下载 PDF
-        </Button>
+        <SubmissionDownloadLinks submissionId={data.id} />
       </div>
     </div>
   )
@@ -688,22 +725,7 @@ function SubmissionDetailDialog({
                 <div className="col-span-2 flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground">已上传文件：</span>
                   <span className="break-all font-mono">{data.file_path}</span>
-                  <button
-                    type="button"
-                    className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
-                    onClick={() => void downloadSubmissionFile(data.id, 'docx')}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    下载 Word
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex shrink-0 items-center gap-1 text-primary hover:underline"
-                    onClick={() => void downloadSubmissionFile(data.id, 'pdf')}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    下载 PDF
-                  </button>
+                  <SubmissionDownloadLinks submissionId={data.id} compact />
                 </div>
               )}
             </div>

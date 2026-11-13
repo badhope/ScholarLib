@@ -716,6 +716,31 @@ export async function previewUploadedSourcePages(
 
 // 下载稿件文件（作者/编辑/被指派审稿人）。用 blob + programmatic <a>
 // 而不是裸 <a href>：请求必须带 Authorization 头，纯链接带不上。
+/** 提前换好的短时直链：移动端用原生 <a> 同步跳转，避免 WebView
+ *  拦截“await 完再 location.assign”的异步导航。 */
+export function useSubmissionDownloadTicket(
+  id: number,
+  format: 'docx' | 'pdf',
+  enabled = true,
+) {
+  return useQuery<string>({
+    queryKey: ['submission', id, 'download-ticket', format],
+    queryFn: async () => {
+      const { data } = await api.post<{ url: string }>(
+        `/submissions/${id}/download-ticket`,
+        null,
+        { params: { format, inline: true } },
+      )
+      return data.url
+    },
+    enabled: enabled && id > 0,
+    staleTime: 4 * 60_000,
+    gcTime: 10 * 60_000,
+    refetchInterval: 6 * 60_000,
+    refetchOnWindowFocus: false,
+  })
+}
+
 export async function downloadSubmissionFile(
   id: number,
   format: 'docx' | 'pdf' = 'docx',
