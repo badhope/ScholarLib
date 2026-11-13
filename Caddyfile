@@ -13,6 +13,24 @@ www.rubbish.argjiemi.cn, argjiemi.cn, www.argjiemi.cn {
 {$SITE_DOMAIN} {
 	encode zstd gzip
 
+	# 访问日志：出事后能查到源 IP、路径、状态码；100MB 自动轮转，保留 5 份。
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 100MiB
+			roll_keep 5
+		}
+		format json
+	}
+
+	# 一次性拦截常见漏洞扫描/后门探测路径，减少无效流量与误报噪音。
+	@probes path /.env* /.git* /.svn* /.aws* /.ssh* /wp-admin* /wp-login* /xmlrpc.php* /phpmyadmin* /pma* /vendor* /server-status* /actuator* /config.json /config.yml /docker-compose.yml
+	respond @probes 404
+
+	# 全站请求体上限：投稿 PDF 最大 50MB，留 10MB 余量；超过直接 413，不进应用内存。
+	request_body {
+		max_size 60MB
+	}
+
 	# 安全响应头（补齐根 Caddyfile 此前完全缺失的部分，与 infra/Caddyfile 对齐）。
 	# 应用层中间件也会下发一份，这里是边缘层的第二道，防止反向代理配置被
 	# 误改后整站裸奔。
@@ -22,7 +40,9 @@ www.rubbish.argjiemi.cn, argjiemi.cn, www.argjiemi.cn {
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		X-Permitted-Cross-Domain-Policies "none"
 		-Server
+		-Via
 	}
 
 	# 健康检查直通，便于平台探活与 uptime 监控。

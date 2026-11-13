@@ -43,7 +43,7 @@ class SecurityHeadersMiddleware:
                             b"default-src 'self'; "
                             b"script-src 'self'; "
                             b"style-src 'self' 'unsafe-inline'; "
-                            b"frame-ancestors 'self'; "
+                            b"frame-ancestors 'none'; "
                             b"base-uri 'self'; "
                             b"form-action 'self'; "
                             b"connect-src 'self' blob:; "

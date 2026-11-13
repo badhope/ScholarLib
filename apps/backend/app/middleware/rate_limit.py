@@ -57,6 +57,10 @@ STRICT_PATHS: dict[str, int] = {
     "/api/auth/email-code/request": 8,
     "/api/auth/email-code/verify": 10,
     "/api/auth/refresh": 30,
+    # 外部抓取/解析与 DOI 注册会发外网请求，成本高，单独压到更低频。
+    "/api/ingest/fetch": 20,
+    "/api/ingest/parse": 20,
+    "/api/doi/register": 10,
 }
 
 _RATE_WINDOW_SECONDS = 60.0

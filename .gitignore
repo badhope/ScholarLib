@@ -179,3 +179,7 @@ apps/backend/prebuilt-static/templates/
 # TanStack Router generated route tree cache
 apps/frontend/.tanstack/
 *.bak-*
+
+# Caddy access logs (runtime)
+/logs/caddy/*.log
+/logs/caddy/*.log.gz
