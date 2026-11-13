@@ -470,9 +470,28 @@ function SubmissionDownloadLinks({
 }) {
   const pdfTicket = useSubmissionDownloadTicket(submissionId, 'pdf')
   const docxTicket = useSubmissionDownloadTicket(submissionId, 'docx')
+  const isWeChat = /MicroMessenger/i.test(navigator.userAgent)
   const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(
     navigator.userAgent,
   )
+  const [wechatUrl, setWechatUrl] = useState<string | null>(null)
+
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('下载链接已复制')
+    } catch {
+      const input = document.createElement('textarea')
+      input.value = url
+      input.style.position = 'fixed'
+      input.style.opacity = '0'
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      input.remove()
+      toast.success('下载链接已复制')
+    }
+  }
 
   const link = (
     format: 'docx' | 'pdf',
@@ -490,11 +509,17 @@ function SubmissionDownloadLinks({
         rel="noopener"
         className={className}
         onClick={(e) => {
-          // 票据还没取到/取失败时回退到带 Authorization 的 Blob 下载；
-          // 票据存在时走原生 <a> 同步跳转，微信 WebView 不会拦截。
+          // 票据还没取到/取失败时回退到带 Authorization 的 Blob 下载。
           if (!ticket) {
             e.preventDefault()
             void downloadSubmissionFile(submissionId, format)
+            return
+          }
+          // 微信内置浏览器不会直接保存 PDF，拦下来给可执行的打开方式。
+          if (isWeChat) {
+            e.preventDefault()
+            setWechatUrl(ticket)
+            void copyLink(ticket)
           }
         }}
       >
@@ -508,6 +533,39 @@ function SubmissionDownloadLinks({
     <>
       {link('docx', docxTicket.data)}
       {link('pdf', pdfTicket.data)}
+      <Dialog
+        open={wechatUrl !== null}
+        onOpenChange={(open) => !open && setWechatUrl(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>微信里不能直接保存 PDF</DialogTitle>
+            <DialogDescription>
+              下载链接已复制。请点右上角「···」→「在浏览器打开」，粘贴到地址栏即可下载。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="break-all rounded-md bg-muted p-2 text-xs text-muted-foreground">
+            {wechatUrl}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => wechatUrl && void copyLink(wechatUrl)}
+            >
+              复制链接
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (wechatUrl) window.location.href = wechatUrl
+              }}
+            >
+              仍然尝试打开
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
