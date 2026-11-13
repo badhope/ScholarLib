@@ -152,11 +152,9 @@ export function downloadBlob(data: Blob, disposition: string, fallbackName: stri
   a.href = url
   a.download = filename
   a.rel = 'noopener'
-  // 移动端浏览器（尤其 iOS/微信）从点击到真正开始接收 blob 有延迟；
-  // 立刻 revoke 会让下载在开始前就被取消。移动端优先新标签打开 PDF，
-  // 让系统阅读器接管，用户可以直接“存储到文件”或转发。
-  const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(navigator.userAgent)
-  if (isMobile) a.target = '_blank'
+  // 立刻 revoke 会让下载在开始前就被取消，延迟释放即可。
+  // 不再给移动端加 target=_blank：浏览器里点“下载”应当保存文件，
+  // 新标签会把 blob 当页面打开，反而落不了盘。
   document.body.appendChild(a)
   a.click()
   a.remove()

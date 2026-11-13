@@ -758,7 +758,16 @@ export async function downloadSubmissionFile(
         null,
         { params: { format, inline: true } },
       )
-      window.location.assign(new URL(data.url, window.location.origin).toString())
+      // 用带 download 的临时链接触发保存，而不是 location.assign：
+      // 后者会把 PDF 当页面打开，手机浏览器不落盘；异步等待后
+      // location 跳转也容易被部分浏览器拦掉。
+      const a = document.createElement('a')
+      a.href = new URL(data.url, window.location.origin).toString()
+      a.download = ''
+      a.rel = 'noopener'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
       return
     }
     const { data, headers } = await api.get<Blob>(`/submissions/${id}/files`, {
