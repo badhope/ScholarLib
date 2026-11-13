@@ -98,6 +98,7 @@ export type AssignableRole =
   | 'board_editor'
   | 'deputy_editor'
   | 'chief_editor'
+  | 'shop_manager'
   | 'author'
   | 'reader'
 
