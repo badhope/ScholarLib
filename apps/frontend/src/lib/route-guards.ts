@@ -14,3 +14,14 @@ export function requireAdminGuard(): void {
   if (!state.isAuthenticated) throw redirect({ to: '/login' })
   if (!state.isAdmin) throw redirect({ to: '/403' })
 }
+
+
+/** 主编/副主编可访问的站点管理页（比 admin 宽一档，覆盖非 is_admin 的主编）。 */
+export function requireChiefGuard(): void {
+  const state = getAuthState()
+  if (!state.isAuthenticated) throw redirect({ to: '/login' })
+  const roles = state.user?.roles ?? []
+  if (!state.isAdmin && !roles.some((r) => ['chief_editor', 'deputy_editor'].includes(r))) {
+    throw redirect({ to: '/403' })
+  }
+}

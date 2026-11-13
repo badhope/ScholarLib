@@ -3,7 +3,6 @@ import { createFileRoute, Link, redirect, useNavigate } from '@tanstack/react-ro
 import { getAuthState, useAuthStore } from '@/lib/auth'
 import { useMe, useResendVerification } from '@/hooks/api/use-auth'
 import { TwoFactorSection } from '@/components/settings/two-factor-section'
-import { BioCard } from '@/components/settings/bio-card'
 import { ChangePasswordCard } from '@/components/settings/change-password-card'
 import { ProfileDetailsCard } from '@/components/settings/profile-details-card'
 import { Badge } from '@/components/ui/badge'
@@ -174,7 +173,6 @@ function SettingsPage() {
         </TabsList>
         <TabsContent value="profile" className="mt-4 space-y-6">
           <ProfileCard />
-          <BioCard key={`bio-${me?.bio ?? ''}`} initialBio={me?.bio} />
           <ProfileDetailsCard key={profileKey(me)} initial={me} />
         </TabsContent>
         <TabsContent value="security" className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">

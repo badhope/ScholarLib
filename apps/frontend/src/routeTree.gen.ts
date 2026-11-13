@@ -37,6 +37,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RulesRouteImport } from './routes/rules'
 import { Route as SectionsRouteImport } from './routes/sections'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ShopRouteImport } from './routes/shop'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
@@ -50,6 +51,7 @@ import { Route as AdminJournalRouteImport } from './routes/admin/journal'
 import { Route as AdminReleasesRouteImport } from './routes/admin/releases'
 import { Route as AdminRoleApplicationsRouteImport } from './routes/admin/role-applications'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminShopRouteImport } from './routes/admin/shop'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminVolumesRouteImport } from './routes/admin/volumes'
 import { Route as ArchiveIssueRouteImport } from './routes/archive_.$issue'
@@ -71,6 +73,7 @@ import { Route as SectionsSlugRouteImport } from './routes/sections_.$slug'
 import { Route as SubmissionsIndexRouteImport } from './routes/submissions/index'
 import { Route as SubmissionsNewRouteImport } from './routes/submissions/new'
 import { Route as SubmissionsPendingRouteImport } from './routes/submissions/pending'
+import { Route as UUsernameRouteImport } from './routes/u/$username'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
 import { Route as CatalogTrackTrackRouteImport } from './routes/catalog/track.$track'
 import { Route as AdminIssuesVolumeIssueRouteImport } from './routes/admin/issues.$volume.$issue'
@@ -215,6 +218,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShopRoute = ShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
   path: '/support',
@@ -278,6 +286,11 @@ const AdminRoleApplicationsRoute = AdminRoleApplicationsRouteImport.update({
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/admin/settings',
   path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminShopRoute = AdminShopRouteImport.update({
+  id: '/admin/shop',
+  path: '/admin/shop',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -385,6 +398,11 @@ const SubmissionsPendingRoute = SubmissionsPendingRouteImport.update({
   path: '/submissions/pending',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UUsernameRoute = UUsernameRouteImport.update({
+  id: '/u/$username',
+  path: '/u/$username',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
   id: '/auth/oidc/callback',
   path: '/auth/oidc/callback',
@@ -430,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/rules': typeof RulesRoute
   '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
@@ -442,6 +461,7 @@ export interface FileRoutesByFullPath {
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/shop': typeof AdminShopRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive/$issue': typeof ArchiveIssueRoute
@@ -457,6 +477,7 @@ export interface FileRoutesByFullPath {
   '/sections/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
@@ -497,6 +518,7 @@ export interface FileRoutesByTo {
   '/rules': typeof RulesRoute
   '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
@@ -509,6 +531,7 @@ export interface FileRoutesByTo {
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/shop': typeof AdminShopRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive/$issue': typeof ArchiveIssueRoute
@@ -524,6 +547,7 @@ export interface FileRoutesByTo {
   '/sections/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/u/$username': typeof UUsernameRoute
   '/admin': typeof AdminIndexRoute
   '/catalog': typeof CatalogIndexRoute
   '/follows': typeof FollowsIndexRoute
@@ -565,6 +589,7 @@ export interface FileRoutesById {
   '/rules': typeof RulesRoute
   '/sections': typeof SectionsRoute
   '/settings': typeof SettingsRoute
+  '/shop': typeof ShopRoute
   '/support': typeof SupportRoute
   '/verify-email': typeof VerifyEmailRoute
   '/account/security': typeof AccountSecurityRoute
@@ -577,6 +602,7 @@ export interface FileRoutesById {
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/shop': typeof AdminShopRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive_/$issue': typeof ArchiveIssueRoute
@@ -592,6 +618,7 @@ export interface FileRoutesById {
   '/sections_/$slug': typeof SectionsSlugRoute
   '/submissions/new': typeof SubmissionsNewRoute
   '/submissions/pending': typeof SubmissionsPendingRoute
+  '/u/$username': typeof UUsernameRoute
   '/admin/': typeof AdminIndexRoute
   '/catalog/': typeof CatalogIndexRoute
   '/follows/': typeof FollowsIndexRoute
@@ -634,6 +661,7 @@ export interface FileRouteTypes {
     | '/rules'
     | '/sections'
     | '/settings'
+    | '/shop'
     | '/support'
     | '/verify-email'
     | '/account/security'
@@ -646,6 +674,7 @@ export interface FileRouteTypes {
     | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
+    | '/admin/shop'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive/$issue'
@@ -661,6 +690,7 @@ export interface FileRouteTypes {
     | '/sections/$slug'
     | '/submissions/new'
     | '/submissions/pending'
+    | '/u/$username'
     | '/admin/'
     | '/catalog/'
     | '/follows/'
@@ -701,6 +731,7 @@ export interface FileRouteTypes {
     | '/rules'
     | '/sections'
     | '/settings'
+    | '/shop'
     | '/support'
     | '/verify-email'
     | '/account/security'
@@ -713,6 +744,7 @@ export interface FileRouteTypes {
     | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
+    | '/admin/shop'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive/$issue'
@@ -728,6 +760,7 @@ export interface FileRouteTypes {
     | '/sections/$slug'
     | '/submissions/new'
     | '/submissions/pending'
+    | '/u/$username'
     | '/admin'
     | '/catalog'
     | '/follows'
@@ -768,6 +801,7 @@ export interface FileRouteTypes {
     | '/rules'
     | '/sections'
     | '/settings'
+    | '/shop'
     | '/support'
     | '/verify-email'
     | '/account/security'
@@ -780,6 +814,7 @@ export interface FileRouteTypes {
     | '/admin/releases'
     | '/admin/role-applications'
     | '/admin/settings'
+    | '/admin/shop'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive_/$issue'
@@ -795,6 +830,7 @@ export interface FileRouteTypes {
     | '/sections_/$slug'
     | '/submissions/new'
     | '/submissions/pending'
+    | '/u/$username'
     | '/admin/'
     | '/catalog/'
     | '/follows/'
@@ -836,6 +872,7 @@ export interface RootRouteChildren {
   RulesRoute: typeof RulesRoute
   SectionsRoute: typeof SectionsRoute
   SettingsRoute: typeof SettingsRoute
+  ShopRoute: typeof ShopRoute
   SupportRoute: typeof SupportRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AccountSecurityRoute: typeof AccountSecurityRoute
@@ -848,6 +885,7 @@ export interface RootRouteChildren {
   AdminReleasesRoute: typeof AdminReleasesRoute
   AdminRoleApplicationsRoute: typeof AdminRoleApplicationsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminShopRoute: typeof AdminShopRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVolumesRoute: typeof AdminVolumesRoute
   ArchiveIssueRoute: typeof ArchiveIssueRoute
@@ -863,6 +901,7 @@ export interface RootRouteChildren {
   SectionsSlugRoute: typeof SectionsSlugRoute
   SubmissionsNewRoute: typeof SubmissionsNewRoute
   SubmissionsPendingRoute: typeof SubmissionsPendingRoute
+  UUsernameRoute: typeof UUsernameRoute
   AdminIndexRoute: typeof AdminIndexRoute
   CatalogIndexRoute: typeof CatalogIndexRoute
   FollowsIndexRoute: typeof FollowsIndexRoute
@@ -1072,6 +1111,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shop': {
+      id: '/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/support': {
       id: '/support'
       path: '/support'
@@ -1161,6 +1207,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/shop': {
+      id: '/admin/shop'
+      path: '/admin/shop'
+      fullPath: '/admin/shop'
+      preLoaderRoute: typeof AdminShopRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/users': {
@@ -1310,6 +1363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SubmissionsPendingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/u/$username': {
+      id: '/u/$username'
+      path: '/u/$username'
+      fullPath: '/u/$username'
+      preLoaderRoute: typeof UUsernameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/oidc/callback': {
       id: '/auth/oidc/callback'
       path: '/auth/oidc/callback'
@@ -1375,6 +1435,7 @@ const rootRouteChildren: RootRouteChildren = {
   RulesRoute: RulesRoute,
   SectionsRoute: SectionsRoute,
   SettingsRoute: SettingsRoute,
+  ShopRoute: ShopRoute,
   SupportRoute: SupportRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AccountSecurityRoute: AccountSecurityRoute,
@@ -1387,6 +1448,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminReleasesRoute: AdminReleasesRoute,
   AdminRoleApplicationsRoute: AdminRoleApplicationsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminShopRoute: AdminShopRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminVolumesRoute: AdminVolumesRoute,
   ArchiveIssueRoute: ArchiveIssueRoute,
@@ -1402,6 +1464,7 @@ const rootRouteChildren: RootRouteChildren = {
   SectionsSlugRoute: SectionsSlugRoute,
   SubmissionsNewRoute: SubmissionsNewRoute,
   SubmissionsPendingRoute: SubmissionsPendingRoute,
+  UUsernameRoute: UUsernameRoute,
   AdminIndexRoute: AdminIndexRoute,
   CatalogIndexRoute: CatalogIndexRoute,
   FollowsIndexRoute: FollowsIndexRoute,

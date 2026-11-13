@@ -23,6 +23,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  ShoppingBag,
   User,
   Users,
   Award,
@@ -93,6 +94,7 @@ const NAV: NavItem[] = [
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin', label: '站点总览', icon: Gavel, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/shop', label: 'R 币商城', icon: ShoppingBag, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
@@ -352,6 +354,12 @@ export function AppShell() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuLabel>{user.username}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/shop">
+                      <ShoppingBag className="h-4 w-4" />
+                      R 币商城
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link to="/me">
                       <Award className="h-4 w-4" />

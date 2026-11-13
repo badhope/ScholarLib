@@ -214,6 +214,15 @@ class UserResponse(BaseModel):
     website: str | None = None
     google_scholar: str | None = None
     location: str | None = None
+    # 公开主页自定义（迁移 033）
+    avatar_url: str | None = None
+    banner_url: str | None = None
+    accent_color: str = "#2f5d46"
+    contact_email: str | None = None
+    profile_visibility: str = "public"
+    # R 币余额（只读；写入走 /gamification/wallet）
+    coin_balance: int = 0
+    accent_unlocked: bool = False
     # 当前用户在本租户内被授予的角色名列表（如 ["reviewer", "editor"]）
     # 默认空列表：未填充时视为"无角色"，向后兼容旧调用点
     roles: list[str] = Field(default_factory=list)
@@ -253,6 +262,13 @@ class UserResponse(BaseModel):
                 "website": data.website,
                 "google_scholar": data.google_scholar,
                 "location": data.location,
+                "avatar_url": data.avatar_url,
+                "banner_url": data.banner_url,
+                "accent_color": data.accent_color or "#2f5d46",
+                "contact_email": data.contact_email,
+                "profile_visibility": data.profile_visibility or "public",
+                "coin_balance": int(getattr(data, "coin_balance", 0) or 0),
+                "accent_unlocked": bool(getattr(data, "accent_unlocked", False)),
                 "xp": int(getattr(data, "xp", 0) or 0),
                 # roles 不在此填：让默认空列表生效；admin 路径用 _user_with_roles 显式覆盖
             }
@@ -352,6 +368,13 @@ class UserUpdate(BaseModel):
     website: str | None = Field(default=None, max_length=300)
     google_scholar: str | None = Field(default=None, max_length=300)
     location: str | None = Field(default=None, max_length=100)
+    # 公开主页自定义（迁移 033）。头像/封面既可传站内上传短链，也可传
+    # http(s) 外链；空串清除。
+    avatar_url: str | None = Field(default=None, max_length=500)
+    banner_url: str | None = Field(default=None, max_length=500)
+    accent_color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
+    contact_email: EmailStr | None = None
+    profile_visibility: Literal["public", "private"] | None = None
 
     @field_validator(
         "display_name",
@@ -368,6 +391,23 @@ class UserUpdate(BaseModel):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("avatar_url", "banner_url")
+    @classmethod
+    def _clean_profile_image(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if cleaned.startswith("/api/forum/images/") or cleaned.startswith(
+            "/api/users/profile-images/"
+        ):
+            return cleaned
+        parsed = urlparse(cleaned)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("头像/封面必须是站内图片或 http(s) 链接")
+        return cleaned
 
     @field_validator("website", "google_scholar")
     @classmethod
@@ -389,6 +429,11 @@ class UserUpdate(BaseModel):
             return None
         cleaned = value.strip()
         return cleaned or None
+
+    @field_validator("contact_email")
+    @classmethod
+    def _normalise_contact_email(cls, value: str | None) -> str | None:
+        return value.strip().lower() if value is not None else None
 
     @field_validator("email")
     @classmethod

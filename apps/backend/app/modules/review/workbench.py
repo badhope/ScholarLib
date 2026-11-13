@@ -354,12 +354,21 @@ async def editor_workbench(
 
     email_digest = await _email_digest_summary(db, tenant_id, now)
 
+    # 每栏先给 50 篇，避免主编工作台一次渲染几百张卡片；count 仍是全量。
+    def _page(items: list[dict[str, Any]]) -> dict[str, Any]:
+        return {
+            "count": len(items),
+            "items": items[:50],
+            "page_size": 50,
+            "has_more": len(items) > 50,
+        }
+
     return {
         "columns": {
-            "to_assign": {"count": len(to_assign), "items": to_assign},
-            "in_review": {"count": len(in_review), "items": in_review},
-            "to_decide": {"count": len(to_decide), "items": to_decide},
-            "decided": {"count": len(decided), "items": decided},
+            "to_assign": _page(to_assign),
+            "in_review": _page(in_review),
+            "to_decide": _page(to_decide),
+            "decided": _page(decided),
         },
         "email_digest": email_digest,
     }

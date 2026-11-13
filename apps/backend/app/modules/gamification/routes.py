@@ -12,19 +12,19 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_admin, require_tenant_id
+from app.api.deps import get_current_user, require_admin, require_role, require_tenant_id
 from app.api.levels import CURRENT_RULES_VERSION
 from app.core.db import get_db, paginate
 from app.core.schemas import PaginationMeta
 from app.core.time import utcnow
 from app.models import AuditLog, User, UserRole
-from app.modules.gamification import applications, service
+from app.modules.gamification import applications, currency, service, shop
 from app.modules.gamification.ladder import (
     SCORING_VERSION,
     identities_payload,
     identity_payload,
 )
-from app.modules.gamification.models import RoleApplication
+from app.modules.gamification.models import CoinPolicy, CoinRule, CoinShopItem, RoleApplication
 
 router = APIRouter(prefix="/gamification", tags=["gamification"])
 
@@ -184,6 +184,38 @@ async def get_checkin_status(
 ) -> dict[str, object]:
     """每日签到状态：今日是否已签、连续天数、累计天数与 XP 口径。"""
     return await service.checkin_status(db, current_user)
+
+
+@router.get("/wallet")
+async def get_wallet(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """R 币钱包：余额、签到状态、收入规则与最近流水。"""
+    return await currency.wallet_summary(db, current_user)
+
+
+@router.post("/wallet/checkin")
+async def post_wallet_checkin(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """每日签到：同时发 XP 与 R 币；重复签到幂等。"""
+    await service.daily_checkin(db, current_user)
+    await db.refresh(current_user)
+    return await currency.wallet_summary(db, current_user)
+
+
+@router.post("/wallet/unlock-accent")
+async def post_unlock_accent(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    """花 100 R 币解锁自定义主页主题色。"""
+    try:
+        return await currency.unlock_accent(db, current_user)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/checkin")
@@ -549,3 +581,267 @@ async def decide_application(
     await db.commit()
     await db.refresh(row)
     return {"id": row.id, "status": row.status}
+
+
+# --- R 币商城与发行规则（主编后台） -----------------------------------------
+
+
+class ShopItemIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=1000)
+    price_coin: int = Field(ge=1, le=100000)
+    stock: int | None = Field(default=None, ge=0, le=100000)
+    effect: Literal["none", "accent_unlock"] = "none"
+    cover_url: str | None = Field(default=None, max_length=500)
+    sort_order: int = Field(default=0, ge=0, le=1000)
+
+
+class ShopItemPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=1000)
+    price_coin: int | None = Field(default=None, ge=1, le=100000)
+    stock: int | None = Field(default=None, ge=0, le=100000)
+    is_active: bool | None = None
+    effect: Literal["none", "accent_unlock"] | None = None
+    cover_url: str | None = Field(default=None, max_length=500)
+    sort_order: int | None = Field(default=None, ge=0, le=1000)
+
+
+class CoinRulePatch(BaseModel):
+    amount: int = Field(ge=0, le=10000)
+    daily_cap: int = Field(default=0, ge=0, le=1000)
+    is_active: bool = True
+
+
+class CoinPolicyPatch(BaseModel):
+    coin_per_yuan: int = Field(ge=1, le=10000)
+    daily_earn_cap: int = Field(ge=1, le=10000)
+    monthly_issue_cap: int = Field(ge=1, le=100000000)
+
+
+def _shop_item_out(item: CoinShopItem) -> dict[str, object]:
+    return {
+        "id": item.id,
+        "name": item.name,
+        "description": item.description,
+        "price_coin": item.price_coin,
+        "stock": item.stock,
+        "is_active": item.is_active,
+        "sort_order": item.sort_order,
+        "effect": item.effect,
+        "cover_url": item.cover_url,
+    }
+
+
+@router.get("/shop/items")
+async def get_shop_items(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    tenant_id = require_tenant_id()
+    items = await shop.list_items(db, tenant_id)
+    return {"data": [_shop_item_out(i) for i in items]}
+
+
+@router.post("/shop/items/{item_id}/purchase")
+async def purchase_shop_item(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    try:
+        result = await shop.purchase(db, current_user, item_id)
+    except shop.ShopError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {**result, "wallet": await currency.wallet_summary(db, current_user)}
+
+
+@router.get("/shop/purchases")
+async def get_my_purchases(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    from app.modules.gamification.models import CoinPurchase  # local: avoid widening top imports
+
+    rows = (
+        (
+            await db.execute(
+                select(CoinPurchase)
+                .where(
+                    CoinPurchase.tenant_id == current_user.tenant_id,
+                    CoinPurchase.user_id == current_user.id,
+                )
+                .order_by(CoinPurchase.created_at.desc(), CoinPurchase.id.desc())
+                .limit(30)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {
+        "data": [
+            {
+                "id": p.id,
+                "item_name": p.item_name,
+                "price_coin": p.price_coin,
+                "status": p.status,
+                "note": p.note,
+                "created_at": p.created_at.isoformat(),
+            }
+            for p in rows
+        ]
+    }
+
+
+@router.get("/admin/coin/config")
+async def get_coin_config(
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    policy = await currency._load_policy(db, current_user)
+    rules = await currency._load_rules(db, current_user)
+    return {
+        "policy": {
+            "coin_per_yuan": policy.coin_per_yuan,
+            "daily_earn_cap": policy.daily_earn_cap,
+            "monthly_issue_cap": policy.monthly_issue_cap,
+        },
+        "rules": [
+            {
+                "reason": r.reason,
+                "label": r.label,
+                "amount": r.amount,
+                "daily_cap": r.daily_cap,
+                "is_active": r.is_active,
+            }
+            for r in sorted(rules.values(), key=lambda x: x.id)
+        ],
+        "monthly_issued": await currency.monthly_issued(db, current_user.tenant_id),
+    }
+
+
+@router.patch("/admin/coin/rules/{reason}")
+async def patch_coin_rule(
+    reason: str,
+    body: CoinRulePatch,
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    rule = (
+        await db.execute(
+            select(CoinRule).where(
+                CoinRule.tenant_id == current_user.tenant_id, CoinRule.reason == reason
+            )
+        )
+    ).scalar_one_or_none()
+    if rule is None:
+        rule = CoinRule(
+            tenant_id=current_user.tenant_id,
+            reason=reason,
+            label=currency.COIN_LABELS.get(reason, reason),
+            amount=body.amount,
+            daily_cap=body.daily_cap,
+            is_active=body.is_active,
+            updated_by=current_user.id,
+        )
+        db.add(rule)
+    else:
+        rule.amount = body.amount
+        rule.daily_cap = body.daily_cap
+        rule.is_active = body.is_active
+        rule.updated_by = current_user.id
+    await db.commit()
+    await db.refresh(rule)
+    return {
+        "reason": rule.reason,
+        "label": rule.label,
+        "amount": rule.amount,
+        "daily_cap": rule.daily_cap,
+        "is_active": rule.is_active,
+    }
+
+
+@router.patch("/admin/coin/policy")
+async def patch_coin_policy(
+    body: CoinPolicyPatch,
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    policy = (
+        await db.execute(select(CoinPolicy).where(CoinPolicy.tenant_id == current_user.tenant_id))
+    ).scalar_one_or_none()
+    if policy is None:
+        policy = CoinPolicy(tenant_id=current_user.tenant_id, updated_by=current_user.id)
+        db.add(policy)
+    policy.coin_per_yuan = body.coin_per_yuan
+    policy.daily_earn_cap = body.daily_earn_cap
+    policy.monthly_issue_cap = body.monthly_issue_cap
+    policy.updated_by = current_user.id
+    await db.commit()
+    await db.refresh(policy)
+    return {
+        "coin_per_yuan": policy.coin_per_yuan,
+        "daily_earn_cap": policy.daily_earn_cap,
+        "monthly_issue_cap": policy.monthly_issue_cap,
+    }
+
+
+@router.get("/admin/shop/items")
+async def admin_list_shop_items(
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    items = await shop.list_items(db, current_user.tenant_id, include_inactive=True)
+    return {"data": [_shop_item_out(i) for i in items]}
+
+
+@router.post("/admin/shop/items")
+async def admin_create_shop_item(
+    body: ShopItemIn,
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    item = await shop.create_item(
+        db,
+        tenant_id=current_user.tenant_id,
+        created_by=current_user.id,
+        name=body.name,
+        description=body.description,
+        price_coin=body.price_coin,
+        stock=body.stock,
+        effect=body.effect,
+        cover_url=body.cover_url,
+        sort_order=body.sort_order,
+    )
+    return _shop_item_out(item)
+
+
+@router.patch("/admin/shop/items/{item_id}")
+async def admin_update_shop_item(
+    item_id: int,
+    body: ShopItemPatch,
+    current_user: User = Depends(require_role("editor_in_chief")),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    item = (
+        await db.execute(
+            select(CoinShopItem).where(
+                CoinShopItem.tenant_id == current_user.tenant_id,
+                CoinShopItem.id == item_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="货品不存在")
+    updated = await shop.update_item(
+        db,
+        item,
+        name=body.name,
+        description=body.description,
+        price_coin=body.price_coin,
+        stock=body.stock,
+        is_active=body.is_active,
+        effect=body.effect,
+        cover_url=body.cover_url,
+        sort_order=body.sort_order,
+    )
+    return _shop_item_out(updated)

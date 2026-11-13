@@ -1962,10 +1962,10 @@ export interface EmailDigestRecordRow {
 
 export interface EditorWorkbenchResponse {
   columns: {
-    to_assign: { count: number; items: EditorColumnItem[] }
-    in_review: { count: number; items: EditorColumnItem[] }
-    to_decide: { count: number; items: EditorColumnItem[] }
-    decided: { count: number; items: EditorColumnItem[] }
+    to_assign: { count: number; items: EditorColumnItem[]; page_size?: number; has_more?: boolean }
+    in_review: { count: number; items: EditorColumnItem[]; page_size?: number; has_more?: boolean }
+    to_decide: { count: number; items: EditorColumnItem[]; page_size?: number; has_more?: boolean }
+    decided: { count: number; items: EditorColumnItem[]; page_size?: number; has_more?: boolean }
   }
   email_digest: EmailDigestSummary
 }

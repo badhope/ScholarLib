@@ -166,6 +166,10 @@ async def award_points(
             note=note,
         )
     )
+    # 同一业务动作顺带发 R 币（独立 identity，不影响身份等级）。
+    from app.modules.gamification import currency
+
+    await currency.award_for_reason(db, user, reason, ref_type=ref_type, ref_id=ref_id)
     if d != 0:
         row = await _get_level_row(db, user, ident)
         row.points = (row.points or 0) + d

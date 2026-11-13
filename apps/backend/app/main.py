@@ -168,7 +168,9 @@ _SPA_ROUTE_PREFIXES = frozenset(
         "grade",
         "feedback",
         "guide",
+        "u",
         "rules",
+        "shop",
     }
 )
 

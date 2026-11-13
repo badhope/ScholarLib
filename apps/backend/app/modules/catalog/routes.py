@@ -3307,9 +3307,13 @@ async def submit_feedback(
         created_at=utcnow(),
     )
     db.add(entry)
-    # 收件人 = 主编账号（bigbad, id=5）。角色表结构在不同版本间有差异，
-    # 直接锁定主编账号最可靠；反馈本身已落审计，通知失败不影响入库。
-    editors = (await db.execute(select(User.id).where(User.username == "bigbad"))).scalars().all()
+    # 收件人 = AI 管理账号，不再使用用户个人主编账号；反馈本身已落审计，
+    # 通知失败不影响入库。
+    editors = (
+        (await db.execute(select(User.id).where(User.username == "rubbish_ai_admin")))
+        .scalars()
+        .all()
+    )
     for uid in set(editors):
         try:
             await _notify.create(
@@ -3425,7 +3429,11 @@ async def submit_appeal(
         created_at=utcnow(),
     )
     db.add(appeal)
-    editors = (await db.execute(select(User.id).where(User.username == "bigbad"))).scalars().all()
+    editors = (
+        (await db.execute(select(User.id).where(User.username == "rubbish_ai_admin")))
+        .scalars()
+        .all()
+    )
     for uid in set(editors):
         try:
             await _notify.create(

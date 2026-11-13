@@ -12,6 +12,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  LayoutDashboard,
   Pencil,
   Plus,
   RefreshCw,
@@ -29,6 +30,7 @@ import {
   useSubmissionReports,
   useSubmissionVersions,
   useUploadSubmissionFile,
+  useMeProfile,
 } from '@/hooks/api/use-modules'
 import type {
   IngestResource,
@@ -138,6 +140,10 @@ function statusHint(status: string): string {
 
 function SubmissionsPage() {
   const navigate = useNavigate()
+  const { data: meProfile } = useMeProfile()
+  const canOpenWorkbench = Boolean(
+    meProfile && ['editor', 'editor_in_chief'].includes(meProfile.permission_role),
+  )
   // 上传约束来自服务端（/capabilities），前端不再维护第二份规则。
   const caps = useCapabilities()
   const uploadMaxMb = Math.round((caps.data?.upload_max_bytes ?? 50 * 1024 * 1024) / 1024 / 1024)
@@ -241,14 +247,24 @@ function SubmissionsPage() {
         title="我的提交"
         description="查看你提交的资源及审核状态。"
         actions={
-          <Button
-            onClick={() => {
-              void navigate({ to: '/submissions/new' })
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            新建提交
-          </Button>
+          <>
+            {canOpenWorkbench && (
+              <Button variant="outline" asChild>
+                <Link to="/editor/workbench">
+                  <LayoutDashboard className="h-4 w-4" />
+                  主编工作台
+                </Link>
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                void navigate({ to: '/submissions/new' })
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              新建提交
+            </Button>
+          </>
         }
       />
 

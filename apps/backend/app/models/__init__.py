@@ -205,6 +205,24 @@ class User(Base, TenantScopedMixin):
     website: Mapped[str | None] = mapped_column(String(300), nullable=True)
     google_scholar: Mapped[str | None] = mapped_column(String(300), nullable=True)
     location: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # --- 公开主页自定义（迁移 033） ---
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    banner_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    accent_color: Mapped[str] = mapped_column(
+        String(7), nullable=False, default="#2f5d46", server_default="#2f5d46"
+    )
+    # 用户主动公开的联系邮箱；账号 email 永不对外。
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    profile_visibility: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="public", server_default="public"
+    )
+    # --- R 币（迁移 033）：可消费的社区货币，与 XP/等级完全分开 ---
+    coin_balance: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    accent_unlocked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     # Soft-delete timestamp. Set when the user requests account deletion
     # (GDPR right-to-erasure). The row is anonymised in place, and a
     # background job hard-deletes it after the grace window.

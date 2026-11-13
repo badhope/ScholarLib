@@ -18,7 +18,17 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.time import utcnow
@@ -194,4 +204,78 @@ class PointEvent(Base, TenantScopedMixin):
             name="uq_point_event_identity",
         ),
         Index("ix_point_events_tenant_user_created", "tenant_id", "user_id", created_at.desc()),
+    )
+
+
+class CoinRule(Base, TenantScopedMixin):
+    """R 币发放规则（主编可在后台调整金额与每日上限）。"""
+
+    __tablename__ = "coin_rules"
+    __table_args__ = (UniqueConstraint("tenant_id", "reason", name="uq_coin_rule_tenant_reason"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    daily_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class CoinPolicy(Base, TenantScopedMixin):
+    """R 币发行口径：汇率锚、单用户日上限、全站月度发行上限。"""
+
+    __tablename__ = "coin_policy"
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_coin_policy_tenant"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    coin_per_yuan: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    daily_earn_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    monthly_issue_cap: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
+    updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+
+class CoinShopItem(Base, TenantScopedMixin):
+    """商城货品。stock 为 NULL 表示不限量；0 表示售罄。"""
+
+    __tablename__ = "coin_shop_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    price_coin: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    stock: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 目前支持 none（人工发货） / accent_unlock（自动解锁主题色）
+    effect: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class CoinPurchase(Base, TenantScopedMixin):
+    """R 币消费流水（事实源仍是 point_events，这里记录订单履约状态）。"""
+
+    __tablename__ = "coin_purchases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    item_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    item_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    price_coin: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="paid")
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
     )

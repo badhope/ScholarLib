@@ -1,13 +1,16 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { Award, Shield, Flame, Building2, MapPin, Globe, Pencil } from 'lucide-react'
+import { Award, ExternalLink, Pencil, Shield, Flame } from 'lucide-react'
 import { getAuthState } from '@/lib/auth'
 import { PageHeader } from '@/components/common/page-header'
 import { ErrorState, Loading } from '@/components/common/state'
+import { PublicProfileView } from '@/components/profile/public-profile-view'
+import { WalletCard } from '@/components/profile/wallet-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useMe } from '@/hooks/api/use-auth'
 import { useMePoints, useMeProfile, type MeIdentityLevel } from '@/hooks/api/use-modules'
+import { usePublicProfile } from '@/hooks/api/use-profile'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/me')({
@@ -60,126 +63,10 @@ function LevelCard({ level }: { level: MeIdentityLevel }) {
   )
 }
 
-function ProfileSummaryCard({ user }: { user: ReturnType<typeof useMe>['data'] }) {
-  if (!user) return null
-  const hasAny = Boolean(
-    user.display_name ||
-      user.real_name ||
-      user.affiliation ||
-      user.department ||
-      user.academic_title ||
-      user.location ||
-      user.research_interests ||
-      user.website ||
-      user.google_scholar ||
-      user.bio,
-  )
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-base">个人资料</CardTitle>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/settings" search={{ tab: 'profile' }}>
-              <Pencil className="mr-1 h-3.5 w-3.5" />
-              编辑
-            </Link>
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        {!hasAny ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="icon-chip">
-              <Pencil className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-foreground">还没有填写个人资料</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                单位、研究兴趣与主页会展示在文章署名旁，读者可据此找到你。
-              </p>
-            </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/settings" search={{ tab: 'profile' }}>
-                去补充
-              </Link>
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                {(user.display_name || user.real_name || user.username || 'R').slice(0, 1)}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate font-medium">
-                  {user.display_name || user.real_name || user.username}
-                </p>
-                {user.display_name && user.real_name && (
-                  <p className="text-xs text-muted-foreground">实名：{user.real_name}</p>
-                )}
-              </div>
-            </div>
-            {(user.affiliation || user.department || user.academic_title) && (
-              <p className="flex items-start gap-2">
-                <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <span>
-                  {[user.affiliation, user.department, user.academic_title]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-              </p>
-            )}
-            {user.location && (
-              <p className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
-                {user.location}
-              </p>
-            )}
-            {user.research_interests && (
-              <p>
-                <span className="text-muted-foreground">研究兴趣：</span>
-                {user.research_interests}
-              </p>
-            )}
-            {user.bio && (
-              <p className="rounded-lg bg-muted/40 p-3 text-muted-foreground">{user.bio}</p>
-            )}
-            {(user.website || user.google_scholar) && (
-              <div className="flex flex-wrap gap-3">
-                {user.website && (
-                  <a
-                    href={user.website}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    <Globe className="h-3.5 w-3.5" />
-                    个人主页
-                  </a>
-                )}
-                {user.google_scholar && (
-                  <a
-                    href={user.google_scholar}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    Google Scholar
-                  </a>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
 function MePage() {
   const { data, isLoading, isError, refetch } = useMeProfile()
   const { data: account } = useMe()
+  const profile = usePublicProfile(data?.username ?? '', Boolean(data?.username))
 
   if (isLoading) return <Loading />
   if (isError || !data) return <ErrorState message="加载个人中心失败" onRetry={() => refetch()} />
@@ -190,11 +77,35 @@ function MePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="我的"
-        description="身份（权限轴）与身份内等级（激励轴）分轨展示，不同身份数值互不混排。"
+        title="我的主页"
+        description="这是别人看到的你：资料、作品、论坛动态和徽章。下面才是身份权限与身份内等级。"
+        actions={
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/u/$username" params={{ username: data.username }}>
+                <ExternalLink className="h-4 w-4" />
+                看公开主页
+              </Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link to="/settings" search={{ tab: 'profile' }}>
+                <Pencil className="h-4 w-4" />
+                编辑主页
+              </Link>
+            </Button>
+          </>
+        }
       />
 
-      <ProfileSummaryCard user={account} />
+      {profile.data ? (
+        <PublicProfileView profile={profile.data} footer={<WalletCard />} />
+      ) : (
+        <Card>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            正在加载公开主页… 如果一直空白，先去设置里补充头像和简介。
+          </CardContent>
+        </Card>
+      )}
 
       {/* 当前身份（权限轴） */}
       <Card>
@@ -265,7 +176,7 @@ function MePage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        等级只在同一身份内比较，不跨身份、不换权限；积分是荣誉与晋升信号。
+        等级只在同一身份内比较，不跨身份、不换权限；积分是荣誉与晋升信号。{account?.coin_balance !== undefined ? ` R 币余额 ${account.coin_balance}。` : ''}
       </p>
     </div>
   )

@@ -208,6 +208,39 @@ function EditorWorkbenchPage() {
         title="主编工作台"
         description="四栏流水线：待指派 → 评审中 → 待裁决 → 已决定。"
       />
+
+      {/* 批量指派条放在顶部：待指派列表可能很长，按钮不能沉到列表底部。 */}
+      {columns && columns.to_assign.count > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-4 py-3 shadow-sm">
+          <span className="text-sm text-muted-foreground">
+            待指派 {columns.to_assign.count} 篇 · 已勾选{' '}
+            <span className="font-semibold text-foreground">{checked.size}</span> 篇
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setChecked(new Set())}
+              disabled={checked.size === 0}
+            >
+              清空
+            </Button>
+            <Button
+              onClick={openAssignDialog}
+              disabled={checked.size === 0 || batchMut.isPending}
+            >
+              <UserPlus className="h-4 w-4" /> 批量指派
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {columns && (columns.to_assign.has_more || columns.in_review.has_more || columns.to_decide.has_more || columns.decided.has_more) && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          每栏最多展示 50 篇；当前共 待指派 {columns.to_assign.count} / 评审中 {columns.in_review.count} / 待裁决 {columns.to_decide.count} / 已决定 {columns.decided.count} 篇。
+        </p>
+      )}
+
       <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
         <HelpTip text="指派前先看利益冲突；裁决必须写 20 字以上处置说明；撤回申诉受理后作品会下架，分数/分区重审要记录结论。" />
         指派、裁决、申诉处置的边界
@@ -436,20 +469,6 @@ function EditorWorkbenchPage() {
             })}
           </div>
 
-          {/* 底部批量指派条 */}
-          {columns.to_assign.count > 0 && (
-            <div className="sticky bottom-4 mt-6 flex items-center justify-between rounded-lg border bg-card px-4 py-3 shadow">
-              <span className="text-sm text-muted-foreground">
-                已勾选 <span className="font-semibold">{checked.size}</span> / {columns.to_assign.count} 篇
-              </span>
-              <Button
-                onClick={openAssignDialog}
-                disabled={checked.size === 0 || batchMut.isPending}
-              >
-                <UserPlus className="h-4 w-4" /> 批量指派
-              </Button>
-            </div>
-          )}
         </>
       )}
 

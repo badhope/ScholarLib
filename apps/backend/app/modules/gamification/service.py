@@ -531,6 +531,17 @@ async def daily_checkin(db: AsyncSession, user: User) -> dict[str, object]:
     if awarded:
         dates = await _checkin_dates(db, user)
         streak = _current_streak(dates, today)
+        # R 币签到收入：与 XP 同一事务，签到成功才发。
+        from app.modules.gamification import currency
+
+        await currency.award(
+            db,
+            user,
+            "checkin.daily",
+            ref_type="checkin",
+            ref_id=today,
+            commit=False,
+        )
         if streak > 0 and streak % 7 == 0:
             bonus_awarded = await award(
                 db,
@@ -540,6 +551,14 @@ async def daily_checkin(db: AsyncSession, user: User) -> dict[str, object]:
                 ref_id=today,
                 commit=False,
                 note=f"连续签到 {streak} 天奖励",
+            )
+            await currency.award(
+                db,
+                user,
+                "checkin.weekly_bonus",
+                ref_type="checkin",
+                ref_id=today,
+                commit=False,
             )
     await db.commit()
     dates = await _checkin_dates(db, user)

@@ -482,11 +482,24 @@ async def create_topic(
         paper_id=payload.paper_id,
     )
     db.add(topic)
+    author = AuthorBrief(id=current_user.id, username=current_user.username)
     await db.commit()
     await db.refresh(topic)
-    return _topic_out(
-        topic, {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)}
-    )
+    # 社区活跃奖励：发主题按后台规则（默认 1 R 币）；失败不影响发帖本身。
+    try:
+        from app.modules.gamification import currency
+
+        await currency.award(
+            db,
+            current_user,
+            "forum.topic",
+            ref_type="forum_topic",
+            ref_id=str(topic.id),
+            commit=True,
+        )
+    except Exception:
+        await db.rollback()
+    return _topic_out(topic, {author.id: author})
 
 
 @router.post(
@@ -539,15 +552,30 @@ async def create_reply(
         body=payload.body.strip(),
         parent_id=parent_id,
     )
+    author = AuthorBrief(id=current_user.id, username=current_user.username)
     db.add(reply)
     # 反冗余计数与最近活跃时间在同一事务里更新
     topic.reply_count += 1
     topic.last_reply_at = utcnow()
     await db.commit()
     await db.refresh(reply)
+    # 回帖按后台规则（默认 0 R 币，防止灌水）；失败不影响回帖本身。
+    try:
+        from app.modules.gamification import currency
+
+        await currency.award(
+            db,
+            current_user,
+            "forum.reply",
+            ref_type="forum_reply",
+            ref_id=str(reply.id),
+            commit=True,
+        )
+    except Exception:
+        await db.rollback()
     return _reply_out(
         reply,
-        {current_user.id: AuthorBrief(id=current_user.id, username=current_user.username)},
+        {author.id: author},
         {k: 0 for k in REACTION_KINDS},
         [],
     )

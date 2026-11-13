@@ -51,6 +51,14 @@ export interface UserResponse {
   website?: string | null
   google_scholar?: string | null
   location?: string | null
+  // 公开主页自定义（迁移 033）
+  avatar_url?: string | null
+  banner_url?: string | null
+  accent_color?: string
+  contact_email?: string | null
+  profile_visibility?: 'public' | 'private'
+  coin_balance?: number
+  accent_unlocked?: boolean
   // admin 端点会填入；普通 /auth/* 端点保持空数组
   roles: string[]
   /** 等级体系：XP 与生效等级（1–9） */
@@ -73,6 +81,11 @@ export type UserProfileUpdate = Partial<
     | 'website'
     | 'google_scholar'
     | 'location'
+    | 'avatar_url'
+    | 'banner_url'
+    | 'accent_color'
+    | 'contact_email'
+    | 'profile_visibility'
   >
 >
 
