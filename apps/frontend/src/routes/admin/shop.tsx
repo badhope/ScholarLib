@@ -174,6 +174,9 @@ function AdminShopPage() {
                 <Input type="number" min={1} value={policy.monthly_issue_cap} onChange={(e) => setPolicy({ ...policy, monthly_issue_cap: Number(e.target.value) })} />
               </div>
             </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              每日上限只约束签到、发帖等日常收入；审稿、录用、认领、裁决等一次性劳务奖励另计，但仍计入全站月发行上限。
+            </p>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-muted-foreground">
                 本月已发 {config.data.monthly_issued} R（约 ¥{(config.data.monthly_issued / policy.coin_per_yuan).toFixed(2)}）。
