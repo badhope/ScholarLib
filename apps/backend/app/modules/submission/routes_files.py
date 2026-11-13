@@ -7,11 +7,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import hmac
 import mimetypes
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -21,7 +24,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ROLE_EDITOR, get_current_user, user_has_role
+from app.api.deps import ROLE_EDITOR, get_current_user, get_current_user_optional, user_has_role
 from app.core.db import get_db
 from app.core.storage import get_storage
 from app.models import User
@@ -51,7 +54,7 @@ def _safe_extension(filename: str) -> str:
     return ext if _EXT_PATTERN.match(ext) else ""
 
 
-def _content_disposition(filename: str) -> str:
+def _content_disposition(filename: str, *, inline: bool = False) -> str:
     """构造下载响应头，含 ASCII 回退与 RFC 5987 的 UTF-8 文件名。
 
     只用 ASCII 回退会让中文标题变成乱码，只用 RFC 5987 又会让老客户端
@@ -64,7 +67,8 @@ def _content_disposition(filename: str) -> str:
         or "download"
     )
     encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
+    kind = "inline" if inline else "attachment"
+    return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
 _ALLOWED_UPLOAD_MIMES = frozenset(
@@ -633,6 +637,7 @@ async def _generated_download(
     *,
     anonymized: bool,
     resource: Any = None,
+    inline: bool = False,
 ) -> Response:
     """Build a submission download from its Markdown.
 
@@ -738,8 +743,106 @@ async def _generated_download(
     return Response(
         content=payload,
         media_type=media,
-        headers={"Content-Disposition": _content_disposition(filename)},
+        headers={"Content-Disposition": _content_disposition(filename, inline=inline)},
     )
+
+
+_DOWNLOAD_TICKET_TTL = 600
+
+
+def _download_ticket_secret() -> bytes:
+    from app.core.config import get_settings
+
+    key = get_settings().secret_key
+    return key.encode("utf-8") if isinstance(key, str) else key
+
+
+def _make_download_ticket(submission_id: int, user_id: int, file_format: str) -> str:
+    """短时下载票据：移动端浏览器/下载器带不上 Authorization 头时用。
+
+    票据只绑定稿件、用户、格式和到期时间，不携带用户密码或长期 token；
+    泄露后最多 10 分钟内可下载同一份稿件，且不能调用其他接口。
+    """
+    expires = int(time.time()) + _DOWNLOAD_TICKET_TTL
+    payload = f"{submission_id}:{user_id}:{file_format}:{expires}"
+    signature = hmac.new(
+        _download_ticket_secret(), payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}:{signature}".encode()).decode("ascii")
+
+
+def _verify_download_ticket(ticket: str, submission_id: int, file_format: str) -> int | None:
+    try:
+        decoded = base64.urlsafe_b64decode(ticket.encode("ascii")).decode("utf-8")
+        payload, signature = decoded.rsplit(":", 1)
+        parts = payload.split(":")
+        if len(parts) != 4:
+            return None
+        ticket_submission, ticket_user, ticket_format, expires_s = parts
+        expected = hmac.new(
+            _download_ticket_secret(), payload.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            return None
+        if int(ticket_submission) != submission_id or ticket_format != file_format:
+            return None
+        if int(expires_s) < int(time.time()):
+            return None
+        return int(ticket_user)
+    except (ValueError, UnicodeDecodeError):
+        return None
+
+
+async def _can_access_submission_file(
+    db: AsyncSession, entry: Any, user_id: int, user: User | None
+) -> bool:
+    if entry.submitted_by == user_id:
+        return True
+    if user is not None and await user_has_role(db, user, ROLE_EDITOR):
+        return True
+    assignment = (
+        (
+            await db.execute(
+                select(ReviewAssignment).where(
+                    ReviewAssignment.submission_id == entry.id,
+                    ReviewAssignment.reviewer_id == user_id,
+                    ReviewAssignment.status.in_(("pending", "accepted", "completed")),
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return assignment is not None
+
+
+@router.post("/{submission_id}/download-ticket")
+async def create_submission_download_ticket(
+    submission_id: int,
+    file_format: str = Query(default="pdf", alias="format", pattern="^(docx|pdf)$"),
+    inline: bool = Query(default=True),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """给移动端换一条短时直链，避免 blob 下载在 iOS/微信里被撤销。"""
+    entry = await _get_or_404(db, submission_id)
+    if not entry.file_path and not entry.markdown_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="This submission has no uploaded file or online manuscript",
+        )
+    if not await _can_access_submission_file(db, entry, current_user.id, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this submission file",
+        )
+    ticket = _make_download_ticket(entry.id, current_user.id, file_format)
+    return {
+        "url": (
+            f"/api/submissions/{entry.id}/files?format={file_format}"
+            f"&inline={str(inline).lower()}&ticket={ticket}"
+        )
+    }
 
 
 @router.get("/{submission_id}/files")
@@ -747,7 +850,9 @@ async def download_submission_file(
     submission_id: int,
     request: Request,
     file_format: str = Query(default="docx", alias="format", pattern="^(docx|pdf|md)$"),
-    current_user: User = Depends(get_current_user),
+    ticket: str | None = Query(default=None),
+    inline: bool = Query(default=False),
+    current_user: User | None = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """下载稿件文件。
@@ -770,34 +875,33 @@ async def download_submission_file(
             detail="This submission has no uploaded file or online manuscript",
         )
 
-    allowed = entry.submitted_by == current_user.id or await user_has_role(
-        db, current_user, ROLE_EDITOR
-    )
-    if not allowed:
-        assignment = (
-            (
-                await db.execute(
-                    select(ReviewAssignment).where(
-                        ReviewAssignment.submission_id == entry.id,
-                        ReviewAssignment.reviewer_id == current_user.id,
-                        ReviewAssignment.status.in_(("pending", "accepted", "completed")),
-                    )
-                )
+    if current_user is not None:
+        actor_id = current_user.id
+        if not await _can_access_submission_file(db, entry, actor_id, current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this submission file",
             )
-            .scalars()
-            .first()
-        )
-        allowed = assignment is not None
-    if not allowed:
+    elif ticket is not None:
+        # 票据换发时已经完整校验过权限；这里只验证 HMAC/绑定/到期，
+        # 不再要求浏览器带 Authorization 头。票据 10 分钟失效。
+        actor_id = _verify_download_ticket(ticket, entry.id, file_format) or 0
+        if not actor_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Download ticket is invalid or expired",
+            )
+    else:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this submission file",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
         )
 
     # 作者/编辑可直接取回 Markdown 源文件（审稿人仍走匿名通道）。
     if file_format == "md" and (entry.file_path or entry.markdown_path):
-        is_privileged_md = entry.submitted_by == current_user.id or await user_has_role(
-            db, current_user, ROLE_EDITOR
+        is_privileged_md = current_user is not None and (
+            entry.submitted_by == current_user.id
+            or await user_has_role(db, current_user, ROLE_EDITOR)
         )
         if is_privileged_md:
             # 作者上传的 .md 原件优先（保留原始换行/字节）；没有原件时
@@ -822,8 +926,8 @@ async def download_submission_file(
     # ``review_mode=double_blind``，但 328/329 都没有匿名稿，于是审稿人连
     # 稿件都下载不了，整个评审流程卡死。现在改为**从 Markdown 现场生成**
     # 匿名 Word/PDF：不依赖外部 URL，也不会把原始 PDF 的元数据带出去。
-    is_privileged = entry.submitted_by == current_user.id or await user_has_role(
-        db, current_user, ROLE_EDITOR
+    is_privileged = current_user is not None and (
+        entry.submitted_by == current_user.id or await user_has_role(db, current_user, ROLE_EDITOR)
     )
     needs_anonymized = False
     if not is_privileged:
@@ -865,7 +969,9 @@ async def download_submission_file(
             stored_exists = False
         if not stored_exists:
             if entry.markdown_path:
-                return await _generated_download(entry, file_format, anonymized=needs_anonymized)
+                return await _generated_download(
+                    entry, file_format, anonymized=needs_anonymized, inline=inline
+                )
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Stored file is missing",
@@ -884,6 +990,7 @@ async def download_submission_file(
             file_format,
             anonymized=needs_anonymized,
             resource=canonical_resource,
+            inline=inline,
         )
 
     file_path = entry.file_path
@@ -948,7 +1055,7 @@ async def download_submission_file(
                     "Content-Range": f"bytes {start}-{end}/{len(data)}",
                     "Accept-Ranges": "bytes",
                     "Content-Length": str(len(chunk)),
-                    "Content-Disposition": _content_disposition(filename),
+                    "Content-Disposition": _content_disposition(filename, inline=inline),
                 },
             )
         except (ValueError, IndexError):
@@ -959,7 +1066,7 @@ async def download_submission_file(
         iter((data,)),
         media_type=media_type,
         headers={
-            "Content-Disposition": _content_disposition(filename),
+            "Content-Disposition": _content_disposition(filename, inline=inline),
             "Accept-Ranges": "bytes",
         },
     )

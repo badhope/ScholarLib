@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import auth_headers
+from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
 _PDF = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF"
@@ -187,3 +187,58 @@ async def test_capabilities_exposes_upload_limits(client: AsyncClient) -> None:
     assert body["upload_max_bytes"] == 50 * 1024 * 1024
     assert ".pdf" in body["upload_extensions"]
     assert ".ipynb" in body["upload_extensions"]
+
+
+@pytest.mark.asyncio
+async def test_download_ticket_allows_mobile_without_auth_header(
+    client: AsyncClient, test_user: dict
+) -> None:
+    """移动端直链：票据换出的 URL 不带 Authorization 也能下载。"""
+    sid = await _create_submission(client, test_user["token"])
+    assert (await _upload(client, test_user["token"], sid)).status_code == 200
+
+    ticket = await client.post(
+        f"/api/submissions/{sid}/download-ticket?format=pdf",
+        headers=auth_headers(test_user),
+    )
+    assert ticket.status_code == 200
+    url = ticket.json()["url"]
+    assert "ticket=" in url
+
+    # 模拟系统浏览器/下载器：只有 URL，没有 Bearer 头。
+    downloaded = await client.get(url)
+    assert downloaded.status_code == 200
+    assert downloaded.headers["content-type"].startswith("application/pdf")
+    assert downloaded.headers["content-disposition"].startswith("inline;")
+    assert downloaded.content.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_download_ticket_rejects_tampering(client: AsyncClient, test_user: dict) -> None:
+    sid = await _create_submission(client, test_user["token"])
+    assert (await _upload(client, test_user["token"], sid)).status_code == 200
+    ticket = (
+        await client.post(
+            f"/api/submissions/{sid}/download-ticket?format=pdf",
+            headers=auth_headers(test_user),
+        )
+    ).json()["url"]
+
+    # 改掉票据末位，HMAC 校验必须失败。
+    tampered = ticket[:-1] + ("A" if ticket[-1] != "A" else "B")
+    r = await client.get(tampered)
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_download_ticket_forbidden_for_outsider(client: AsyncClient, test_user: dict) -> None:
+    sid = await _create_submission(client, test_user["token"])
+    outsider = await register_user(
+        client, email="ticket_outsider@example.com", username="ticket_outsider"
+    )
+    r = await client.post(
+        f"/api/submissions/{sid}/download-ticket?format=pdf",
+        headers=auth_headers(outsider),
+    )
+    # 租户隔离会先把外部用户挡成 404；两者都表示无权换票。
+    assert r.status_code in (403, 404)

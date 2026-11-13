@@ -151,10 +151,16 @@ export function downloadBlob(data: Blob, disposition: string, fallbackName: stri
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.rel = 'noopener'
+  // 移动端浏览器（尤其 iOS/微信）从点击到真正开始接收 blob 有延迟；
+  // 立刻 revoke 会让下载在开始前就被取消。移动端优先新标签打开 PDF，
+  // 让系统阅读器接管，用户可以直接“存储到文件”或转发。
+  const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(navigator.userAgent)
+  if (isMobile) a.target = '_blank'
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => URL.revokeObjectURL(url), 120_000)
 }
 
 // Backend list endpoints return a bare array with no meta; the total page

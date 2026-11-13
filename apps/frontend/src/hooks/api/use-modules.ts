@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { downloadBlob } from '@/lib/utils'
+import { downloadBlob, extractError } from '@/lib/utils'
+import { toast } from 'sonner'
 import type {
   AdminAnalytics,
   AdminUserCreateResponse,
@@ -719,15 +720,35 @@ export async function downloadSubmissionFile(
   id: number,
   format: 'docx' | 'pdf' = 'docx',
 ): Promise<void> {
-  const { data, headers } = await api.get<Blob>(`/submissions/${id}/files`, {
-    params: { format },
-    responseType: 'blob',
-  })
-  downloadBlob(
-    data,
-    (headers['content-disposition'] as string | undefined) ?? '',
-    `submission-${id}.${format}`,
+  const isMobile = /Android|iPhone|iPad|iPod|HarmonyOS|Mobile/i.test(
+    navigator.userAgent,
   )
+  try {
+    // 移动端（含微信内置浏览器）不靠 XHR + blob：系统下载器拿不到
+    // Authorization 头，blob URL 也常被 WebView 拦截。改为换取 10 分钟
+    // 有效的签名直链，交给系统浏览器/阅读器直接打开或保存。
+    if (isMobile) {
+      const { data } = await api.post<{ url: string }>(
+        `/submissions/${id}/download-ticket`,
+        null,
+        { params: { format, inline: true } },
+      )
+      window.location.assign(new URL(data.url, window.location.origin).toString())
+      return
+    }
+    const { data, headers } = await api.get<Blob>(`/submissions/${id}/files`, {
+      params: { format },
+      responseType: 'blob',
+    })
+    downloadBlob(
+      data,
+      (headers['content-disposition'] as string | undefined) ?? '',
+      `submission-${id}.${format}`,
+    )
+  } catch (err) {
+    // 移动端失败时过去是静默 unhandled rejection，用户只看到“点了没反应”。
+    toast.error(extractError(err, '下载失败，请检查网络后重试'))
+  }
 }
 
 
@@ -736,15 +757,19 @@ export async function downloadSubmissionVersion(
   id: number,
   version: number,
 ): Promise<void> {
-  const { data, headers } = await api.get<Blob>(
-    `/submissions/${id}/versions/${version}/file`,
-    { responseType: 'blob', timeout: 120_000 },
-  )
-  downloadBlob(
-    data,
-    (headers['content-disposition'] as string | undefined) ?? '',
-    `submission-${id}-v${version}`,
-  )
+  try {
+    const { data, headers } = await api.get<Blob>(
+      `/submissions/${id}/versions/${version}/file`,
+      { responseType: 'blob', timeout: 120_000 },
+    )
+    downloadBlob(
+      data,
+      (headers['content-disposition'] as string | undefined) ?? '',
+      `submission-${id}-v${version}`,
+    )
+  } catch (err) {
+    toast.error(extractError(err, '版本下载失败，请检查网络后重试'))
+  }
 }
 
 // 审稿报告列表（单盲：作者只看 comments_to_author）

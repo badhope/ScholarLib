@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Download, Loader2, Paperclip, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
-import { extractError } from '@/lib/utils'
+import { downloadBlob, extractError } from '@/lib/utils'
 import { useUploadReviewAttachment } from '@/hooks/api/use-modules'
 import type { ReviewAttachment } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -183,12 +183,11 @@ async function downloadAttachment(reportId: number, index: number, filename: str
       `/review/reports/${reportId}/attachments/${index}`,
       { responseType: 'blob', timeout: 120_000 },
     )
-    const url = URL.createObjectURL(response.data)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(
+      response.data,
+      (response.headers['content-disposition'] as string | undefined) ?? '',
+      filename,
+    )
   } catch (err) {
     toast.error(extractError(err, '附件下载失败'))
   }
