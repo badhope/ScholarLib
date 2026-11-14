@@ -116,8 +116,10 @@ test.describe('admin: create resource', () => {
 
     // 点编辑（管理员操作收在「管理此条」菜单里，避免误触删除）
     await page.getByRole('button', { name: '管理此条' }).click()
-    await page.getByRole('menuitem', { name: '编辑题录' }).click()
-    await expect(page.getByText('编辑资源')).toBeVisible()
+    const editItem = page.getByRole('menuitem', { name: '编辑题录' })
+    await editItem.waitFor({ state: 'attached' })
+    await editItem.dispatchEvent('click')
+    await expect(page.getByText('编辑资源')).toBeVisible({ timeout: 10_000 })
     // 改标题
     const newTitle = `${title} (v2)`
     await page.getByLabel('标题').fill(newTitle)

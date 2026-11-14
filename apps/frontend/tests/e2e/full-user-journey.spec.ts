@@ -175,7 +175,7 @@ test.describe('全流程用户旅程', () => {
     await ensureReviewerRole(adminPage, reviewer.username)
 
     await adminPage.goto('/submissions/pending')
-    await expect(adminPage.getByRole('heading', { name: '编辑工作台' })).toBeVisible()
+    await expect(adminPage.getByRole('heading', { name: '初筛工作台' })).toBeVisible()
     await expect(adminPage.getByText(title)).toBeVisible({ timeout: 10_000 })
 
     await adminPage.getByRole('button', { name: '分配审稿人' }).first().click()

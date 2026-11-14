@@ -22,10 +22,10 @@ test.describe('profile bio', () => {
 
     await page.goto('/settings')
     await page.getByRole('tab', { name: '资料' }).click()
-    const textarea = page.getByPlaceholder(/荒诞现象业余观测者/)
+    const textarea = page.locator('#profile-bio')
     await textarea.fill('荒诞现象业余观测者，正经赛道在读研究生。')
-    await page.getByRole('button', { name: '保存简介' }).click()
-    await expect(page.getByText('简介已更新')).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('button', { name: '保存主页' }).click()
+    await expect(page.getByText('主页资料已保存')).toBeVisible({ timeout: 5_000 })
 
     // 刷新后仍能读到：说明落库，而不是只活在前端 state
     await page.reload()
@@ -41,14 +41,14 @@ test.describe('profile bio', () => {
     await loginViaUi(page, user)
 
     await page.goto('/settings')
-    const textarea = page.getByPlaceholder(/荒诞现象业余观测者/)
+    const textarea = page.locator('#profile-bio')
     await textarea.fill('先写一句。')
-    await page.getByRole('button', { name: '保存简介' }).click()
-    await expect(page.getByText('简介已更新')).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('button', { name: '保存主页' }).click()
+    await expect(page.getByText('主页资料已保存')).toBeVisible({ timeout: 5_000 })
 
     await textarea.fill('')
-    await page.getByRole('button', { name: '保存简介' }).click()
-    await expect(page.getByText('简介已清除')).toBeVisible({ timeout: 5_000 })
+    await page.getByRole('button', { name: '保存主页' }).click()
+    await expect(page.getByText('主页资料已保存')).toBeVisible({ timeout: 5_000 })
 
     await page.goto('/me')
     await expect(page.getByText('先写一句。')).toHaveCount(0)

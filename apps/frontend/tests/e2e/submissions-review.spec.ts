@@ -61,7 +61,7 @@ test.describe('submissions + review flow', () => {
     await ensureReviewerRole(adminPage, reviewer.username)
 
     await adminPage.goto('/submissions/pending')
-    await expect(adminPage.getByRole('heading', { name: '编辑工作台' })).toBeVisible()
+    await expect(adminPage.getByRole('heading', { name: '初筛工作台' })).toBeVisible()
     await expect(adminPage.getByText(submittedTitle)).toBeVisible({ timeout: 10_000 })
 
     // 指派审稿人：新版对话框是多选候选列表，最终录用需要两份 accept 报告。
