@@ -109,7 +109,7 @@ const FAQ = [
   },
   {
     q: '忘记密码怎么办？',
-    a: '当前站点尚未开通邮件服务，自助重置不可用。请使用注册邮箱联系编辑部 admin@argjiemi.cn，由管理员协助重置。',
+    a: '当前站点尚未开通邮件服务，自助重置不可用。请使用注册邮箱联系编辑部 Rubbish_EB@qun.mail.163.com，由管理员协助重置。',
   },
 ]
 
@@ -558,8 +558,8 @@ function DiscoverTabs({
             </h3>
             <p className="mt-3 flex items-center gap-2 text-sm">
               <Mail aria-hidden className="h-4 w-4 text-muted-foreground" />
-              <a href="mailto:admin@argjiemi.cn" className="text-primary hover:underline">
-                admin@argjiemi.cn
+              <a href="mailto:Rubbish_EB@qun.mail.163.com" className="text-primary hover:underline">
+                Rubbish_EB@qun.mail.163.com
               </a>
             </p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -1309,7 +1309,7 @@ function HomePage() {
                 </li>
                 <li>
                   <a
-                    href="mailto:admin@argjiemi.cn"
+                    href="mailto:Rubbish_EB@qun.mail.163.com"
                     className="text-primary-foreground/75 transition-colors hover:text-primary-foreground"
                   >
                     联系编辑部

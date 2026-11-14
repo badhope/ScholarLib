@@ -22,7 +22,7 @@ from app.core.retention import AUDIT_LOG_RETENTION_DAYS, USER_DELETION_GRACE_DAY
 
 router = APIRouter(tags=["public"])
 
-CONTACT_EMAIL = "admin@argjiemi.cn"
+CONTACT_EMAIL = "Rubbish_EB@qun.mail.163.com"
 
 PRIVACY_POLICY_MD = f"""\
 # Rubbish 隐私政策

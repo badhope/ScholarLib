@@ -1,20 +1,86 @@
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import rehypeRaw from 'rehype-raw'
+import rehypeKatex from 'rehype-katex'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import 'katex/dist/katex.min.css'
 import { cn } from '@/lib/utils'
 
 /**
- * 论坛/编辑器共用的 Markdown 渲染。
+ * 论坛/编辑器/文章预览共用的 Markdown 渲染。
  *
- * 编辑器工具栏会插入 <u> / <mark> / <sup> / <sub> 这类原生 HTML；
- * react-markdown 默认不解析 HTML，用户就会看到一堆标签。这里用
- * rehype-raw 解析，再用 rehype-sanitize 白名单过滤，保留排版能力，
- * 同时挡掉 script / iframe / 事件属性等 XSS 面。
+ * 以前这里只挂了 GFM：公式显示成 `$...$`、data 图片被清洗掉、HTML 图注
+ * 不生效。现在统一补齐四件事：
+ * 1. remark-math + KaTeX 渲染行内/块级公式；
+ * 2. rehype-raw 保留编辑器插入的 <u>/<mark>/<figure> 等排版标签；
+ * 3. 白名单清洗（含 id/class/colspan/rowspan），既保留排版又挡 XSS；
+ * 4. data:image 图片白名单，避免上传图或公式图被默认 URL 清洗清空。
  */
 const schema = {
   ...defaultSchema,
-  tagNames: [...new Set([...(defaultSchema.tagNames ?? []), 'u', 'mark', 'sup', 'sub'])],
+  tagNames: [
+    ...new Set([
+      ...(defaultSchema.tagNames ?? []),
+      'u',
+      'mark',
+      'sup',
+      'sub',
+      'figure',
+      'figcaption',
+      'details',
+      'summary',
+      'kbd',
+      'picture',
+      'source',
+    ]),
+  ],
+  protocols: {
+    ...defaultSchema.protocols,
+    src: [...(defaultSchema.protocols?.src ?? []), 'data'],
+  },
+  attributes: {
+    ...defaultSchema.attributes,
+    '*': [...(defaultSchema.attributes?.['*'] ?? []), 'className', 'id'],
+    a: [...(defaultSchema.attributes?.a ?? []), 'target', 'rel'],
+    img: [
+      ...(defaultSchema.attributes?.img ?? []),
+      'loading',
+      'decoding',
+      'width',
+      'height',
+    ],
+    code: [...(defaultSchema.attributes?.code ?? []), 'className'],
+    table: [...(defaultSchema.attributes?.table ?? []), 'align'],
+    td: [...(defaultSchema.attributes?.td ?? []), 'colSpan', 'rowSpan', 'align'],
+    th: [...(defaultSchema.attributes?.th ?? []), 'colSpan', 'rowSpan', 'align'],
+    input: [...(defaultSchema.attributes?.input ?? []), 'checked', 'disabled', 'type'],
+    details: [...(defaultSchema.attributes?.details ?? []), 'open'],
+  },
+}
+
+const markdownComponents: Components = {
+  a: ({ href, children, ...props }) => {
+    const external = typeof href === 'string' && /^https?:\/\//i.test(href)
+    return (
+      <a
+        href={href}
+        {...props}
+        {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
+        {children}
+      </a>
+    )
+  },
+  img: ({ src, alt, ...props }) =>
+    typeof src === 'string' && src ? (
+      <img src={src} alt={alt ?? ''} loading="lazy" decoding="async" {...props} />
+    ) : null,
+  table: ({ children }) => (
+    <div className="md-table-wrap">
+      <table>{children}</table>
+    </div>
+  ),
 }
 
 export function MarkdownContent({
@@ -27,8 +93,16 @@ export function MarkdownContent({
   return (
     <div className={cn('markdown-body', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, [rehypeSanitize, schema]]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[
+          rehypeRaw,
+          [rehypeSanitize, schema],
+          [rehypeKatex, { strict: false }],
+        ]}
+        urlTransform={(url) =>
+          url.startsWith('data:image/') ? url : defaultUrlTransform(url)
+        }
+        components={markdownComponents}
       >
         {text}
       </ReactMarkdown>

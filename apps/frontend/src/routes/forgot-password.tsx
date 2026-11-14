@@ -41,7 +41,7 @@ function ForgotPasswordPage() {
             {capabilities.isFetched && !emailDelivery && (
               <span className="mt-2 block text-xs text-muted-foreground">
                 当前站点未开通邮件服务，自助重置暂不可用；请直接联系编辑部
-                admin@argjiemi.cn 重置密码。
+                Rubbish_EB@qun.mail.163.com 重置密码。
               </span>
             )}
           </CardDescription>

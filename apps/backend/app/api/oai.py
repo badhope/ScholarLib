@@ -33,7 +33,7 @@ from app.domain.catalog.visibility import public_conditions
 router = APIRouter(prefix="/oai", tags=["oai-pmh"])
 
 REPOSITORY_NAME = "Rubbish — 开放获取期刊"
-ADMIN_EMAIL = "admin@argjiemi.cn"
+ADMIN_EMAIL = "Rubbish_EB@qun.mail.163.com"
 BASE_IDENTIFIER_PREFIX = "oai:rubbish.argjiemi.cn"
 EARLIEST_DATESTAMP = "2026-04-03T00:00:00Z"
 

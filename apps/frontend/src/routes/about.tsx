@@ -204,7 +204,7 @@ function AboutPage() {
             ；投诉与举报请在邮件主题注明「伦理」。一般咨询在 5 个工作日内回复。
           </p>
           <p className="mt-3 text-sm">
-            编辑部邮箱：<span className="font-medium">editorial@argjiemi.cn</span>
+            编辑部邮箱：<a href="mailto:Rubbish_EB@qun.mail.163.com" className="font-medium text-primary hover:underline">Rubbish_EB@qun.mail.163.com</a>
           </p>
           <p className="mt-3 text-sm text-muted-foreground">
             本刊无广告、无付费墙，运行成本靠读者自愿支持：

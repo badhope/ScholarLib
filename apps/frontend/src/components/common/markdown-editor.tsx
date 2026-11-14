@@ -45,6 +45,7 @@ interface ToolAction {
 const H1: ToolAction = { label: 'H1', title: '标题一', linePrefix: '# ' }
 const H2: ToolAction = { label: 'H2', title: '标题二', linePrefix: '## ' }
 const H3: ToolAction = { label: 'H3', title: '标题三', linePrefix: '### ' }
+const H4: ToolAction = { label: 'H4', title: '标题四', linePrefix: '#### ' }
 const BOLD: ToolAction = { label: 'B', title: '加粗（Ctrl+B）', wrap: ['**', '**'] }
 const ITALIC: ToolAction = { label: 'I', title: '斜体（Ctrl+I）', wrap: ['*', '*'] }
 const UNDERLINE: ToolAction = { label: 'U', title: '下划线', wrap: ['<u>', '</u>'] }
@@ -55,6 +56,7 @@ const BOOK: ToolAction = { label: '《》', title: '书名号', wrap: ['《', '�
 const QUOTE_CN: ToolAction = { label: '「」', title: '中文引号', wrap: ['「', '」'] }
 const QUOTE_DOUBLE: ToolAction = { label: '“”', title: '中文双引号', wrap: ['“', '”'] }
 const LIST: ToolAction = { label: '• 列表', title: '无序列表', linePrefix: '- ' }
+const CHECKLIST: ToolAction = { label: '☑ 清单', title: '任务清单', linePrefix: '- [ ] ' }
 const ORDERED: ToolAction = { label: '1. 列表', title: '有序列表', linePrefix: '1. ' }
 const QUOTE: ToolAction = { label: '❝ 引用', title: '引用块', linePrefix: '> ' }
 const TABLE: ToolAction = {
@@ -68,10 +70,30 @@ const CODE: ToolAction = {
   block: '\n```python\nprint("hello")\n```\n',
 }
 const DIVIDER: ToolAction = { label: '分割线', title: '分割线', block: '\n---\n' }
+const LINK: ToolAction = {
+  label: '链接',
+  title: '插入链接（Ctrl+K）',
+  wrap: ['[', '](https://)'],
+}
+const INLINE_CODE: ToolAction = {
+  label: '`代码`',
+  title: '行内代码',
+  wrap: ['`', '`'],
+}
+const FORMULA: ToolAction = {
+  label: '$x$',
+  title: '行内公式',
+  wrap: ['$', '$'],
+}
+const FORMULA_BLOCK: ToolAction = {
+  label: '∑ 公式',
+  title: '块级公式',
+  block: '\n$$\n\\frac{a}{b}\n$$\n',
+}
 
-const HEADING_TOOLS = [H1, H2, H3]
-const PARAGRAPH_TOOLS = [LIST, ORDERED, QUOTE, DIVIDER]
-const INSERT_TOOLS = [TABLE, CODE, HIGHLIGHT, UNDERLINE, SUPER, SUB, BOOK, QUOTE_CN, QUOTE_DOUBLE]
+const HEADING_TOOLS = [H1, H2, H3, H4]
+const PARAGRAPH_TOOLS = [LIST, ORDERED, CHECKLIST, QUOTE, DIVIDER]
+const INSERT_TOOLS = [LINK, INLINE_CODE, FORMULA, FORMULA_BLOCK, TABLE, CODE, HIGHLIGHT, UNDERLINE, SUPER, SUB, BOOK, QUOTE_CN, QUOTE_DOUBLE]
 
 export function MarkdownEditor({
   value,
@@ -84,7 +106,7 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const areaRef = useRef<HTMLTextAreaElement | null>(null)
   const imageRef = useRef<HTMLInputElement | null>(null)
-  const [tab, setTab] = useState<'edit' | 'preview'>('edit')
+  const [tab, setTab] = useState<'edit' | 'split' | 'preview'>('edit')
   const [uploadingImage, setUploadingImage] = useState(false)
 
   const charCount = useMemo(() => value.replace(/\s/g, '').length, [value])
@@ -140,10 +162,12 @@ export function MarkdownEditor({
     })
   }
 
-  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
+  const uploadImageFile = async (file?: File | null) => {
     if (!file || !onUploadImage) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('只能上传图片文件')
+      return
+    }
     if (file.size > 5 * 1024 * 1024) {
       toast.error('图片不能超过 5MB')
       return
@@ -151,12 +175,33 @@ export function MarkdownEditor({
     setUploadingImage(true)
     try {
       const url = await onUploadImage(file)
-      insertText(`\n![图片](${url})\n`)
+      insertText(`\n![${file.name.replace(/\.\w+$/, '') || '图片'}](${url})\n`)
     } catch (err) {
       toast.error(extractError(err, '图片上传失败'))
     } finally {
       setUploadingImage(false)
     }
+  }
+
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    await uploadImageFile(file)
+  }
+
+  const onDrop = async (e: React.DragEvent<HTMLTextAreaElement>) => {
+    const file = e.dataTransfer.files?.[0]
+    if (!file || !onUploadImage) return
+    e.preventDefault()
+    await uploadImageFile(file)
+  }
+
+  const onPaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!onUploadImage) return
+    const file = Array.from(e.clipboardData.files)[0]
+    if (!file?.type.startsWith('image/')) return
+    e.preventDefault()
+    await uploadImageFile(file)
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -168,7 +213,13 @@ export function MarkdownEditor({
       } else if (key === 'i') {
         e.preventDefault()
         applyTool(ITALIC)
+      } else if (key === 'k') {
+        e.preventDefault()
+        applyTool(LINK)
       }
+    } else if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault()
+      insertText('  ')
     }
   }
 
@@ -209,10 +260,13 @@ export function MarkdownEditor({
           <span className="text-xs tabular-nums text-muted-foreground" data-testid="md-char-count">
             {charCount} 字
           </span>
-          <Tabs value={tab} onValueChange={(v) => setTab(v as 'edit' | 'preview')}>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as 'edit' | 'split' | 'preview')}>
             <TabsList className="h-7">
               <TabsTrigger value="edit" className="h-7 px-2 text-xs">
                 编辑
+              </TabsTrigger>
+              <TabsTrigger value="split" className="h-7 px-2 text-xs">
+                分栏
               </TabsTrigger>
               <TabsTrigger value="preview" className="h-7 px-2 text-xs">
                 预览
@@ -221,28 +275,48 @@ export function MarkdownEditor({
           </Tabs>
         </div>
       </div>
-      {tab === 'edit' ? (
-        <textarea
-          ref={areaRef}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          spellCheck={false}
-          style={{ minHeight }}
-          className="w-full resize-y rounded-b-lg bg-transparent px-3 py-2 font-mono text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-50"
-        />
-      ) : (
-        <div
-          className="overflow-auto px-4 py-3"
-          style={{ minHeight }}
-          data-testid="md-preview"
-        >
+      {tab === 'preview' ? (
+        <div className="overflow-auto px-4 py-3" style={{ minHeight }} data-testid="md-preview">
           {value.trim() ? (
             <MarkdownContent text={value} className="text-sm" />
           ) : (
             <p className="text-sm text-muted-foreground">暂无内容</p>
+          )}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            'grid min-w-0',
+            tab === 'split' ? 'lg:grid-cols-2 lg:divide-x' : 'grid-cols-1',
+          )}
+        >
+          <div className="relative min-w-0">
+            <textarea
+              ref={areaRef}
+              value={value}
+              disabled={disabled}
+              onChange={(e) => onChange(e.target.value)}
+              onKeyDown={onKeyDown}
+              onDrop={onDrop}
+              onPaste={onPaste}
+              placeholder={placeholder}
+              spellCheck={false}
+              style={{ minHeight }}
+              className="w-full resize-y rounded-b-lg bg-transparent px-3 py-2 font-mono text-sm leading-6 outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            />
+          </div>
+          {tab === 'split' && (
+            <div
+              className="max-h-[70vh] overflow-auto border-t px-4 py-3 lg:border-t-0"
+              style={{ minHeight }}
+              data-testid="md-split-preview"
+            >
+              {value.trim() ? (
+                <MarkdownContent text={value} className="text-sm" />
+              ) : (
+                <p className="text-sm text-muted-foreground">左侧开始输入后，这里实时排版。</p>
+              )}
+            </div>
           )}
         </div>
       )}
