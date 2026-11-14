@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -112,6 +113,14 @@ class Submission(Base, TenantScopedMixin):
     anonymized_file_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     doi: Mapped[str | None] = mapped_column(String(200), nullable=True)
     corresponding_author_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # 站内相似度（0–100）：提交时与本站已发表 Resource / 已有投稿比对。
+    # 仅作编辑与作者的提示，不是外部查重库结论，不自动拒稿。
+    similarity_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Top 3 命中：[{kind: resource|submission, id, title, score}]
+    similarity_matches: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONBVariant, nullable=True
+    )
 
     # Workflow fields。
     # status 兼容旧值 pending/approved/rejected，同时支持

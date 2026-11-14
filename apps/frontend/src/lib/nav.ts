@@ -11,8 +11,10 @@ export interface NavItem {
    * 真正的权限由后端 require_* 依赖强制。
    */
   roles?: string[]
-  /** 侧边栏分组标题：角色化导航 —— 读者/作者/审稿人/编辑各自只见自己的分区 */
+  /** 侧边栏一级分组标题：角色化导航 —— 读者/作者/审稿人/编辑各自只见自己的分区 */
   group?: string
+  /** 二级分组：后台「站点管理」内部再分层（内容治理/用户权限/期刊发布/系统） */
+  subgroup?: string
 }
 
 export interface NavViewer {

@@ -55,6 +55,7 @@ _CATEGORY_TYPES: dict[str, tuple[str, ...]] = {
     "review": ("review.invited", "review.reminder", "review.accepted", "review.submitted"),
     "submission": ("submission.decision", "submission.resubmitted", "submission.rework_requested"),
     "feedback": ("site.feedback",),
+    "community": ("comment.new", "forum.reply"),
     "system": ("system", "gamification.role_application"),
 }
 
@@ -75,7 +76,7 @@ async def list_notifications(
     type: str | None = Query(default=None, description="精确 type 过滤"),
     category: str | None = Query(
         default=None,
-        pattern=r"^(assigned|reminder|decision|claim|review|submission|feedback|system)$",
+        pattern=r"^(assigned|reminder|decision|claim|review|submission|feedback|community|system)$",
         description="聚合分类：审稿/投稿/认领/反馈/系统",
     ),
     current_user: User = Depends(get_current_user),

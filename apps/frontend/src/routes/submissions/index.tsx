@@ -437,6 +437,33 @@ function SubmissionsPage() {
                   {statusHint(detail.status)}
                 </p>
               )}
+              {detail.similarity_score != null && detail.similarity_score >= 35 ? (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs leading-relaxed">
+                  <div className="mb-1 flex items-center gap-2 font-medium">
+                    <span>站内相似度 {detail.similarity_score.toFixed(1)} / 100</span>
+                    <Badge variant="outline">
+                      {detail.similarity_score >= 70 ? '高度重复' : '建议核对'}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground">
+                    这是与本站已发表文章、已有投稿的文本重合度，不是 CNKI / CrossCheck
+                    等外部查重库的结论。相似不等于抄袭，请核对引用与原创表述。
+                  </p>
+                  {detail.similarity_matches && detail.similarity_matches.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {detail.similarity_matches.map((m) => (
+                        <li key={`${m.kind}-${m.id}`} className="flex flex-wrap items-center gap-1">
+                          <span className="text-muted-foreground">
+                            {m.kind === 'resource' ? '已发表' : '投稿'} #{m.id}
+                          </span>
+                          <span className="min-w-0 truncate">{m.title}</span>
+                          <span className="tabular-nums text-muted-foreground">{m.score.toFixed(1)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
               <WorkflowTimeline
                 status={detail.status}
                 submittedAt={new Date(detail.submitted_at)}

@@ -996,6 +996,7 @@ export type NotificationCategory =
   | 'submission'
   | 'claim'
   | 'feedback'
+  | 'community'
   | 'system'
 
 export function useNotifications(

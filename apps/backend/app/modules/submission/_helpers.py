@@ -191,6 +191,8 @@ def _to_response(
         admin_note=entry.admin_note,
         editor_note=entry.editor_note,
         resource_id=entry.resource_id,
+        similarity_score=getattr(entry, "similarity_score", None),
+        similarity_matches=getattr(entry, "similarity_matches", None) or [],
         cover_image=entry.cover_image,
         file_path=entry.file_path,
         markdown_path=entry.markdown_path,

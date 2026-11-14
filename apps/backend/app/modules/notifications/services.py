@@ -30,6 +30,32 @@ if TYPE_CHECKING:
 
 logger = get_logger("rubbish.notifications")
 
+DEFAULT_PREFS: dict[str, bool] = {
+    # 站内：默认开——不打扰，但用户能在通知页看到。
+    "in_app_comment": True,
+    "in_app_forum": True,
+    "in_app_review": True,
+    "in_app_submission": True,
+    # 邮件：默认关——SMTP 未配置时也不假装已发；用户主动开才尝试。
+    "email_comment": False,
+    "email_forum": False,
+    "email_review": False,
+    "email_submission": False,
+}
+
+
+def merged_prefs(user: object) -> dict[str, bool]:
+    raw = getattr(user, "notification_prefs", None) or {}
+    prefs = dict(DEFAULT_PREFS)
+    for key in DEFAULT_PREFS:
+        if key in raw:
+            prefs[key] = bool(raw[key])
+    return prefs
+
+
+def wants(user: object, key: str) -> bool:
+    return bool(merged_prefs(user).get(key, False))
+
 
 async def create(
     db: AsyncSession,
@@ -123,4 +149,4 @@ async def record_email_digest(
     return record.status
 
 
-__all__ = ["create", "record_email_digest"]
+__all__ = ["DEFAULT_PREFS", "create", "merged_prefs", "record_email_digest", "wants"]

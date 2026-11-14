@@ -46,12 +46,15 @@ import { Route as AdminAnnouncementsRouteImport } from './routes/admin/announcem
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminClaimsRouteImport } from './routes/admin/claims'
 import { Route as AdminCommentsRouteImport } from './routes/admin/comments'
+import { Route as AdminForumBoardsRouteImport } from './routes/admin/forum-boards'
 import { Route as AdminIssuesRouteImport } from './routes/admin/issues'
 import { Route as AdminJournalRouteImport } from './routes/admin/journal'
 import { Route as AdminReleasesRouteImport } from './routes/admin/releases'
+import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminRoleApplicationsRouteImport } from './routes/admin/role-applications'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminShopRouteImport } from './routes/admin/shop'
+import { Route as AdminSystemHealthRouteImport } from './routes/admin/system-health'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminVolumesRouteImport } from './routes/admin/volumes'
 import { Route as ArchiveIssueRouteImport } from './routes/archive_.$issue'
@@ -263,6 +266,11 @@ const AdminCommentsRoute = AdminCommentsRouteImport.update({
   path: '/admin/comments',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminForumBoardsRoute = AdminForumBoardsRouteImport.update({
+  id: '/admin/forum-boards',
+  path: '/admin/forum-boards',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIssuesRoute = AdminIssuesRouteImport.update({
   id: '/admin/issues',
   path: '/admin/issues',
@@ -278,6 +286,11 @@ const AdminReleasesRoute = AdminReleasesRouteImport.update({
   path: '/admin/releases',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/admin/reports',
+  path: '/admin/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoleApplicationsRoute = AdminRoleApplicationsRouteImport.update({
   id: '/admin/role-applications',
   path: '/admin/role-applications',
@@ -291,6 +304,11 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
 const AdminShopRoute = AdminShopRouteImport.update({
   id: '/admin/shop',
   path: '/admin/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSystemHealthRoute = AdminSystemHealthRouteImport.update({
+  id: '/admin/system-health',
+  path: '/admin/system-health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminUsersRoute = AdminUsersRouteImport.update({
@@ -456,12 +474,15 @@ export interface FileRoutesByFullPath {
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
+  '/admin/forum-boards': typeof AdminForumBoardsRoute
   '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/shop': typeof AdminShopRoute
+  '/admin/system-health': typeof AdminSystemHealthRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive/$issue': typeof ArchiveIssueRoute
@@ -526,12 +547,15 @@ export interface FileRoutesByTo {
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
+  '/admin/forum-boards': typeof AdminForumBoardsRoute
   '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/shop': typeof AdminShopRoute
+  '/admin/system-health': typeof AdminSystemHealthRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive/$issue': typeof ArchiveIssueRoute
@@ -597,12 +621,15 @@ export interface FileRoutesById {
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
+  '/admin/forum-boards': typeof AdminForumBoardsRoute
   '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/role-applications': typeof AdminRoleApplicationsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/shop': typeof AdminShopRoute
+  '/admin/system-health': typeof AdminSystemHealthRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/volumes': typeof AdminVolumesRoute
   '/archive_/$issue': typeof ArchiveIssueRoute
@@ -669,12 +696,15 @@ export interface FileRouteTypes {
     | '/admin/audit-logs'
     | '/admin/claims'
     | '/admin/comments'
+    | '/admin/forum-boards'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
+    | '/admin/reports'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/shop'
+    | '/admin/system-health'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive/$issue'
@@ -739,12 +769,15 @@ export interface FileRouteTypes {
     | '/admin/audit-logs'
     | '/admin/claims'
     | '/admin/comments'
+    | '/admin/forum-boards'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
+    | '/admin/reports'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/shop'
+    | '/admin/system-health'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive/$issue'
@@ -809,12 +842,15 @@ export interface FileRouteTypes {
     | '/admin/audit-logs'
     | '/admin/claims'
     | '/admin/comments'
+    | '/admin/forum-boards'
     | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
+    | '/admin/reports'
     | '/admin/role-applications'
     | '/admin/settings'
     | '/admin/shop'
+    | '/admin/system-health'
     | '/admin/users'
     | '/admin/volumes'
     | '/archive_/$issue'
@@ -880,12 +916,15 @@ export interface RootRouteChildren {
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
   AdminClaimsRoute: typeof AdminClaimsRoute
   AdminCommentsRoute: typeof AdminCommentsRoute
+  AdminForumBoardsRoute: typeof AdminForumBoardsRoute
   AdminIssuesRoute: typeof AdminIssuesRouteWithChildren
   AdminJournalRoute: typeof AdminJournalRoute
   AdminReleasesRoute: typeof AdminReleasesRoute
+  AdminReportsRoute: typeof AdminReportsRoute
   AdminRoleApplicationsRoute: typeof AdminRoleApplicationsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminShopRoute: typeof AdminShopRoute
+  AdminSystemHealthRoute: typeof AdminSystemHealthRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminVolumesRoute: typeof AdminVolumesRoute
   ArchiveIssueRoute: typeof ArchiveIssueRoute
@@ -1174,6 +1213,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCommentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/forum-boards': {
+      id: '/admin/forum-boards'
+      path: '/admin/forum-boards'
+      fullPath: '/admin/forum-boards'
+      preLoaderRoute: typeof AdminForumBoardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/issues': {
       id: '/admin/issues'
       path: '/admin/issues'
@@ -1195,6 +1241,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminReleasesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/admin/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/role-applications': {
       id: '/admin/role-applications'
       path: '/admin/role-applications'
@@ -1214,6 +1267,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/shop'
       fullPath: '/admin/shop'
       preLoaderRoute: typeof AdminShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/system-health': {
+      id: '/admin/system-health'
+      path: '/admin/system-health'
+      fullPath: '/admin/system-health'
+      preLoaderRoute: typeof AdminSystemHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/users': {
@@ -1443,12 +1503,15 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAuditLogsRoute: AdminAuditLogsRoute,
   AdminClaimsRoute: AdminClaimsRoute,
   AdminCommentsRoute: AdminCommentsRoute,
+  AdminForumBoardsRoute: AdminForumBoardsRoute,
   AdminIssuesRoute: AdminIssuesRouteWithChildren,
   AdminJournalRoute: AdminJournalRoute,
   AdminReleasesRoute: AdminReleasesRoute,
+  AdminReportsRoute: AdminReportsRoute,
   AdminRoleApplicationsRoute: AdminRoleApplicationsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminShopRoute: AdminShopRoute,
+  AdminSystemHealthRoute: AdminSystemHealthRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminVolumesRoute: AdminVolumesRoute,
   ArchiveIssueRoute: ArchiveIssueRoute,

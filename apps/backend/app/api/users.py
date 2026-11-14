@@ -31,6 +31,17 @@ router = APIRouter(prefix="/users", tags=["users"])
 logger = get_logger("rubbish.users")
 
 
+class NotificationPrefsPatch(BaseModel):
+    in_app_comment: bool | None = None
+    in_app_forum: bool | None = None
+    in_app_review: bool | None = None
+    in_app_submission: bool | None = None
+    email_comment: bool | None = None
+    email_forum: bool | None = None
+    email_review: bool | None = None
+    email_submission: bool | None = None
+
+
 class ChangePasswordRequest(BaseModel):
     # Body, not query string: passwords must never appear in URLs
     old_password: str = Field(min_length=1)
@@ -134,6 +145,36 @@ async def update_me(
     resp = UserResponse.model_validate(current_user)
     resp.roles = await user_role_names(db, current_user)
     return resp
+
+
+@router.get("/me/notification-preferences")
+async def get_notification_preferences(
+    current_user: User = Depends(get_current_user),
+) -> dict[str, bool]:
+    """当前用户的通知偏好（缺省值与用户显式设置合并后返回）。"""
+    from app.modules.notifications.services import merged_prefs
+
+    return merged_prefs(current_user)
+
+
+@router.patch("/me/notification-preferences")
+async def update_notification_preferences(
+    payload: NotificationPrefsPatch,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    """只写入用户显式提交的键；其余保持默认或原值。"""
+    from app.modules.notifications.services import merged_prefs
+
+    current = merged_prefs(current_user)
+    for key in payload.model_fields_set:
+        value = getattr(payload, key)
+        if value is not None:
+            current[key] = bool(value)
+    current_user.notification_prefs = current
+    await db.commit()
+    await db.refresh(current_user)
+    return merged_prefs(current_user)
 
 
 @router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)

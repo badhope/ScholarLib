@@ -30,6 +30,7 @@ from app.api.deps import (
     user_has_role,
 )
 from app.core.db import get_db
+from app.core.moderation import rejection_detail
 from app.core.storage import get_storage
 from app.models import Role, User, UserRole
 from app.modules.notifications import services as notifications
@@ -53,6 +54,7 @@ from app.modules.submission.schemas import (
     SubmissionVersionListResponse,
     SubmissionVersionResponse,
 )
+from app.modules.submission.similarity import check_against_site
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
@@ -92,6 +94,15 @@ async def create_submission(
                 "message": "投稿前请先阅读并确认《Rubbish 投稿与编辑规范》。",
             },
         )
+    blocked = rejection_detail(f"{body.title}\n{body.abstract}")
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked)
+    similarity_score, similarity_matches = await check_against_site(
+        db,
+        current_user.tenant_id,
+        title=body.title,
+        abstract=body.abstract,
+    )
     submission = Submission(
         tenant_id=current_user.tenant_id,
         submitted_by=current_user.id,
@@ -115,6 +126,8 @@ async def create_submission(
         external_url=str(body.external_url) if body.external_url else None,
         doi=body.doi,
         corresponding_author_email=body.corresponding_author_email,
+        similarity_score=similarity_score,
+        similarity_matches=similarity_matches,
     )
     db.add(submission)
     await db.flush()  # 拿到 submission.id 供 v1 快照引用

@@ -447,6 +447,10 @@ export interface ResourceListParams {
   genre?: 'joke' | 'fiction' | 'review' | 'guide' | 'essay' | 'poetry' | 'rant'
   discipline?: string
   year?: number
+  year_from?: number
+  year_to?: number
+  author?: string
+  doi?: string
   volume?: string
   issue?: string
   section?: string
@@ -559,6 +563,9 @@ export interface SubmissionResponse {
   /** 关联目录条目的刊出状态（published/draft/in_review）；无关联时为 null。前端据此区分「已发表」与「刊前预览」 */
   resource_publication_status?: string | null
   resource_id?: number | null
+  /** 站内相似度（0–100）；不是外部查重库结论 */
+  similarity_score?: number | null
+  similarity_matches?: Array<{ kind: 'resource' | 'submission'; id: number; title: string; score: number }>
   file_path?: string | null
   /**
    * 双盲评审下编辑提供给审稿人的匿名稿外链。

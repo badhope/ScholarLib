@@ -21,7 +21,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -33,10 +33,11 @@ from app.api.deps import (
     user_has_role,
 )
 from app.core.db import get_db, paginate
+from app.core.moderation import rejection_detail
 from app.core.storage import get_storage
 from app.core.time import utcnow
 from app.models import AuditLog, User
-from app.modules.forum.models import ForumReaction, ForumReply, ForumReport, ForumTopic
+from app.modules.forum.models import ForumBoard, ForumReaction, ForumReply, ForumReport, ForumTopic
 
 router = APIRouter(prefix="/forum", tags=["forum"])
 
@@ -155,6 +156,9 @@ class TopicCreate(BaseModel):
     title: str = Field(min_length=2, max_length=200)
     body: str = Field(min_length=2, max_length=20000)
     category: ForumCategory = "paper"
+    # 树形版块：新客户端传 board_id；旧客户端只传 category 仍然兼容。
+    board_id: int | None = Field(default=None, ge=1)
+    board_slug: str | None = Field(default=None, max_length=40)
     paper_id: int | None = Field(default=None, ge=1)
 
 
@@ -180,6 +184,10 @@ class TopicOut(BaseModel):
     title: str
     body: str
     category: str
+    board_id: int | None = None
+    board_slug: str | None = None
+    board_name: str | None = None
+    board_path: str | None = None
     is_pinned: bool
     is_locked: bool
     reply_count: int
@@ -274,17 +282,48 @@ async def _reaction_summary(
     return counts, viewers
 
 
+async def _board_index(db: AsyncSession, tenant_id) -> dict[int, ForumBoard]:
+    """当前租户全部版块，供列表页一次解析名称/路径，避免 N+1。"""
+    rows = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
+                ForumBoard.sort_order, ForumBoard.id
+            )
+        )
+    ).scalars().all()
+    return {b.id: b for b in rows}
+
+
+def _board_path(board: ForumBoard | None, index: dict[int, ForumBoard]) -> str | None:
+    if board is None:
+        return None
+    names: list[str] = []
+    seen: set[int] = set()
+    cursor: ForumBoard | None = board
+    while cursor is not None and cursor.id not in seen:
+        seen.add(cursor.id)
+        names.append(cursor.name)
+        cursor = index.get(cursor.parent_id) if cursor.parent_id else None
+    return " / ".join(reversed(names))
+
+
 def _topic_out(
     t: ForumTopic,
     authors: dict[int, AuthorBrief],
     reactions: dict[str, int] | None = None,
     viewer_reactions: list[str] | None = None,
+    boards: dict[int, ForumBoard] | None = None,
 ) -> TopicOut:
+    board = boards.get(t.board_id) if boards and t.board_id else None
     return TopicOut(
         id=t.id,
         title=t.title,
         body=t.body,
         category=t.category,
+        board_id=t.board_id,
+        board_slug=board.slug if board else None,
+        board_name=board.name if board else None,
+        board_path=_board_path(board, boards or {}),
         is_pinned=t.is_pinned,
         is_locked=t.is_locked,
         reply_count=t.reply_count,
@@ -315,11 +354,62 @@ def _reply_out(
     )
 
 
+def _subtree_ids(
+    boards: list[ForumBoard], root: ForumBoard
+) -> set[int]:
+    """父板块筛选时把全部子板块一起带上；3 层也只需一次内存遍历。"""
+    children: dict[int, list[ForumBoard]] = {}
+    for b in boards:
+        if b.parent_id is not None:
+            children.setdefault(b.parent_id, []).append(b)
+    ids: set[int] = set()
+    stack = [root]
+    while stack:
+        cur = stack.pop()
+        if cur.id in ids:
+            continue
+        ids.add(cur.id)
+        stack.extend(children.get(cur.id, []))
+    return ids
+
+
+def _ancestor_ids(boards: list[ForumBoard], board: ForumBoard) -> set[int]:
+    index = {b.id: b for b in boards}
+    ids: set[int] = set()
+    cur: ForumBoard | None = board
+    while cur is not None and cur.id not in ids:
+        ids.add(cur.id)
+        cur = index.get(cur.parent_id) if cur.parent_id else None
+    return ids
+
+
+async def _resolve_board(
+    db: AsyncSession,
+    tenant_id,
+    *,
+    board_id: int | None = None,
+    board_slug: str | None = None,
+) -> ForumBoard | None:
+    stmt = select(ForumBoard).where(ForumBoard.tenant_id == tenant_id)
+    if board_id is not None:
+        stmt = stmt.where(ForumBoard.id == board_id)
+    elif board_slug is not None:
+        stmt = stmt.where(ForumBoard.slug == board_slug)
+    else:
+        return None
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 @router.get("/topics", response_model=TopicListOut)
 async def list_topics(
     category: str | None = Query(
         default=None,
         pattern=r"^(paper|method|life|collab|meta|notice|discussion|question|suggestion)$",
+    ),
+    board: str | None = Query(
+        default=None,
+        pattern=r"^[a-z0-9-]{2,40}$",
+        description="树形版块 slug；父板块会聚合全部子板块",
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -329,13 +419,48 @@ async def list_topics(
 ) -> TopicListOut:
     """帖子列表：置顶优先。latest 按最近活跃，hot 按回复数再按活跃。"""
     tenant_id = require_tenant_id()
+    all_boards = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
+                ForumBoard.sort_order, ForumBoard.id
+            )
+        )
+    ).scalars().all()
     stmt = select(ForumTopic).where(
         ForumTopic.tenant_id == tenant_id,
         ForumTopic.deleted_at.is_(None),
     )
-    if category:
-        board = CATEGORY_BOARD.get(category, (category,))
-        stmt = stmt.where(ForumTopic.category.in_(board))
+    # board 优先；旧 category 仍可用。父板块筛选包含全部后代。
+    selected_slugs: set[str] = set()
+    selected_ids: set[int] = set()
+    if board:
+        root = next((b for b in all_boards if b.slug == board), None)
+        if root is None:
+            return TopicListOut(data=[], meta={"total": 0, "page": page, "page_size": page_size, "total_pages": 0})
+        subtree = _subtree_ids(list(all_boards), root)
+        selected_ids = subtree
+        selected_slugs = {b.slug for b in all_boards if b.id in subtree}
+    elif category:
+        # 旧分类别名映射到新版块，再带上子板块
+        slug = next((b for b in all_boards if b.slug == category), None)
+        if slug is None:
+            slug = next((b for b in all_boards if b.slug == next(
+                (k for k, v in CATEGORY_BOARD.items() if category in v), category
+            )), None)
+        if slug is not None:
+            subtree = _subtree_ids(list(all_boards), slug)
+            selected_ids = subtree
+            selected_slugs = {b.slug for b in all_boards if b.id in subtree}
+        else:
+            selected_slugs = {category}
+
+    if selected_ids or selected_slugs:
+        clauses = []
+        if selected_ids:
+            clauses.append(ForumTopic.board_id.in_(selected_ids))
+        if selected_slugs:
+            clauses.append(ForumTopic.category.in_(selected_slugs))
+        stmt = stmt.where(or_(*clauses))
     if paper_id is not None:
         stmt = stmt.where(ForumTopic.paper_id == paper_id)
     rows, meta = await paginate(
@@ -343,8 +468,6 @@ async def list_topics(
         stmt,
         page=page,
         page_size=page_size,
-        # 置顶优先：desc(True) > desc(False)。hot 用回复数做热度信号，
-        # 不引入浏览数/时间衰减——小型学术社区不需要黑箱热榜。
         order_by=(
             (
                 desc(ForumTopic.is_pinned),
@@ -360,8 +483,9 @@ async def list_topics(
         ),
     )
     authors = await _author_map(db, {r.author_id for r in rows})
+    boards = {b.id: b for b in all_boards}
     return TopicListOut(
-        data=[_topic_out(r, authors) for r in rows],
+        data=[_topic_out(r, authors, boards=boards) for r in rows],
         meta={
             "total": meta.total,
             "page": meta.page,
@@ -373,15 +497,24 @@ async def list_topics(
 
 @router.get("/boards")
 async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
-    """五个版块的帖子数与最近活跃时间。
+    """树形版块及帖子数。
 
-    冷启动阶段版块卡片如果只写定位、不写“有多少人在聊”，社区会显得空。
-    这里按版块聚合（旧分类按 CATEGORY_BOARD 归并），一次返回五条。
+    ``data`` 保留旧的扁平结构（category = slug，兼容旧前端/测试），
+    ``tree`` 给新前台按「父板块 → 子板块 → 子子板块」渲染。
+    父板块的 ``total_topics`` 是整棵子树的合计。
     """
     tenant_id = require_tenant_id()
-    rows = (
+    boards = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
+                ForumBoard.sort_order, ForumBoard.id
+            )
+        )
+    ).scalars().all()
+    raw_counts = (
         await db.execute(
             select(
+                ForumTopic.board_id,
                 ForumTopic.category,
                 func.count(ForumTopic.id),
                 func.max(func.coalesce(ForumTopic.last_reply_at, ForumTopic.created_at)),
@@ -390,25 +523,61 @@ async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
                 ForumTopic.tenant_id == tenant_id,
                 ForumTopic.deleted_at.is_(None),
             )
-            .group_by(ForumTopic.category)
+            .group_by(ForumTopic.board_id, ForumTopic.category)
         )
     ).all()
-    buckets: dict[str, dict[str, object]] = {
-        b: {"category": b, "topics": 0, "last_active": None}
-        for b in ("paper", "method", "life", "collab", "meta")
+    direct: dict[int, dict[str, object]] = {
+        b.id: {"topics": 0, "last_active": None} for b in boards
     }
-    for raw, count, last in rows:
-        board = next((b for b, raws in CATEGORY_BOARD.items() if raw in raws), raw)
-        if board not in buckets:
+    legacy_slugs = {b.slug for b in boards}
+    for board_id, category, count, last in raw_counts:
+        target = board_id if board_id in direct else None
+        if target is None and category in legacy_slugs:
+            target = next((b.id for b in boards if b.slug == category), None)
+        if target is None:
             continue
-        buckets[board]["topics"] = int(str(buckets[board]["topics"])) + int(str(count))
-        current = buckets[board]["last_active"]
+        direct[target]["topics"] = int(str(direct[target]["topics"])) + int(str(count))
+        current = direct[target]["last_active"]
         if last is not None and (current is None or last > current):
-            buckets[board]["last_active"] = last
-    for b in buckets.values():
-        if b["last_active"] is not None:
-            b["last_active"] = b["last_active"].isoformat()  # type: ignore[union-attr]
-    return {"data": list(buckets.values())}
+            direct[target]["last_active"] = last
+
+    flat: list[dict[str, object]] = []
+    for b in boards:
+        row = {
+            "id": b.id,
+            "parent_id": b.parent_id,
+            "slug": b.slug,
+            "category": b.slug,
+            "name": b.name,
+            "description": b.description,
+            "sort_order": b.sort_order,
+            "is_active": b.is_active,
+            "topics": direct[b.id]["topics"],
+            "last_active": direct[b.id]["last_active"],
+        }
+        if row["last_active"] is not None:
+            row["last_active"] = row["last_active"].isoformat()  # type: ignore[union-attr]
+        flat.append(row)
+
+    by_parent: dict[int | None, list[dict[str, object]]] = {}
+    for row in flat:
+        by_parent.setdefault(row["parent_id"], []).append(row)
+
+    def build(parent_id: int | None) -> list[dict[str, object]]:
+        nodes: list[dict[str, object]] = []
+        for row in by_parent.get(parent_id, []):
+            children = build(row["id"])  # type: ignore[arg-type]
+            own = int(str(row["topics"]))
+            total = own + sum(int(str(c["total_topics"])) for c in children)
+            node = dict(row)
+            node["total_topics"] = total
+            node["children"] = children
+            last_values = [row["last_active"]] + [c["last_active"] for c in children]
+            node["last_active"] = max([v for v in last_values if v], default=None)
+            nodes.append(node)
+        return nodes
+
+    return {"data": flat, "tree": build(None), "total": len(flat)}
 
 
 @router.get("/topics/{topic_id}", response_model=TopicOut)
@@ -436,7 +605,8 @@ async def get_topic(
         target_ids=[topic.id],
         viewer_id=current_user.id if current_user else None,
     )
-    return _topic_out(topic, authors, counts.get(topic.id), viewers.get(topic.id))
+    boards = await _board_index(db, tenant_id)
+    return _topic_out(topic, authors, counts.get(topic.id), viewers.get(topic.id), boards)
 
 
 @router.get("/topics/{topic_id}/replies", response_model=list[ReplyOut])
@@ -480,9 +650,20 @@ async def create_topic(
     db: AsyncSession = Depends(get_db),
 ) -> TopicOut:
     """发帖。登录即可，不设积分门槛。"""
+    blocked = rejection_detail(f"{payload.title}\n{payload.body}")
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked)
     tenant_id = require_tenant_id()
+    board = await _resolve_board(
+        db, tenant_id, board_id=payload.board_id, board_slug=payload.board_slug
+    )
+    if (payload.board_id is not None or payload.board_slug is not None) and board is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="版块不存在")
+    if board is not None and not board.is_active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="版块已关闭")
+    category = board.slug if board is not None else payload.category
     # 公告类帖子只允许编辑/管理员发——否则任何人都能伪装成官方公告
-    if payload.category == "notice":
+    if category == "notice" or (board is not None and board.slug == "meta"):
         allowed = current_user.is_admin or await user_has_role(db, current_user, ROLE_EDITOR)
         if not allowed:
             raise HTTPException(
@@ -494,7 +675,8 @@ async def create_topic(
         author_id=current_user.id,
         title=payload.title.strip(),
         body=payload.body.strip(),
-        category=payload.category,
+        category=category,
+        board_id=board.id if board is not None else None,
         paper_id=payload.paper_id,
     )
     db.add(topic)
@@ -520,7 +702,8 @@ async def create_topic(
         )
     except Exception:
         await db.rollback()
-    return _topic_out(topic, {author.id: author})
+    boards = await _board_index(db, tenant_id)
+    return _topic_out(topic, {author.id: author}, boards=boards)
 
 
 @router.post(
@@ -548,6 +731,9 @@ async def create_reply(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topic not found")
     if topic.is_locked:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该帖已锁定，无法回复")
+    blocked = rejection_detail(payload.body)
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked)
 
     parent_id = payload.parent_id
     if parent_id is not None:
@@ -583,6 +769,39 @@ async def create_reply(
     # 反冗余计数与最近活跃时间在同一事务里更新
     topic.reply_count += 1
     topic.last_reply_at = utcnow()
+    await db.flush()
+    # 回帖通知主题作者；自己回自己不通知。
+    if topic.author_id != current_user.id:
+        from app.modules.notifications import services as notifications
+
+        author_user = (
+            await db.execute(select(User).where(User.id == topic.author_id))
+        ).scalar_one_or_none()
+        if author_user is not None:
+            prefs = notifications.merged_prefs(author_user)
+            if prefs.get("in_app_forum"):
+                await notifications.create(
+                    db,
+                    tenant_id=tenant_id,
+                    user_id=author_user.id,
+                    type_="forum.reply",
+                    title=f"你的帖子「{topic.title[:80]}」有新回复",
+                    body=f"{current_user.display_name or current_user.username}：{payload.body.strip()[:120]}",
+                    related_type="forum_topic",
+                    related_id=str(topic.id),
+                )
+            if prefs.get("email_forum") and author_user.email:
+                await notifications.record_email_digest(
+                    db,
+                    tenant_id=tenant_id,
+                    user_id=author_user.id,
+                    event_type="forum.reply",
+                    recipient_email=author_user.email,
+                    subject=f"Rubbish：{topic.title[:80]} 有新回复",
+                    text=f"{current_user.display_name or current_user.username} 回复了你的帖子：\n\n{payload.body.strip()[:500]}",
+                    related_type="forum_topic",
+                    related_id=str(topic.id),
+                )
     await db.commit()
     await db.refresh(reply)
     # 回帖按后台规则（默认 0 R 币，防止灌水）；失败不影响回帖本身。
@@ -652,7 +871,8 @@ async def moderate_topic(
     await db.commit()
     await db.refresh(topic)
     authors = await _author_map(db, {topic.author_id})
-    return _topic_out(topic, authors)
+    boards = await _board_index(db, tenant_id)
+    return _topic_out(topic, authors, boards=boards)
 
 
 @router.delete("/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -804,6 +1024,10 @@ class ReportOut(BaseModel):
     reason: str
     status: str
     created_at: datetime
+    resolved_at: datetime | None = None
+    target_type: str | None = None
+    target_excerpt: str | None = None
+    target_author: AuthorBrief | None = None
     reporter: AuthorBrief | None = None
 
 
@@ -877,6 +1101,8 @@ async def create_report(
             reason=existing.reason,
             status=existing.status,
             created_at=existing.created_at,
+            resolved_at=existing.resolved_at,
+            target_type="reply" if existing.reply_id else "topic",
             reporter=authors.get(current_user.id),
         )
 
@@ -898,6 +1124,8 @@ async def create_report(
         reason=report.reason,
         status=report.status,
         created_at=report.created_at,
+        resolved_at=report.resolved_at,
+        target_type="reply" if report.reply_id else "topic",
         reporter=authors.get(current_user.id),
     )
 
@@ -915,16 +1143,435 @@ async def list_reports(
         stmt = stmt.where(ForumReport.status == status_filter)
     stmt = stmt.order_by(ForumReport.created_at.desc()).limit(200)
     rows = (await db.execute(stmt)).scalars().all()
-    authors = await _author_map(db, {r.reporter_id for r in rows})
-    return [
-        ReportOut(
-            id=r.id,
-            topic_id=r.topic_id,
-            reply_id=r.reply_id,
-            reason=r.reason,
-            status=r.status,
-            created_at=r.created_at,
-            reporter=authors.get(r.reporter_id),
+    topic_ids = {r.topic_id for r in rows if r.topic_id}
+    reply_ids = {r.reply_id for r in rows if r.reply_id}
+    topics = {
+        t.id: t
+        for t in (
+            await db.execute(select(ForumTopic).where(ForumTopic.id.in_(topic_ids)))
+        ).scalars().all()
+    } if topic_ids else {}
+    replies = {
+        r.id: r
+        for r in (
+            await db.execute(select(ForumReply).where(ForumReply.id.in_(reply_ids)))
+        ).scalars().all()
+    } if reply_ids else {}
+    target_author_ids = {
+        *(t.author_id for t in topics.values()),
+        *(r.author_id for r in replies.values()),
+    }
+    authors = await _author_map(db, {r.reporter_id for r in rows} | target_author_ids)
+    out: list[ReportOut] = []
+    for r in rows:
+        topic = topics.get(r.topic_id) if r.topic_id else None
+        reply = replies.get(r.reply_id) if r.reply_id else None
+        target = topic or reply
+        excerpt = None
+        if topic is not None:
+            excerpt = f"{topic.title} · {topic.body[:120]}"
+        elif reply is not None:
+            excerpt = reply.body[:140]
+        out.append(
+            ReportOut(
+                id=r.id,
+                topic_id=r.topic_id,
+                reply_id=r.reply_id,
+                reason=r.reason,
+                status=r.status,
+                created_at=r.created_at,
+                resolved_at=r.resolved_at,
+                target_type="reply" if reply is not None else "topic",
+                target_excerpt=excerpt,
+                target_author=authors.get(target.author_id) if target is not None else None,
+                reporter=authors.get(r.reporter_id),
+            )
         )
-        for r in rows
-    ]
+    return out
+
+
+class ReportAction(BaseModel):
+    action: Literal["dismiss", "remove_content", "suspend_author"]
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.patch("/reports/{report_id}", response_model=ReportOut)
+async def handle_report(
+    report_id: int,
+    payload: ReportAction,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> ReportOut:
+    """举报处置：驳回 / 移除内容 / 暂停作者账号。
+
+    - dismiss：举报不成立，标记 rejected，不动内容；
+    - remove_content：软删被举报帖子或回复，标记 resolved；
+    - suspend_author：停用被举报内容作者（token_version+1，立即踢下线），
+      并移除内容。处罚本身写 AuditLog，后台可追溯。
+    """
+    tenant_id = require_tenant_id()
+    report = (
+        await db.execute(
+            select(ForumReport).where(
+                ForumReport.id == report_id, ForumReport.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise HTTPException(status_code=404, detail="举报不存在")
+    if report.status != "open":
+        raise HTTPException(status_code=409, detail="该举报已处理")
+
+    topic = None
+    reply = None
+    if report.topic_id:
+        topic = (
+            await db.execute(
+                select(ForumTopic).where(
+                    ForumTopic.id == report.topic_id, ForumTopic.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+    if report.reply_id:
+        reply = (
+            await db.execute(
+                select(ForumReply).where(
+                    ForumReply.id == report.reply_id, ForumReply.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+    target = topic or reply
+    if target is None:
+        raise HTTPException(status_code=404, detail="被举报内容已被删除")
+
+    now = utcnow()
+    action = payload.action
+    if action == "dismiss":
+        report.status = "rejected"
+        report.resolved_at = now
+    else:
+        if topic is not None:
+            topic.deleted_at = now
+        if reply is not None:
+            reply.deleted_at = now
+        report.status = "resolved"
+        report.resolved_at = now
+    if action == "suspend_author":
+        author = (
+            await db.execute(select(User).where(User.id == target.author_id))
+        ).scalar_one_or_none()
+        if author is not None and author.id != current_user.id:
+            author.is_active = False
+            author.token_version = (author.token_version or 0) + 1
+            db.add(
+                AuditLog(
+                    tenant_id=tenant_id,
+                    actor_user_id=current_user.id,
+                    action="forum.report.suspend_author",
+                    target_type="user",
+                    target_id=str(author.id),
+                    payload={"report_id": report.id, "note": payload.note},
+                )
+            )
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action=f"forum.report.{action}",
+            target_type="forum_report",
+            target_id=str(report.id),
+            payload={
+                "topic_id": report.topic_id,
+                "reply_id": report.reply_id,
+                "note": payload.note,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(report)
+    authors = await _author_map(db, {report.reporter_id, target.author_id})
+    excerpt = (
+        f"{topic.title} · {topic.body[:120]}" if topic is not None else (reply.body[:140] if reply is not None else None)
+    )
+    return ReportOut(
+        id=report.id,
+        topic_id=report.topic_id,
+        reply_id=report.reply_id,
+        reason=report.reason,
+        status=report.status,
+        created_at=report.created_at,
+        resolved_at=report.resolved_at,
+        target_type="reply" if reply is not None else "topic",
+        target_excerpt=excerpt,
+        target_author=authors.get(target.author_id),
+        reporter=authors.get(report.reporter_id),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 版块管理（管理员）
+# ---------------------------------------------------------------------------
+
+_BOARD_SLUG = re.compile(r"^[a-z0-9-]{2,40}$")
+
+
+class BoardCreate(BaseModel):
+    parent_id: int | None = Field(default=None, ge=1)
+    slug: str = Field(min_length=2, max_length=40)
+    name: str = Field(min_length=1, max_length=60)
+    description: str | None = Field(default=None, max_length=200)
+    sort_order: int = Field(default=0, ge=0, le=9999)
+    is_active: bool = True
+
+
+class BoardUpdate(BaseModel):
+    parent_id: int | None = Field(default=None, ge=1)
+    slug: str | None = Field(default=None, min_length=2, max_length=40)
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    description: str | None = Field(default=None, max_length=200)
+    sort_order: int | None = Field(default=None, ge=0, le=9999)
+    is_active: bool | None = None
+
+
+@router.get("/admin/boards")
+async def admin_list_boards(
+    db: AsyncSession = Depends(get_db),
+    _admin: User = Depends(require_admin),
+) -> dict[str, object]:
+    """管理员版块列表（含停用项，方便恢复）。"""
+    tenant_id = require_tenant_id()
+    rows = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
+                ForumBoard.sort_order, ForumBoard.id
+            )
+        )
+    ).scalars().all()
+    return {
+        "data": [
+            {
+                "id": b.id,
+                "parent_id": b.parent_id,
+                "slug": b.slug,
+                "name": b.name,
+                "description": b.description,
+                "sort_order": b.sort_order,
+                "is_active": b.is_active,
+            }
+            for b in rows
+        ]
+    }
+
+
+@router.post("/admin/boards", status_code=status.HTTP_201_CREATED)
+async def create_board(
+    payload: BoardCreate,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    tenant_id = require_tenant_id()
+    slug = payload.slug.strip().lower()
+    if not _BOARD_SLUG.match(slug):
+        raise HTTPException(status_code=422, detail="slug 只能是小写字母、数字、连字符（2-40 位）")
+    if payload.parent_id is not None:
+        parent = (
+            await db.execute(
+                select(ForumBoard).where(
+                    ForumBoard.id == payload.parent_id, ForumBoard.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise HTTPException(status_code=404, detail="父版块不存在")
+    exists = (
+        await db.execute(
+            select(ForumBoard.id).where(
+                ForumBoard.tenant_id == tenant_id, ForumBoard.slug == slug
+            )
+        )
+    ).scalar_one_or_none()
+    if exists is not None:
+        raise HTTPException(status_code=409, detail="slug 已存在")
+    board = ForumBoard(
+        tenant_id=tenant_id,
+        parent_id=payload.parent_id,
+        slug=slug,
+        name=payload.name.strip(),
+        description=(payload.description or "").strip() or None,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.add(board)
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action="forum.board.create",
+            target_type="forum_board",
+            target_id=slug,
+            payload={"name": board.name, "parent_id": payload.parent_id},
+        )
+    )
+    await db.commit()
+    await db.refresh(board)
+    return {
+        "id": board.id,
+        "parent_id": board.parent_id,
+        "slug": board.slug,
+        "name": board.name,
+        "description": board.description,
+        "sort_order": board.sort_order,
+        "is_active": board.is_active,
+    }
+
+
+@router.patch("/admin/boards/{board_id}")
+async def update_board(
+    board_id: int,
+    payload: BoardUpdate,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    tenant_id = require_tenant_id()
+    board = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.id == board_id, ForumBoard.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if board is None:
+        raise HTTPException(status_code=404, detail="版块不存在")
+    before = {
+        "parent_id": board.parent_id,
+        "slug": board.slug,
+        "name": board.name,
+        "description": board.description,
+        "sort_order": board.sort_order,
+        "is_active": board.is_active,
+    }
+    if payload.parent_id is not None:
+        if payload.parent_id == board.id:
+            raise HTTPException(status_code=422, detail="版块不能挂到自己下面")
+        parent = (
+            await db.execute(
+                select(ForumBoard).where(
+                    ForumBoard.id == payload.parent_id, ForumBoard.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise HTTPException(status_code=404, detail="父版块不存在")
+        # 防环：父链上不能出现自己
+        cursor: ForumBoard | None = parent
+        seen: set[int] = set()
+        while cursor is not None and cursor.id not in seen:
+            if cursor.id == board.id:
+                raise HTTPException(status_code=422, detail="父版块会形成循环")
+            seen.add(cursor.id)
+            cursor = (
+                await db.execute(
+                    select(ForumBoard).where(
+                        ForumBoard.id == cursor.parent_id,
+                        ForumBoard.tenant_id == tenant_id,
+                    )
+                )
+            ).scalar_one_or_none() if cursor.parent_id else None
+        board.parent_id = payload.parent_id
+    if payload.name is not None:
+        board.name = payload.name.strip()
+    if payload.description is not None:
+        board.description = payload.description.strip() or None
+    if payload.sort_order is not None:
+        board.sort_order = payload.sort_order
+    if payload.is_active is not None:
+        board.is_active = payload.is_active
+    if payload.slug is not None:
+        slug = payload.slug.strip().lower()
+        if not _BOARD_SLUG.match(slug):
+            raise HTTPException(status_code=422, detail="slug 只能是小写字母、数字、连字符（2-40 位）")
+        if slug != board.slug:
+            exists = (
+                await db.execute(
+                    select(ForumBoard.id).where(
+                        ForumBoard.tenant_id == tenant_id, ForumBoard.slug == slug
+                    )
+                )
+            ).scalar_one_or_none()
+            if exists is not None:
+                raise HTTPException(status_code=409, detail="slug 已存在")
+            board.slug = slug
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action="forum.board.update",
+            target_type="forum_board",
+            target_id=str(board.id),
+            payload={"before": before, "after": {
+                "parent_id": board.parent_id,
+                "slug": board.slug,
+                "name": board.name,
+                "description": board.description,
+                "sort_order": board.sort_order,
+                "is_active": board.is_active,
+            }},
+        )
+    )
+    await db.commit()
+    await db.refresh(board)
+    return {
+        "id": board.id,
+        "parent_id": board.parent_id,
+        "slug": board.slug,
+        "name": board.name,
+        "description": board.description,
+        "sort_order": board.sort_order,
+        "is_active": board.is_active,
+    }
+
+
+@router.delete("/admin/boards/{board_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_board(
+    board_id: int,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """删除空版块；有子版块或帖子时拒绝，避免帖子失去归属。"""
+    tenant_id = require_tenant_id()
+    board = (
+        await db.execute(
+            select(ForumBoard).where(ForumBoard.id == board_id, ForumBoard.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if board is None:
+        raise HTTPException(status_code=404, detail="版块不存在")
+    child_count = (
+        await db.execute(
+            select(func.count(ForumBoard.id)).where(
+                ForumBoard.tenant_id == tenant_id, ForumBoard.parent_id == board.id
+            )
+        )
+    ).scalar_one()
+    topic_count = (
+        await db.execute(
+            select(func.count(ForumTopic.id)).where(
+                ForumTopic.tenant_id == tenant_id, ForumTopic.board_id == board.id
+            )
+        )
+    ).scalar_one()
+    if child_count or topic_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"版块下还有 {int(child_count)} 个子版块、{int(topic_count)} 个帖子，不能直接删除",
+        )
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action="forum.board.delete",
+            target_type="forum_board",
+            target_id=str(board.id),
+            payload={"slug": board.slug, "name": board.name},
+        )
+    )
+    await db.delete(board)
+    await db.commit()

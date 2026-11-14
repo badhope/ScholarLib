@@ -45,6 +45,10 @@ interface ForumTopic {
   title: string
   body: string
   category: string
+  board_id: number | null
+  board_slug: string | null
+  board_name: string | null
+  board_path: string | null
   is_pinned: boolean
   is_locked: boolean
   reply_count: number
@@ -366,7 +370,10 @@ function ForumTopicPage() {
                 置顶
               </Badge>
             )}
-            <Badge variant="outline">{CATEGORY_LABEL[topic.category] ?? topic.category}</Badge>
+            <Badge variant="outline">{topic.board_name ?? CATEGORY_LABEL[topic.category] ?? topic.category}</Badge>
+            {topic.board_path ? (
+              <span className="text-[11px] text-muted-foreground">{topic.board_path}</span>
+            ) : null}
             {topic.is_locked && (
               <Badge variant="secondary" className="gap-1">
                 <Lock className="h-3 w-3" />

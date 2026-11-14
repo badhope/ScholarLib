@@ -24,6 +24,37 @@ from app.core.time import utcnow
 from app.models import Base, TenantScopedMixin
 
 
+class ForumBoard(Base, TenantScopedMixin):
+    """树形版块。parent_id 为空是父板块，非空是子板块/子子板块。
+
+    版块是运营配置而不是枚举：新增叶子版块不用改代码、不用迁移。
+    ``slug`` 在租户内唯一，是 URL 与旧 ``category`` 的稳定锚点。
+    """
+
+    __tablename__ = "forum_boards"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("forum_boards.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    slug: Mapped[str] = mapped_column(String(40), nullable=False)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "slug", name="uq_forum_boards_tenant_slug"),
+        Index("ix_forum_boards_tenant_parent_sort", "tenant_id", "parent_id", "sort_order"),
+    )
+
+
 class ForumTopic(Base, TenantScopedMixin):
     """一个讨论帖。"""
 
@@ -35,8 +66,16 @@ class ForumTopic(Base, TenantScopedMixin):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # 新树形版块。为空时回退到旧 category（兼容存量帖与旧客户端）。
+    board_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("forum_boards.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # 版块：论文沙龙 / 方法与写作 / 学术生存 / 组队招募 / 站务公告。
     # notice 是「站务公告」下的官方公告子类，只有编辑与管理员能发。
+    # 保留旧字段作为兼容别名；新帖同时写入 board.slug。
     category: Mapped[str] = mapped_column(String(20), nullable=False, default="paper")
     # 关联论文（可选）：从论文详情页发起的讨论带上资源 id，
     # 论文页据此显示"讨论 N"；普通帖子保持 NULL。

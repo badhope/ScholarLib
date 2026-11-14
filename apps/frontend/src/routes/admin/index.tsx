@@ -5,6 +5,8 @@ import {
   ClipboardCheck,
   FileSignature,
   Gavel,
+  Flag,
+  Activity,
   Layers,
   Megaphone,
   MessageSquare,
@@ -43,11 +45,14 @@ const WORKFLOWS: { title: string; desc: string; to: string; icon: typeof Gavel }
     { title: '发布门禁', desc: '检查 · Manifest · 发布/排期', to: '/admin/releases', icon: Rocket },
     { title: '卷管理', desc: '卷结构与覆盖范围', to: '/admin/volumes', icon: Layers },
     { title: '公告管理', desc: '首屏公告板', to: '/admin/announcements', icon: Megaphone },
+    { title: '社区版块', desc: '三级树 · 停用 · 排序', to: '/admin/forum-boards', icon: Layers },
   ],
   [
     { title: '用户管理', desc: '角色 · 状态 · 检索', to: '/admin/users', icon: Users },
     { title: '评论审核', desc: '待审 · 通过 · 拒绝', to: '/admin/comments', icon: MessageSquare },
     { title: '角色申请', desc: '审稿人/编辑申请审批', to: '/admin/role-applications', icon: ClipboardCheck },
+    { title: '举报处置', desc: '驳回 · 删内容 · 停用作者', to: '/admin/reports', icon: Flag },
+    { title: '系统健康', desc: '数据库 · 迁移 · 磁盘 · 积压', to: '/admin/system-health', icon: Activity },
     { title: '审计日志', desc: '全站敏感操作留痕', to: '/admin/audit-logs', icon: ShieldCheck },
   ],
 ]

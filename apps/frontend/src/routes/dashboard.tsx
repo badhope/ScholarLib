@@ -55,6 +55,15 @@ interface StatCard {
   icon: LucideIcon
 }
 
+function SectionHeading({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="mt-8 mb-3">
+      <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  )
+}
+
 function greeting(): string {
   const h = new Date().getHours()
   if (h < 6) return '夜深了'
@@ -282,11 +291,14 @@ function DashboardPage() {
         }
       />
 
+      <SectionHeading title="今日与成长" hint="签到、等级进度与连续阅读，先看今天要做什么。" />
       <CheckinBanner />
 
       <div className="mt-3">
         <BadgeProgressStrip />
       </div>
+
+      <SectionHeading title="阅读与发现" hint="继续上次的阅读，或从推荐里找下一篇。" />
       <div className="mt-3">
         <ContinueReadingCard />
       </div>
@@ -365,7 +377,8 @@ function DashboardPage() {
         </div>
       )}
 
-      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <SectionHeading title="社区与消息" hint="推荐、通知与社区动态按用途分开，不再混在一条信息流里。" />
+      <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">为你推荐</CardTitle>

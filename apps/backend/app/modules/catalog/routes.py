@@ -241,6 +241,11 @@ async def list_resources(
     ),
     discipline: str | None = None,
     year: int | None = None,
+    # 高级筛选：年份区间、作者、DOI（大小写不敏感包含）。
+    year_from: int | None = Query(default=None, ge=1900, le=2200),
+    year_to: int | None = Query(default=None, ge=1900, le=2200),
+    author: str | None = Query(default=None, max_length=100),
+    doi: str | None = Query(default=None, max_length=200),
     volume: str | None = None,
     issue: str | None = None,
     section: str | None = None,
@@ -268,7 +273,10 @@ async def list_resources(
     # Meilisearch documents carry no publication_status, so the relevance
     # ids are re-fetched through the same publication filter as the DB path
     # below — an indexed draft can never leak just because it ranked high.
-    if q is not None and fulltext.search_enabled():
+    advanced_filters = any(
+        value is not None for value in (year_from, year_to, author, doi)
+    )
+    if q is not None and fulltext.search_enabled() and not advanced_filters:
         hit = await fulltext.search_resource_ids(
             tenant_id=str(tenant_id),
             q=q,
@@ -339,6 +347,29 @@ async def list_resources(
         stmt = stmt.where(Resource.discipline == discipline)
     if year is not None:
         stmt = stmt.where(Resource.year == year)
+    if year_from is not None:
+        stmt = stmt.where(Resource.year >= year_from)
+    if year_to is not None:
+        stmt = stmt.where(Resource.year <= year_to)
+    if author:
+        # authors 是 JSON 数组；SQLite 用 json_each，PostgreSQL 用
+        # jsonb_array_elements_text。与 q 的作者匹配共用同一套展开方式。
+        if db.get_bind().dialect.name == "postgresql":
+            _authors = (
+                func.jsonb_array_elements_text(Resource.authors)
+                .table_valued("value")
+                .render_derived()
+            )
+        else:
+            _authors = func.json_each(Resource.authors).table_valued("value")
+        stmt = stmt.where(
+            select(1)
+            .select_from(_authors)
+            .where(_authors.c.value.ilike(f"%{author.strip()}%"))
+            .exists()
+        )
+    if doi:
+        stmt = stmt.where(Resource.doi.ilike(f"%{doi.strip()}%"))
     # 卷/期筛选：目录页与卷期归档页共用。空串按 None 处理（前端清空下拉框会传 ""）。
     if volume:
         stmt = stmt.where(Resource.volume == volume)

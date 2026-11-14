@@ -36,6 +36,7 @@ const CATEGORY_TABS: { value: CategoryTab; label: string }[] = [
   { value: 'review', label: '审稿' },
   { value: 'submission', label: '投稿' },
   { value: 'claim', label: '认领' },
+  { value: 'community', label: '社区' },
   { value: 'feedback', label: '反馈' },
   { value: 'system', label: '系统' },
 ]
@@ -52,6 +53,8 @@ const TYPE_LABELS: Record<string, string> = {
   'claim.created': '认领申请',
   'claim.decision': '认领结果',
   'site.feedback': '站点反馈',
+  'comment.new': '文章评论',
+  'forum.reply': '论坛回复',
   system: '系统',
   'gamification.role_application': '角色申请',
 }
@@ -81,6 +84,12 @@ function resolveTarget(
       return { to: '/submissions', label: '查看稿件' }
     case 'review_assignment':
       return { to: '/review/assignments', label: '前往审稿' }
+    case 'forum_topic':
+      return {
+        to: '/forum/$topicId',
+        params: { topicId: relatedId },
+        label: '查看讨论',
+      }
     default:
       return null
   }

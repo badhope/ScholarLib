@@ -211,6 +211,9 @@ class SubmissionResponse(BaseModel):
     # 前端据此区分「已发表」与「刊前预览（暂存草稿）」。
     resource_publication_status: str | None = None
     resource_id: int | None = None
+    # 站内相似度（0–100）与 Top 3 命中；null 表示尚未计算。
+    similarity_score: float | None = None
+    similarity_matches: list[dict[str, Any]] = Field(default_factory=list)
     cover_image: str | None = None
     file_path: str | None = None
     # 在线阅读用 Markdown 稿件的存储 key（可空 = 回退 PDF 视图）。

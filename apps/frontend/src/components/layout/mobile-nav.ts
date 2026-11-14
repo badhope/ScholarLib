@@ -14,6 +14,8 @@ import {
   PenLine,
   Rocket,
   ScrollText,
+  Activity,
+  Flag,
   Settings,
   ShieldCheck,
   Upload,
@@ -46,7 +48,7 @@ export interface MobileMoreItem {
 }
 
 // 折叠菜单分组顺序
-export const MOBILE_MORE_GROUP_ORDER = ['我的', '工作台', '期刊', '消息', '设置', '站点管理'] as const
+export const MOBILE_MORE_GROUP_ORDER = ['我的', '工作台', '期刊', '消息', '内容与社区', '用户与权限', '期刊与发布', '系统与安全', '设置'] as const
 
 // 底部固定 5 Tab：首页 / 论文 / 副刊 / 讨论 / 我的。
 // 「我的」指向 /me（身份等级同事已落地；/profile 会重定向到 /me）。
@@ -83,13 +85,16 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/guide', label: '投稿与操作指南', icon: PenLine, group: '期刊' },
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '消息' },
   { to: '/settings', label: '账号设置', icon: Settings, auth: true, group: '设置' },
-  { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/audit-logs', label: '审计日志', icon: ShieldCheck, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/releases', label: '发布门禁', icon: Rocket, auth: true, adminOnly: true, group: '站点管理' },
-  { to: '/admin/settings', label: '期刊设置', icon: Settings, auth: true, adminOnly: true, group: '站点管理' },
+  { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '用户与权限' },
+  { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '用户与权限' },
+  { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '用户与权限' },
+  { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '内容与社区' },
+  { to: '/admin/forum-boards', label: '社区版块', icon: Layers, auth: true, adminOnly: true, group: '内容与社区' },
+  { to: '/admin/reports', label: '举报处置', icon: Flag, auth: true, adminOnly: true, group: '内容与社区' },
+  { to: '/admin/releases', label: '发布门禁', icon: Rocket, auth: true, adminOnly: true, group: '期刊与发布' },
+  { to: '/admin/settings', label: '期刊设置', icon: Settings, auth: true, adminOnly: true, group: '期刊与发布' },
+  { to: '/admin/audit-logs', label: '审计日志', icon: ShieldCheck, auth: true, adminOnly: true, group: '系统与安全' },
+  { to: '/admin/system-health', label: '系统健康', icon: Activity, auth: true, adminOnly: true, group: '系统与安全' },
 ]
 
 // 中心悬浮按钮（FAB）跳转目标：导入页（投稿/导入属于创建类操作）。

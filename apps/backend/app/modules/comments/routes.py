@@ -17,10 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_tenant_id
 from app.api.levels import require_reader
 from app.core.db import get_db, paginate
+from app.core.moderation import rejection_detail
 from app.models import AuditLog, User
 from app.modules.catalog.visibility import is_public
 from app.modules.comments.models import Comment
 from app.modules.comments.schemas import CommentCreate, CommentListResponse, CommentResponse
+from app.modules.notifications import services as notifications
 
 router = APIRouter(prefix="/comments", tags=["comments"])
 
@@ -60,7 +62,7 @@ async def _serialize(db: AsyncSession, rows: list[Comment]) -> list[CommentRespo
     ]
 
 
-async def _require_published_resource(db: AsyncSession, resource_id: int, tenant_id: Any) -> None:
+async def _require_published_resource(db: AsyncSession, resource_id: int, tenant_id: Any) -> Any:
     """Comments are only allowed on published records (404 mirrors catalog)."""
     from app.modules.catalog.models import Resource
 
@@ -74,6 +76,7 @@ async def _require_published_resource(db: AsyncSession, resource_id: int, tenant
     # 排期中的期号同样不可评论：公开面判定统一走 is_public。
     if not is_public(resource):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    return resource
 
 
 @router.get("", response_model=CommentListResponse)
@@ -122,7 +125,10 @@ async def create_comment(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="评论内容不能为空"
         )
-    await _require_published_resource(db, payload.resource_id, tenant_id)
+    blocked = rejection_detail(body)
+    if blocked is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked)
+    resource = await _require_published_resource(db, payload.resource_id, tenant_id)
 
     comment = Comment(
         tenant_id=tenant_id,
@@ -144,6 +150,37 @@ async def create_comment(
             ref_type="comment",
             ref_id=str(comment.id),
         )
+        # 评论通知：只通知资源作者（不通知其他读者），自己评论自己不通知。
+        owner_id = getattr(resource, "owner_id", None)
+        if owner_id and owner_id != current_user.id:
+            owner = (
+                await db.execute(select(User).where(User.id == owner_id))
+            ).scalar_one_or_none()
+            if owner is not None:
+                prefs = notifications.merged_prefs(owner)
+                if prefs.get("in_app_comment"):
+                    await notifications.create(
+                        db,
+                        tenant_id=tenant_id,
+                        user_id=owner.id,
+                        type_="comment.new",
+                        title=f"《{resource.title[:80]}》有新评论",
+                        body=f"{current_user.display_name or current_user.username}：{body[:120]}",
+                        related_type="resource",
+                        related_id=str(resource.id),
+                    )
+                if prefs.get("email_comment") and owner.email:
+                    await notifications.record_email_digest(
+                        db,
+                        tenant_id=tenant_id,
+                        user_id=owner.id,
+                        event_type="comment.new",
+                        recipient_email=owner.email,
+                        subject=f"Rubbish：{resource.title[:80]} 有新评论",
+                        text=f"{current_user.display_name or current_user.username} 评论了你的文章：\n\n{body[:500]}",
+                        related_type="resource",
+                        related_id=str(resource.id),
+                    )
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()

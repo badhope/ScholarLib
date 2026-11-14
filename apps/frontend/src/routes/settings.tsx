@@ -5,6 +5,7 @@ import { useMe, useResendVerification } from '@/hooks/api/use-auth'
 import { TwoFactorSection } from '@/components/settings/two-factor-section'
 import { ChangePasswordCard } from '@/components/settings/change-password-card'
 import { ProfileDetailsCard } from '@/components/settings/profile-details-card'
+import { NotificationPrefsCard } from '@/components/settings/notification-prefs-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,8 +14,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/settings')({
-  validateSearch: (search: Record<string, unknown>): { tab?: 'profile' | 'security' } => {
-    const tab = search.tab === 'security' ? 'security' : search.tab === 'profile' ? 'profile' : undefined
+  validateSearch: (search: Record<string, unknown>): { tab?: 'profile' | 'security' | 'notifications' } => {
+    const tab =
+      search.tab === 'security'
+        ? 'security'
+        : search.tab === 'notifications'
+          ? 'notifications'
+          : search.tab === 'profile'
+            ? 'profile'
+            : undefined
     return tab ? { tab } : {}
   },
   // 与其他需要登录的页面保持一致：访客进来直接弹回登录页，
@@ -152,11 +160,15 @@ function SettingsPage() {
   const navigate = useNavigate()
   const { data: me } = useMe()
   // 初始 tab 来自 ?tab=security（旧 /account/security 链接转跳进来时直达安全页）
-  const [tab, setTab] = useState<'profile' | 'security'>(search.tab ?? 'profile')
+  const [tab, setTab] = useState<'profile' | 'security' | 'notifications'>(search.tab ?? 'profile')
 
   const onTabChange = (v: string) => {
-    setTab(v as 'profile' | 'security')
-    void navigate({ to: '/settings', search: { tab: v as 'profile' | 'security' }, replace: true })
+    setTab(v as 'profile' | 'security' | 'notifications')
+    void navigate({
+      to: '/settings',
+      search: { tab: v as 'profile' | 'security' | 'notifications' },
+      replace: true,
+    })
   }
 
   return (
@@ -170,10 +182,14 @@ function SettingsPage() {
         <TabsList>
           <TabsTrigger value="profile">资料</TabsTrigger>
           <TabsTrigger value="security">安全</TabsTrigger>
+          <TabsTrigger value="notifications">通知</TabsTrigger>
         </TabsList>
         <TabsContent value="profile" className="mt-4 space-y-6">
           <ProfileCard />
           <ProfileDetailsCard key={profileKey(me)} initial={me} />
+        </TabsContent>
+        <TabsContent value="notifications" className="mt-4">
+          <NotificationPrefsCard />
         </TabsContent>
         <TabsContent value="security" className="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-2">
           <TwoFactorSection />

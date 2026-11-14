@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Clock3, Coffee, Flame, Flag, Lock, Megaphone, MessageSquare, PenLine, Pin, Plus, Users } from 'lucide-react'
+import { ChevronRight, Clock3, Flame, Flag, Lock, Megaphone, MessageSquare, Pin, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { uploadForumImage } from '@/lib/forum'
@@ -48,6 +48,10 @@ interface ForumTopic {
   title: string
   body: string
   category: string
+  board_id: number | null
+  board_slug: string | null
+  board_name: string | null
+  board_path: string | null
   is_pinned: boolean
   is_locked: boolean
   reply_count: number
@@ -57,53 +61,41 @@ interface ForumTopic {
   author: { id: number; username: string; display_name?: string | null; avatar_url?: string | null } | null
 }
 
-const CATEGORIES = [
-  { value: 'all', label: '全部' },
-  { value: 'paper', label: '论文沙龙' },
-  { value: 'method', label: '方法与写作' },
-  { value: 'life', label: '学术生存' },
-  { value: 'collab', label: '组队招募' },
-  { value: 'meta', label: '站务公告' },
-]
+interface BoardNode {
+  id: number
+  parent_id: number | null
+  slug: string
+  name: string
+  description: string | null
+  topics: number
+  total_topics: number
+  last_active: string | null
+  children: BoardNode[]
+}
 
-/** 五个平铺版块的定位。冷启动阶段用一句话说明“这里该发什么”。 */
-const BOARDS = [
-  {
-    value: 'paper',
-    label: '论文沙龙',
-    desc: '逐篇聊论文：方法、结论、复现',
-    icon: BookOpen,
-    style: 'text-primary',
-  },
-  {
-    value: 'method',
-    label: '方法与写作',
-    desc: '选题、统计、审稿意见、拒稿复盘',
-    icon: PenLine,
-    style: 'text-primary',
-  },
-  {
-    value: 'life',
-    label: '学术生存',
-    desc: '读研、投稿、毕业与情绪',
-    icon: Coffee,
-    style: 'text-primary',
-  },
-  {
-    value: 'collab',
-    label: '组队招募',
-    desc: '找合作、找数据、找被试',
-    icon: Users,
-    style: 'text-primary',
-  },
-  {
-    value: 'meta',
-    label: '站务公告',
-    desc: '反馈、规则、活动与官方公告',
-    icon: Megaphone,
-    style: 'text-primary',
-  },
-]
+/** 旧分类到新版块 slug 的兼容映射：老链接和旧客户端不 404。 */
+const LEGACY_SLUG: Record<string, string> = {
+  discussion: 'paper',
+  question: 'method',
+  notice: 'meta',
+  suggestion: 'feedback',
+}
+
+function collectBoards(nodes: BoardNode[], depth = 0): Array<BoardNode & { depth: number; path: string }> {
+  return nodes.flatMap((node) => [
+    { ...node, depth, path: `${'　'.repeat(depth)}${depth ? '└ ' : ''}${node.name}` },
+    ...collectBoards(node.children, depth + 1),
+  ])
+}
+
+function findRoot(nodes: BoardNode[], slug: string): BoardNode | null {
+  for (const node of nodes) {
+    if (node.slug === slug) return node
+    const child = findRoot(node.children, slug)
+    if (child) return node
+  }
+  return null
+}
 
 const CATEGORY_STYLE: Record<string, string> = {
   paper: 'bg-muted text-foreground border-border',
@@ -165,7 +157,7 @@ function ForumListPage() {
   const [form, setForm] = useState({
     title: paperId ? `讨论：${(paperTitle || `论文 #${paperId}`).slice(0, 170)}` : '',
     body: paperId ? `论文链接：/catalog/${paperId}\n\n` : '',
-    category: 'paper',
+    board_id: null as number | null,
     paper_id: paperId,
   })
 
@@ -173,9 +165,13 @@ function ForumListPage() {
     queryKey: ['forum', 'boards'],
     queryFn: async () => (await api.get('/forum/boards')).data,
   })
-  const boardCounts: Record<string, number> = Object.fromEntries(
-    (boardsQ.data?.data ?? []).map((b: { category: string; topics: number }) => [b.category, b.topics]),
-  )
+  const boardTree: BoardNode[] = boardsQ.data?.tree ?? []
+  const allBoards = collectBoards(boardTree)
+  const leafBoards = allBoards.filter((b) => b.children.length === 0)
+  const defaultBoardId = leafBoards.find((b) => b.slug === 'paper-reading')?.id ?? leafBoards[0]?.id ?? null
+  const normalizedCategory = LEGACY_SLUG[category] ?? category
+  const activeRoot = normalizedCategory === 'all' ? null : findRoot(boardTree, normalizedCategory)
+  const activeBoard = normalizedCategory === 'all' ? null : allBoards.find((b) => b.slug === normalizedCategory)
 
   const listQ = useQuery({
     queryKey: ['forum', 'topics', category, page, sort],
@@ -193,7 +189,7 @@ function ForumListPage() {
       toast.success('已发布')
       void qc.invalidateQueries({ queryKey: ['forum'] })
       setOpen(false)
-      setForm({ title: '', body: '', category: 'paper', paper_id: null })
+      setForm({ title: '', body: '', board_id: defaultBoardId, paper_id: null })
       void navigate({ to: '/forum/$topicId', params: { topicId: String(data.id) } })
     },
     onError: (err) => toast.error(extractError(err, '发布失败')),
@@ -206,6 +202,15 @@ function ForumListPage() {
     onError: (err) => toast.error(extractError(err, '举报失败')),
   })
 
+  const openComposer = () => {
+    if (!isAuthenticated) {
+      void navigate({ to: '/login' })
+      return
+    }
+    setForm((prev) => ({ ...prev, board_id: prev.board_id ?? defaultBoardId }))
+    setOpen(true)
+  }
+
   const updateSearch = (patch: Record<string, unknown>) => {
     void navigate({ to: '/forum', search: { ...search, ...patch }, replace: true })
   }
@@ -217,10 +222,10 @@ function ForumListPage() {
     <div className="mx-auto w-full max-w-4xl space-y-4">
       <PageHeader
         title="讨论"
-        description="五个版块：论文沙龙、方法与写作、学术生存、组队招募、站务公告。发帖登录即可，不需要积分。"
+        description="学术交流与站务反馈两大父板块，向下细分到论文精读、复现与数据、写作与投稿、统计与方法等子板块。发帖登录即可，不需要积分。"
         actions={
           <Button
-            onClick={() => (isAuthenticated ? setOpen(true) : void navigate({ to: '/login' }))}
+            onClick={openComposer}
           >
             <Plus className="h-4 w-4" />
             发帖
@@ -244,7 +249,7 @@ function ForumListPage() {
             </span>
             <Button
               size="sm"
-              onClick={() => (isAuthenticated ? setOpen(true) : void navigate({ to: '/login' }))}
+              onClick={openComposer}
             >
               <Plus className="h-4 w-4" />
               写第一条
@@ -253,56 +258,89 @@ function ForumListPage() {
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        {BOARDS.map((b) => {
-          const Icon = b.icon
-          const active = category === b.value
-          return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="论坛父板块">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={category === 'all'}
+            onClick={() => updateSearch({ category: undefined, page: 1 })}
+            className={cn(
+              'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+              category === 'all'
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'bg-card hover:border-primary/30',
+            )}
+          >
+            全部
+            <span className="ml-1 text-[10px] opacity-70">{allBoards.find((b) => b.slug === 'academic')?.total_topics ?? 0} 学术 · {allBoards.find((b) => b.slug === 'site')?.total_topics ?? 0} 站务</span>
+          </button>
+          {boardTree.map((root) => (
             <button
-              key={b.value}
+              key={root.slug}
               type="button"
-              onClick={() => updateSearch({ category: b.value, page: 1 })}
+              role="tab"
+              aria-selected={normalizedCategory === root.slug}
+              onClick={() => updateSearch({ category: root.slug, page: 1 })}
               className={cn(
-                'group flex h-full min-h-[5.25rem] flex-col rounded-xl border p-3 text-left transition-all',
-                b.value === 'meta' ? 'col-span-2 sm:col-span-1' : '',
-                active
-                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                  : 'border-input bg-card hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm',
+                'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+                normalizedCategory === root.slug
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'bg-card hover:border-primary/30',
               )}
             >
-              <span className="flex items-start justify-between gap-1.5 text-sm font-medium">
-                <span className="flex min-w-0 items-center gap-2">
-                  <span
-                    className={cn(
-                      'icon-chip icon-chip-sm',
-                      active && 'border-white/25 bg-white/15 text-primary-foreground',
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                  </span>
-                  <span className="min-w-0 leading-tight">{b.label}</span>
-                </span>
-                <span className={cn('shrink-0 text-[10px] tabular-nums', active ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
-                  {boardCounts[b.value] ?? 0} 帖
-                </span>
-              </span>
-              <span
-                className={cn(
-                  'mt-1 block text-[11px] leading-snug',
-                  active ? 'text-primary-foreground/75' : 'text-muted-foreground',
-                )}
-              >
-                {b.desc}
-              </span>
+              {root.name}
+              <span className="ml-1 text-[10px] opacity-70">{root.total_topics} 帖</span>
             </button>
-          )
-        })}
+          ))}
+        </div>
+
+        {activeRoot ? (
+          <div className="space-y-1.5 rounded-xl border bg-muted/30 p-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="px-1 text-[11px] font-medium text-muted-foreground">{activeRoot.name}</span>
+              {activeRoot.children.map((child) => (
+                <button
+                  key={child.slug}
+                  type="button"
+                  onClick={() => updateSearch({ category: child.slug, page: 1 })}
+                  className={cn(
+                    'rounded-lg border px-2.5 py-1 text-left text-xs transition-colors',
+                    normalizedCategory === child.slug
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'bg-background hover:border-primary/25',
+                  )}
+                >
+                  {child.name}
+                  <span className="ml-1 text-[10px] text-muted-foreground">{child.total_topics}</span>
+                </button>
+              ))}
+            </div>
+            {activeBoard && activeBoard.children.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5 border-l-2 border-primary/20 pl-3">
+                <span className="text-[10px] text-muted-foreground">子板块</span>
+                {activeBoard.children.map((child) => (
+                  <button
+                    key={child.slug}
+                    type="button"
+                    onClick={() => updateSearch({ category: child.slug, page: 1 })}
+                    className="inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-[11px] hover:border-primary/40 hover:text-primary"
+                  >
+                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                    {child.name}
+                    <span className="text-[10px] text-muted-foreground">{child.total_topics}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         {category === 'all' ? (
           <span className="text-xs text-muted-foreground">
-            五个版块，{sort === 'hot' ? '按回复数排' : '按最近活跃排'}
+            {normalizedCategory === 'all' ? '全部板块' : activeBoard?.name ?? '当前板块'}，{sort === 'hot' ? '按回复数排' : '按最近活跃排'}
           </span>
         ) : (
           <button
@@ -354,7 +392,7 @@ function ForumListPage() {
           action={
             <Button
               size="sm"
-              onClick={() => (isAuthenticated ? setOpen(true) : void navigate({ to: '/login' }))}
+              onClick={openComposer}
             >
               发第一个帖
             </Button>
@@ -388,7 +426,7 @@ function ForumListPage() {
                       </Badge>
                     ) : (
                       <Badge variant="outline" className={CATEGORY_STYLE[t.category]}>
-                        {CATEGORY_LABEL[t.category] ?? t.category}
+                        {t.board_name ?? CATEGORY_LABEL[t.category] ?? t.category}
                       </Badge>
                     )}
                     {t.is_locked && (
@@ -463,22 +501,25 @@ function ForumListPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="t-category">分类</Label>
+              <Label htmlFor="t-board">版块</Label>
               <Select
-                value={form.category}
-                onValueChange={(v) => setForm((p) => ({ ...p, category: v }))}
+                value={form.board_id ? String(form.board_id) : ''}
+                onValueChange={(v) => setForm((p) => ({ ...p, board_id: Number(v) }))}
               >
-                <SelectTrigger id="t-category">
-                  <SelectValue />
+                <SelectTrigger id="t-board">
+                  <SelectValue placeholder="选择最具体的子板块" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.filter((c) => c.value !== 'all').map((c) => (
-                    <SelectItem key={c.value} value={c.value}>
-                      {c.label}
+                  {leafBoards.map((b) => (
+                    <SelectItem key={b.id} value={String(b.id)}>
+                      {b.path}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">
+                发到叶子板块，父板块会自动汇总；已选：{allBoards.find((b) => b.id === form.board_id)?.name ?? '未选择'}
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="t-title">标题</Label>
@@ -507,7 +548,7 @@ function ForumListPage() {
             </Button>
             <Button
               onClick={() => createMut.mutate()}
-              disabled={createMut.isPending || form.title.trim().length < 2 || form.body.trim().length < 2}
+              disabled={createMut.isPending || !form.board_id || form.title.trim().length < 2 || form.body.trim().length < 2}
             >
               {createMut.isPending ? '发布中…' : '发布'}
             </Button>

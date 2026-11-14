@@ -9,15 +9,20 @@ tenant B's data.
 
 from __future__ import annotations
 
+import os
 import secrets
+import shutil
+import time
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import __version__
 from app.api.deps import require_admin, require_tenant_id
 from app.core.config import settings
 from app.core.db import get_db
@@ -1179,3 +1184,157 @@ async def edit_submission_authors(
     )
     await db.commit()
     return {"submission_id": submission_id, "authors": sub.authors}
+
+
+
+def _alembic_head() -> str | None:
+    """用 Alembic 自己的迁移图取 head。
+
+    不能靠正则扫 ``down_revision``：历史迁移里既有元组（多父分支），
+    也有重复 revision id；手写差集会漏父分支，把旧分支误判成 head。
+    """
+    root = Path(__file__).resolve().parents[2]
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        cfg = Config(str(root / "alembic.ini"))
+        cfg.set_main_option("script_location", str(root / "alembic"))
+        return ScriptDirectory.from_config(cfg).get_current_head()
+    except Exception:
+        # 迁移图异常时不猜 head，让健康页显示“未知”而不是错误版本。
+        return None
+
+
+@router.get("/system/health")
+async def system_health(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """运营级健康总览：数据库、迁移、磁盘、积压、邮件与版本。
+
+    只返回聚合数字与状态，不返回连接串、主机名、密钥等敏感信息。
+    """
+    started = time.perf_counter()
+    db_revision = None
+    counts: dict[str, int] = {}
+    try:
+        await db.execute(text("SELECT 1"))
+        db_latency_ms = round((time.perf_counter() - started) * 1000, 1)
+        row = (await db.execute(text("SELECT version_num FROM alembic_version"))).scalar_one_or_none()
+        db_revision = str(row) if row else None
+        for table, label in (
+            ("users", "users"),
+            ("resources", "resources"),
+            ("submissions", "submissions"),
+        ):
+            try:
+                counts[label] = int(
+                    (await db.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one()
+                )
+            except Exception:
+                counts[label] = -1
+    except Exception:
+        db_latency_ms = None
+
+    pending_reports = 0
+    pending_comments = 0
+    try:
+        pending_reports = int(
+            (
+                await db.execute(
+                    text("SELECT count(*) FROM forum_reports WHERE status = 'open'")
+                )
+            ).scalar_one()
+        )
+    except Exception:
+        pending_reports = -1
+    try:
+        pending_comments = int(
+            (
+                await db.execute(
+                    text("SELECT count(*) FROM comments WHERE status = 'pending'")
+                )
+            ).scalar_one()
+        )
+    except Exception:
+        pending_comments = -1
+
+    try:
+        disk = shutil.disk_usage("/")
+        disk_free_gb = round(disk.free / (1024 ** 3), 1)
+        disk_used_pct = round(disk.used / disk.total * 100, 1)
+    except Exception:
+        disk_free_gb = None
+        disk_used_pct = None
+
+    head = _alembic_head()
+    migration_ok = bool(head and db_revision and head == db_revision)
+    smtp_ok = False
+    try:
+        from app.core.email import smtp_configured
+
+        smtp_ok = smtp_configured()
+    except Exception:
+        smtp_ok = False
+
+    checks = [
+        {
+            "key": "database",
+            "label": "数据库",
+            "status": "ok" if db_latency_ms is not None else "fail",
+            "detail": f"{db_latency_ms} ms" if db_latency_ms is not None else "连接失败",
+        },
+        {
+            "key": "migration",
+            "label": "数据库迁移",
+            "status": "ok" if migration_ok else "warn",
+            "detail": f"库 {db_revision or '未知'} / 代码 {head or '未知'}",
+        },
+        {
+            "key": "disk",
+            "label": "磁盘",
+            "status": "ok"
+            if disk_used_pct is not None and disk_used_pct < 85
+            else "warn",
+            "detail": f"已用 {disk_used_pct}% · 剩余 {disk_free_gb} GB"
+            if disk_used_pct is not None
+            else "无法读取",
+        },
+        {
+            "key": "reports",
+            "label": "待处置举报",
+            "status": "ok" if pending_reports == 0 else "warn",
+            "detail": f"{pending_reports} 条",
+        },
+        {
+            "key": "comments",
+            "label": "待审评论",
+            "status": "ok" if pending_comments == 0 else "warn",
+            "detail": f"{pending_comments} 条",
+        },
+        {
+            "key": "email",
+            "label": "邮件通道",
+            "status": "ok" if smtp_ok and settings.email_outbound_enabled else "warn",
+            "detail": "已配置并启用"
+            if smtp_ok and settings.email_outbound_enabled
+            else ("已配置但未启用" if smtp_ok else "未配置 SMTP，仅站内通知"),
+        },
+    ]
+    overall = "fail" if any(c["status"] == "fail" for c in checks) else (
+        "warn" if any(c["status"] == "warn" for c in checks) else "ok"
+    )
+    return {
+        "status": overall,
+        "version": __version__,
+        "db_revision": db_revision,
+        "code_revision": head,
+        "db_latency_ms": db_latency_ms,
+        "counts": counts,
+        "disk_free_gb": disk_free_gb,
+        "disk_used_pct": disk_used_pct,
+        "load_1m": round(os.getloadavg()[0], 2) if hasattr(os, "getloadavg") else None,
+        "uptime_seconds": int(time.monotonic()),
+        "checks": checks,
+    }

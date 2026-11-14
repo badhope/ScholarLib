@@ -58,6 +58,11 @@ interface CatalogSearch {
   genre?: 'joke' | 'fiction' | 'review' | 'guide' | 'essay' | 'poetry' | 'rant'
   discipline?: string
   year?: number
+  year_from?: number
+  year_to?: number
+  author?: string
+  doi?: string
+  clc?: string
   page?: number
   view?: 'list' | 'grid'
 }
@@ -114,6 +119,11 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
     genre: effectiveTrack === 'essay' ? search.genre : undefined,
     discipline: search.discipline || undefined,
     year: search.year,
+    year_from: search.year_from,
+    year_to: search.year_to,
+    author: search.author || undefined,
+    doi: search.doi || undefined,
+    clc: search.clc || undefined,
     page: search.page || 1,
     page_size: 10,
   }
@@ -779,15 +789,70 @@ function CatalogFilterFields({
         </Select>
       </div>
       <div className="space-y-1.5">
-        <label className="text-xs text-muted-foreground">年份</label>
+        <label className="text-xs text-muted-foreground">年份区间</label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            inputMode="numeric"
+            placeholder="起"
+            defaultValue={search.year_from ?? ''}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const v = (e.target as HTMLInputElement).value
+                updateSearch({ year_from: v ? Number(v) : undefined, page: 1 })
+              }
+            }}
+          />
+          <span className="text-xs text-muted-foreground">—</span>
+          <Input
+            type="number"
+            inputMode="numeric"
+            placeholder="止"
+            defaultValue={search.year_to ?? ''}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                const v = (e.target as HTMLInputElement).value
+                updateSearch({ year_to: v ? Number(v) : undefined, page: 1 })
+              }
+            }}
+          />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">作者</label>
         <Input
-          type="number"
-          placeholder="如 2024"
-          defaultValue={search.year ?? ''}
+          placeholder="如 张 / Smith"
+          defaultValue={search.author ?? ''}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              const v = (e.target as HTMLInputElement).value
-              updateSearch({ year: v ? Number(v) : undefined, page: 1 })
+              const v = (e.target as HTMLInputElement).value.trim()
+              updateSearch({ author: v || undefined, page: 1 })
+            }
+          }}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">DOI</label>
+        <Input
+          placeholder="10.xxxx/..."
+          defaultValue={search.doi ?? ''}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const v = (e.target as HTMLInputElement).value.trim()
+              updateSearch({ doi: v || undefined, page: 1 })
+            }
+          }}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs text-muted-foreground">中图分类号</label>
+        <Input
+          placeholder="如 TP / I24"
+          defaultValue={search.clc ?? ''}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              const v = (e.target as HTMLInputElement).value.trim().toUpperCase()
+              updateSearch({ clc: v || undefined, page: 1 })
             }
           }}
         />
