@@ -45,6 +45,10 @@ www.rubbish.argjiemi.cn, argjiemi.cn, www.argjiemi.cn {
 		-Via
 	}
 
+	# 旧投稿地址永久跳转到当前投稿页。
+	@legacySubmit path /submit /submit/
+	redir @legacySubmit /submissions/new 301
+
 	# 健康检查直通，便于平台探活与 uptime 监控。
 	handle /api/health* {
 		reverse_proxy app:8080
