@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from app.modules.submission.normalize import audit_style, normalize_markdown
+from app.domain.submission.normalize import audit_style, normalize_markdown
 
 
 def test_heading_number_gets_space():

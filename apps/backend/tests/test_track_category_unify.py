@@ -15,8 +15,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.catalog.models import Resource
 from app.models import Tenant
-from app.modules.catalog.models import Resource
 
 
 async def _default_tenant(db: AsyncSession) -> Tenant:
@@ -209,8 +209,8 @@ async def test_materialize_submission_essay_track(
     client: AsyncClient, admin_user: dict, db_session: AsyncSession
 ) -> None:
     """投稿 content_track=essay → 物化出的资源 category=fun。"""
-    from app.modules.submission._helpers import _materialize_resource_from_submission
-    from app.modules.submission.models import Submission
+    from app.domain.submission._helpers import _materialize_resource_from_submission
+    from app.domain.submission.models import Submission
 
     tenant = await _default_tenant(db_session)
     submission = Submission(

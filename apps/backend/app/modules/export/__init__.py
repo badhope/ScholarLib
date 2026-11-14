@@ -12,7 +12,7 @@ so the registry enforces load order.
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.export.routes import router
+from app.interfaces.http.export.routes import router
 
 registry.register(
     ModuleManifest(

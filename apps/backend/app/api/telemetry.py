@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tenant_id, require_admin
 from app.core.db import get_db
-from app.modules.catalog.models import PageView
+from app.domain.catalog.models import PageView
 
 router = APIRouter(tags=["telemetry"])
 

@@ -7,8 +7,8 @@ from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_storage
+from app.domain.submission.models import Submission
 from app.models import Tenant
-from app.modules.submission.models import Submission
 
 _SAMPLE = {
     "type": "paper",
@@ -446,7 +446,7 @@ async def test_draft_preview_does_not_inflate_download_count(
     file = await client.get(f"/api/catalog/{resource_id}/file", headers=_auth(test_user["token"]))
     assert file.status_code == 200
     # download_count 不在响应 schema 中，直接查库断言（预览不计入指标）。
-    from app.modules.catalog.models import Resource
+    from app.domain.catalog.models import Resource
 
     count = (
         await db_session.execute(
@@ -630,7 +630,7 @@ def test_response_tolerates_legacy_invalid_content_genre() -> None:
     """历史库里的空串/article 不得触发 Literal 校验 500（2026-11-08 线上故障）。"""
     from datetime import UTC, datetime
 
-    from app.modules.catalog.schemas import ResourceResponse
+    from app.interfaces.http.catalog.schemas import ResourceResponse
 
     for legacy in ("", "article", "  "):
         payload = ResourceResponse(

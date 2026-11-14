@@ -51,7 +51,7 @@ async def get_capabilities(
     console when SMTP is half-configured. Either way the console sender
     means "nothing leaves this process".
     """
-    from app.modules.submission.routes_files import (
+    from app.interfaces.http.submission.routes_files import (
         _ALLOWED_UPLOAD_EXTENSIONS,
         _MAX_UPLOAD_BYTES,
     )

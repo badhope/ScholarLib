@@ -14,15 +14,15 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AuditLog, Tenant
-from app.modules.notifications.models import Notification
-from app.modules.review.models import ReviewAssignment
-from app.modules.submission.review_reminders import (
+from app.domain.notifications.models import Notification
+from app.domain.review.models import ReviewAssignment
+from app.domain.submission.review_reminders import (
     REMIND_AFTER_DAYS,
     REVIEW_DUE_DAYS,
     decision_label,
     run_overdue_reminders,
 )
+from app.models import AuditLog, Tenant
 
 
 def test_decision_labels_cover_both_vocabularies() -> None:

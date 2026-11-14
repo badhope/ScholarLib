@@ -22,8 +22,8 @@ from app.core.modules import ModuleManifest, registry
 
 # Importing this package registers Notification with the shared core
 # Base.metadata so Alembic and tests see it alongside the core tables.
-from app.modules.notifications import models  # noqa: F401
-from app.modules.notifications.routes import router
+from app.domain.notifications import models  # noqa: F401
+from app.interfaces.http.notifications.routes import router
 
 registry.register(
     ModuleManifest(

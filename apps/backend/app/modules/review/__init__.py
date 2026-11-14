@@ -19,8 +19,8 @@ from app.core.modules import ModuleManifest, registry
 
 # Registering this package imports models so SQLAlchemy Base.metadata
 # sees the review_* tables alongside the submission + catalog tables.
-from app.modules.review import models  # noqa: F401
-from app.modules.review.routes import router
+from app.domain.review import models  # noqa: F401
+from app.interfaces.http.review.routes import router
 
 registry.register(
     ModuleManifest(

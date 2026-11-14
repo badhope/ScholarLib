@@ -45,7 +45,7 @@ async def _upload(
 async def test_upload_rejects_oversize_file(
     client: AsyncClient, test_user: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.modules.submission import routes_files
+    from app.interfaces.http.submission import routes_files
 
     monkeypatch.setattr(routes_files, "_MAX_UPLOAD_BYTES", 256)
     sid = await _create_submission(client, test_user["token"])

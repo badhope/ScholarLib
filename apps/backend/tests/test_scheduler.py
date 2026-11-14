@@ -15,8 +15,8 @@ from typing import Any
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.application import scheduler
 from app.core import db as db_module
-from app.core import scheduler
 from app.core.config import settings
 
 
@@ -137,7 +137,7 @@ async def test_run_review_reminders_aggregates_across_tenants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from app.core.tenant import TENANT_CONTEXT_VAR
-    from app.modules.submission import review_reminders as rr
+    from app.domain.submission import review_reminders as rr
 
     tenant_a: Any = object()
     tenant_b: Any = object()

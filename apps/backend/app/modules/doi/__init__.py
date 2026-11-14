@@ -11,8 +11,8 @@ metadata by DOI lives in the ``ingest`` module (``fetch_crossref``).
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.doi import models  # noqa: F401
-from app.modules.doi.routes import router
+from app.domain.doi import models  # noqa: F401
+from app.interfaces.http.doi.routes import router
 
 registry.register(
     ModuleManifest(

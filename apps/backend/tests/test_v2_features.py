@@ -16,8 +16,8 @@ import pytest
 from conftest import auth_headers, register_user
 from httpx import AsyncClient
 
-from app.modules.export.exporters import export_resources
-from app.modules.export.jats import JatsMeta, markdown_to_jats
+from app.domain.export.exporters import export_resources
+from app.domain.export.jats import JatsMeta, markdown_to_jats
 
 _DIMS = ("question", "argument", "method", "evidence", "integrity")
 

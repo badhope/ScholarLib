@@ -20,8 +20,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.review.blinding import ANONYMIZED_AUTHOR
 from app.models import Tenant
-from app.modules.review.blinding import ANONYMIZED_AUTHOR
 
 _PAYLOAD = {
     "title": "Double-Blind Test Paper",
@@ -105,7 +105,7 @@ async def _attach_file(db_session: AsyncSession, submission_id: int) -> None:
     rel_path = f"{tenant.id}/{submission_id}/manuscript.pdf"
     await get_storage().save(rel_path, b"%PDF-1.4 sealed original manuscript")
 
-    from app.modules.submission.models import Submission
+    from app.domain.submission.models import Submission
 
     entry = await db_session.get(Submission, submission_id)
     assert entry is not None

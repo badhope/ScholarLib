@@ -190,8 +190,8 @@ async def test_senior_application_requires_reviewer_role_first(
     from sqlalchemy import select
 
     from app.core.db import async_session_factory
+    from app.domain.review.models import ReviewAssignment, ReviewReport
     from app.models import Tenant
-    from app.modules.review.models import ReviewAssignment, ReviewReport
 
     # 唯一约束是 (submission_id, reviewer_id)：5 份审稿必须落在 5 篇不同稿件上。
     submission_ids: list[int] = []

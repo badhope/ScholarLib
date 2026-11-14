@@ -7,7 +7,7 @@ from conftest import auth_headers
 from httpx import AsyncClient
 from sqlalchemy.exc import IntegrityError
 
-from app.modules.catalog.routes import _conflict_detail
+from app.interfaces.http.catalog.routes import _conflict_detail
 
 
 def _conflict(message: str) -> IntegrityError:

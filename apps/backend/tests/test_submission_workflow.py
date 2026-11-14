@@ -16,7 +16,7 @@ from conftest import auth_headers, complete_two_reviews, register_user, review_s
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.modules.review.models import ReviewAssignment, ReviewReport
+from app.domain.review.models import ReviewAssignment, ReviewReport
 
 _PAYLOAD = {
     "title": "Workflow Coverage Specimen",
@@ -135,7 +135,7 @@ async def test_legacy_self_assignment_cannot_accept_or_submit(
 ) -> None:
     await _assign_role(client, admin_user, int(test_user["user_id"]), "reviewer")
     sub = await _create_submission(client, test_user)
-    from app.modules.submission.models import Submission
+    from app.domain.submission.models import Submission
 
     entry = (
         await db_session.execute(select(Submission).where(Submission.id == sub["id"]))

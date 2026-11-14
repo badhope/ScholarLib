@@ -23,7 +23,7 @@ from unittest.mock import patch
 from sqlalchemy.dialects import postgresql
 
 from app.core.totp import decrypt_secret, encrypt_secret
-from app.modules.catalog.models import Resource
+from app.domain.catalog.models import Resource
 
 _MIGRATION_PATH = (
     Path(__file__).resolve().parents[1]

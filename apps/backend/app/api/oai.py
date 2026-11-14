@@ -27,8 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import require_tenant_id
 from app.core.config import settings
 from app.core.db import get_db
-from app.modules.catalog import models as catalog_models
-from app.modules.catalog.visibility import public_conditions
+from app.domain.catalog import models as catalog_models
+from app.domain.catalog.visibility import public_conditions
 
 router = APIRouter(prefix="/oai", tags=["oai-pmh"])
 

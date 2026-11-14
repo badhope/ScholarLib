@@ -26,8 +26,8 @@ from app.core.modules import ModuleManifest, registry
 # Importing this package registers FileAsset / ReadingHistory with the
 # shared core Base.metadata, so Alembic and tests see the reader tables
 # alongside the core tables without extra wiring.
-from app.modules.reader import models  # noqa: F401
-from app.modules.reader.routes import router
+from app.domain.reader import models  # noqa: F401
+from app.interfaces.http.reader.routes import router
 
 registry.register(
     ModuleManifest(

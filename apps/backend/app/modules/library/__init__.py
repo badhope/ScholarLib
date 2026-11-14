@@ -11,8 +11,8 @@ Depends on the catalog module (Resource FK).
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.library import models  # noqa: F401
-from app.modules.library.routes import router
+from app.domain.library import models  # noqa: F401
+from app.interfaces.http.library.routes import router
 
 registry.register(
     ModuleManifest(

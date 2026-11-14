@@ -11,16 +11,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import email as email_module
-from app.models import Tenant, User
-from app.modules.review.models import ReviewAssignment
-from app.modules.submission import review_reminders as rr
-from app.modules.submission.review_reminders import (
+from app.domain.review.models import ReviewAssignment
+from app.domain.submission import review_reminders as rr
+from app.domain.submission.review_reminders import (
     REMIND_AFTER_DAYS,
     _age_days,
     run_overdue_reminders,
     send_assignment_email,
     send_decision_email,
 )
+from app.models import Tenant, User
 
 
 class _RaisingSender:

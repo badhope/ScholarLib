@@ -22,8 +22,8 @@ from app.core.modules import ModuleManifest, registry
 # Importing this package registers Submission with the shared core
 # Base.metadata, so Alembic and tests see it alongside the catalog tables
 # without extra wiring.
-from app.modules.submission import models  # noqa: F401
-from app.modules.submission.routes import router
+from app.domain.submission import models  # noqa: F401
+from app.interfaces.http.submission.routes import router
 
 registry.register(
     ModuleManifest(

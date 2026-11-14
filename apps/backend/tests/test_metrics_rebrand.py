@@ -15,9 +15,9 @@ from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.storage import get_storage
+from app.domain.catalog.models import Resource
+from app.domain.submission.models import Submission
 from app.models import Tenant
-from app.modules.catalog.models import Resource
-from app.modules.submission.models import Submission
 from tests.test_catalog import _SAMPLE
 
 

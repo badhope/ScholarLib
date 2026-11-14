@@ -8,10 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import __version__
+from app.domain.catalog.models import Resource
+from app.domain.review.models import ReviewAssignment
+from app.domain.submission.models import Submission
 from app.models import Tenant
-from app.modules.catalog.models import Resource
-from app.modules.review.models import ReviewAssignment
-from app.modules.submission.models import Submission
 
 
 async def _default_tenant(db: AsyncSession) -> Tenant:

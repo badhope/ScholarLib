@@ -17,8 +17,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.gamification import levels_axis
 from app.models import User
-from app.modules.gamification import levels_axis
 
 
 @pytest_asyncio.fixture
