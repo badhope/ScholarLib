@@ -356,10 +356,6 @@
     overflow-x: clip;
     -webkit-text-size-adjust: 100%;
   }
-  /* Cookie 同意条未处理完时，右下角反馈气泡让位，避免遮住“全部接受”。 */
-  body:has([data-testid="cookie-banner"]) [data-testid="feedback-launcher"] {
-    display: none !important;
-  }
 
   body {
     background-color: var(--background);

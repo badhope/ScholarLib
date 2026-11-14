@@ -5,7 +5,7 @@ import { MarkdownEditor } from '@/components/common/markdown-editor'
 
 describe('MarkdownEditor', () => {
   it('shows a live split preview with headings and math', async () => {
-    const { container } = render(
+    render(
       <MarkdownEditor value={'# 标题\n\n公式 $E=mc^2$'} onChange={() => {}} />,
     )
     await userEvent.click(screen.getByText('分栏'))

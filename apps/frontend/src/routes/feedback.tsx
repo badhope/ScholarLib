@@ -128,7 +128,7 @@ function FeedbackBoardPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title={status === 'resolved' ? '还没有已解决的反馈' : '暂无反馈'}
-            description="页面右下角「有问题」提交后，会出现在这里。"
+            description="页面右侧「提问题」提交后，会出现在这里。"
           />
         ) : (
           <div className="space-y-3">

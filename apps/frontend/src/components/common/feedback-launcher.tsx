@@ -62,9 +62,8 @@ export function FeedbackLauncher() {
     }
   }
 
-  // 全站常驻（含投稿向导）：移动端做成一枚 44px 圆钮抬在 Tab 栏之上，
-  // 桌面端展开为「有问题」文字钮。上一版为避让列表卡片在移动端整颗隐藏，
-  // 读者直接找不到入口；这里恢复可见，并保持不压住底部导航。
+  // 全站常驻（含投稿向导）：移动端做成 44px 圆钮抬在 Tab 栏与 Cookie 条之上；
+  // 桌面端放在视口右侧中部，做成常驻竖边入口——不占正文、不和底部同意条打架。
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -72,10 +71,11 @@ export function FeedbackLauncher() {
           type="button"
           aria-label="给编辑部提问题"
           data-testid="feedback-launcher"
-          className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-3 z-40 inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-full border bg-card/95 text-xs font-medium text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/50 hover:text-primary sm:right-4 sm:h-10 sm:w-auto sm:px-3 md:bottom-6 md:h-11 md:px-4 md:text-sm"
+          title="给编辑部提问题"
+          className="fixed bottom-[calc(13rem+env(safe-area-inset-bottom))] right-3 z-40 inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-full border bg-card/95 text-xs font-medium text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/50 hover:text-primary sm:right-4 sm:h-10 sm:w-auto sm:px-3 md:bottom-auto md:top-1/2 md:right-0 md:h-auto md:w-auto md:-translate-y-1/2 md:rounded-l-xl md:rounded-r-none md:border-r-0 md:px-2.5 md:py-3 md:text-sm"
         >
           <MessageSquareText className="h-4 w-4" />
-          <span className="hidden sm:inline">有问题</span>
+          <span className="hidden sm:inline">提问题</span>
         </button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">

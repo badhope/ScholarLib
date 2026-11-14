@@ -287,7 +287,7 @@ function ContactStrip() {
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">读者与作者 QQ 群</p>
             <p className="hidden text-xs text-muted-foreground sm:block">
-              投稿、审稿、格式问题都可以在群里直接问编辑部；不方便加群就用右下角「有问题」。
+              投稿、审稿、格式问题都可以在群里直接问编辑部；不方便加群就用右侧「提问题」。
             </p>
           </div>
         </div>
