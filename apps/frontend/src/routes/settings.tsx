@@ -141,23 +141,6 @@ function ProfileCard() {
   )
 }
 
-function profileKey(user: ReturnType<typeof useMe>['data']) {
-  if (!user) return 'profile-empty'
-  return [
-    user.id,
-    user.display_name,
-    user.real_name,
-    user.affiliation,
-    user.department,
-    user.academic_title,
-    user.location,
-    user.research_interests,
-    user.website,
-    user.google_scholar,
-    user.bio,
-  ].join('|')
-}
-
 function SettingsPage() {
   const search = Route.useSearch()
   const navigate = useNavigate()
@@ -190,7 +173,7 @@ function SettingsPage() {
         </TabsList>
         <TabsContent value="profile" className="mt-4 space-y-6">
           <ProfileCard />
-          <ProfileDetailsCard key={profileKey(me)} initial={me} />
+          <ProfileDetailsCard key={me?.id ?? 'profile-empty'} initial={me} />
         </TabsContent>
         <TabsContent value="ai" className="mt-4">
           <AiAccessCard />

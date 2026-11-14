@@ -931,8 +931,7 @@ async def download_submission_file(
     # 作者/编辑可直接取回 Markdown 源文件（审稿人仍走匿名通道）。
     if file_format == "md" and (entry.file_path or entry.markdown_path):
         is_privileged_md = current_user is not None and (
-            entry.submitted_by == current_user.id
-            or await user_has_editor_access(db, current_user)
+            entry.submitted_by == current_user.id or await user_has_editor_access(db, current_user)
         )
         if is_privileged_md:
             # 作者上传的 .md 原件优先（保留原始换行/字节）；没有原件时

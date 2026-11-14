@@ -175,9 +175,7 @@ async def run_overdue_reminders(db: AsyncSession, *, tenant_id: Any) -> dict[str
         reminder_count = (assignment.reminder_count or 0) + 1
         assignment.reminder_count = reminder_count
 
-        digest = digests.setdefault(
-            reviewer.id, {"reviewer": reviewer, "items": []}
-        )
+        digest = digests.setdefault(reviewer.id, {"reviewer": reviewer, "items": []})
         digest["items"].append((submission.title, days_pending))
 
         db.add(

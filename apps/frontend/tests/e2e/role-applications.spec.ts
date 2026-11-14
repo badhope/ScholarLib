@@ -40,9 +40,11 @@ test.describe('profile bio', () => {
     await registerAndVerifyViaUi(page, user)
     await loginViaUi(page, user)
 
-    await page.goto('/settings')
+    await page.goto('/settings', { waitUntil: 'networkidle' })
     const textarea = page.locator('#profile-bio')
+    await expect(textarea).toHaveValue('')
     await textarea.fill('先写一句。')
+    await expect(page.getByRole('button', { name: '保存主页' })).toBeEnabled()
     await page.getByRole('button', { name: '保存主页' }).click()
     await expect(page.getByText('主页资料已保存')).toBeVisible({ timeout: 5_000 })
 

@@ -249,8 +249,7 @@ def review_reminder_digest(
         "如果时间不便，请在页面中选择拒绝，编辑会改派其他审稿人。\n"
     )
     lis = "".join(
-        f"<li>《{escape(title)}》已等待 <strong>{days} 天</strong></li>"
-        for title, days in items
+        f"<li>《{escape(title)}》已等待 <strong>{days} 天</strong></li>" for title, days in items
     )
     html = _shell(
         f"审稿提醒（{count} 篇待办）",

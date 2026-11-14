@@ -68,6 +68,7 @@ def redact_manuscript_identity(text: str, authors: Any) -> str:
             text = text.replace(name, ANONYMIZED_AUTHOR)
     return _EMAIL_RE.sub("[邮箱已隐藏]", text)
 
+
 # 审稿人视角**允许看到**的字段白名单。
 #
 # 为什么改成白名单：早期实现是黑名单（枚举要抹掉的字段），结果
