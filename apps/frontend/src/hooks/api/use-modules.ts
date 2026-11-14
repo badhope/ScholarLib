@@ -352,13 +352,19 @@ export function useCreateSubmission() {
   })
 }
 
-export function useMySubmissions(status?: string, page = 1, pageSize = 20) {
+export function useMySubmissions(
+  status?: string,
+  page = 1,
+  pageSize = 20,
+  options?: { enabled?: boolean },
+) {
   return useQuery<SubmissionListResponse>({
     queryKey: keys.submission.mine(status, page, pageSize),
     queryFn: async () =>
       (await api.get<SubmissionListResponse>('/submissions/me', {
         params: { status, page, page_size: pageSize },
       })).data,
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -382,6 +388,47 @@ export interface ReviewerCandidate {
   completed_reviews?: number
   matched_keywords?: string[]
   match_reasons?: string[]
+  /** P1-8：是否已提交当前年度利益冲突声明。 */
+  coi_declared?: boolean
+  coi_year?: number
+  /** 声明命中作者姓名/通讯邮箱时为 true；分派接口会 409。 */
+  conflict?: boolean
+  conflict_reasons?: string[]
+}
+
+export interface CoiDeclaration {
+  year: number
+  declared: boolean
+  conflicts: string[]
+  notes?: string | null
+  declared_at?: string | null
+  updated_at?: string | null
+}
+
+export interface CoiDeclarationInput {
+  conflicts: string[]
+  notes?: string | null
+}
+
+export function useMyCoiDeclaration() {
+  return useQuery<CoiDeclaration>({
+    queryKey: ['review', 'coi', 'me'] as const,
+    queryFn: async () => (await api.get<CoiDeclaration>('/review/conflicts/me')).data,
+  })
+}
+
+export function useSaveMyCoiDeclaration() {
+  const queryClient = useQueryClient()
+  return useMutation<CoiDeclaration, Error, CoiDeclarationInput>({
+    mutationFn: async (input) =>
+      (await api.put<CoiDeclaration>('/review/conflicts/me', input)).data,
+    onSuccess: (data) => {
+      queryClient.setQueryData(['review', 'coi', 'me'], data)
+      queryClient.invalidateQueries({ queryKey: ['submissions', 'reviewer-candidates'] })
+      toast.success(`${data.year} 年度利益冲突声明已保存`)
+    },
+    onError: (error) => toast.error(extractError(error, '声明保存失败')),
+  })
 }
 
 export function useReviewerCandidates(limit = 200, submissionId?: number) {
@@ -414,6 +461,73 @@ export function useReviewerWorkload() {
         await api.get<{ items: ReviewerWorkload[] }>('/editor/workbench/reviewers')
       ).data.items,
     staleTime: 60_000,
+  })
+}
+
+export interface CalibrationReviewerRow {
+  reviewer_id: number
+  username: string
+  completed_reviews: number
+  avg_score: number | null
+  avg_deviation: number | null
+  avg_abs_deviation: number | null
+  accept_rate: number | null
+  flags: string[]
+}
+
+export interface CalibrationResponse {
+  year: number
+  quarter: number
+  period_start: string
+  period_end: string
+  submission_count: number
+  reviewers: CalibrationReviewerRow[]
+  generated_at: string
+}
+
+export function useReviewerCalibration(year?: number, quarter?: number) {
+  return useQuery<CalibrationResponse>({
+    queryKey: ['review', 'calibration', year ?? 'current', quarter ?? 'current'] as const,
+    queryFn: async () =>
+      (
+        await api.get<CalibrationResponse>('/review/calibration', {
+          params: { ...(year ? { year } : {}), ...(quarter ? { quarter } : {}) },
+        })
+      ).data,
+  })
+}
+
+export interface TriageDecisionInput {
+  id: number
+  decision: 'send_to_review' | 'return_for_revision' | 'desk_reject'
+  note?: string
+}
+
+export function useTriageQueue(page = 1, pageSize = 20, options?: { enabled?: boolean }) {
+  return useQuery<SubmissionListResponse>({
+    queryKey: ['submissions', 'triage', page, pageSize] as const,
+    queryFn: async () =>
+      (await api.get<SubmissionListResponse>('/submissions/triage', {
+        params: { page, page_size: pageSize },
+      })).data,
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useTriageSubmission() {
+  const queryClient = useQueryClient()
+  return useMutation<SubmissionResponse, Error, TriageDecisionInput>({
+    mutationFn: async ({ id, decision, note }) =>
+      (
+        await api.post<SubmissionResponse>(`/submissions/${id}/triage`, {
+          decision,
+          note: note ?? '',
+        })
+      ).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['submissions'] })
+    },
+    onError: (error) => toast.error(extractError(error, '初筛失败')),
   })
 }
 
@@ -2013,12 +2127,13 @@ export function useReviewerWorkbench() {
   })
 }
 
-export function useEditorWorkbench() {
+export function useEditorWorkbench(options?: { enabled?: boolean }) {
   return useQuery<EditorWorkbenchResponse>({
     queryKey: ['workbench', 'editor'] as const,
     queryFn: async () =>
       (await api.get<EditorWorkbenchResponse>('/editor/workbench')).data,
     refetchInterval: 30_000,
+    enabled: options?.enabled ?? true,
   })
 }
 

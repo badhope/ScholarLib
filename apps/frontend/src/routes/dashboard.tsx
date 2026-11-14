@@ -42,6 +42,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState, ErrorState, Loading } from '@/components/common/state'
 import { StatTile } from '@/components/mobile/StatTile'
+import { RoleTodayCards } from '@/components/dashboard/role-today-cards'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: () => {
@@ -430,6 +431,7 @@ function DashboardPage() {
       />
       <CheckinBanner />
       <ReviewerTodayCard />
+      <RoleTodayCards />
 
       <div className="mt-3">
         <BadgeProgressStrip />

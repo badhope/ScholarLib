@@ -18,6 +18,7 @@ import { typeLabel } from '@/lib/resource-labels'
 import { extractError } from '@/lib/utils'
 import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import { PageHeader } from '@/components/common/page-header'
+import { ReviewerConflictCard } from '@/components/review/reviewer-conflict-card'
 import { Pagination } from '@/components/common/pagination'
 import { MarkdownContent } from '@/components/common/markdown-content'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
@@ -258,6 +259,10 @@ function ReviewWorkbenchPage() {
         title="审稿工作台"
         description="填写审稿报告：先过四问，再按七个维度逐项打分；意见支持 Markdown 与预览，提交前可看作者/编辑两个视角。稿件默认下载 Word，也可切换 PDF。"
       />
+
+      <div className="mb-4">
+        <ReviewerConflictCard />
+      </div>
 
       <div className="mb-4 rounded-md border border-dashed bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
         <span className="mr-2 font-medium text-foreground">评审依据与版式要求：</span>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createFileRoute, redirect } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -225,6 +225,21 @@ function EditorWorkbenchPage() {
       <PageHeader
         title="主编工作台"
         description="四栏流水线：待指派 → 评审中 → 待裁决 → 已决定。"
+        actions={
+          <>
+            <Link to="/editor/triage">
+              <Button variant="outline" size="sm">
+                <FileText className="mr-1 h-4 w-4" aria-hidden />
+                初筛队列
+              </Button>
+            </Link>
+            <Link to="/editor/calibration">
+              <Button variant="outline" size="sm">
+                季度校准
+              </Button>
+            </Link>
+          </>
+        }
       />
 
       {/* 批量指派条放在顶部：待指派列表可能很长，按钮不能沉到列表底部。 */}

@@ -114,6 +114,46 @@ class ReviewAssignment(Base, TenantScopedMixin):
     )
 
 
+class ReviewerConflictDeclaration(Base, TenantScopedMixin):
+    """审稿人年度利益冲突声明。
+
+    只记录审稿人主动申报的冲突对象（作者姓名、邮箱、机构、项目等）。
+    分派时用作者姓名/通讯邮箱做可解释匹配；机构字段目前不在投稿表里，
+    不做“凭猜测拦截”。没有声明不阻止分派，但编辑侧会显示“未声明”；
+    有声明且命中则硬拦截，并写入审计。
+    """
+
+    __tablename__ = "reviewer_conflict_declarations"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "year",
+            name="uq_reviewer_conflict_tenant_user_year",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    # 每行一个冲突对象；去重、去空白后存 JSON 数组。
+    conflicts: Mapped[list[str]] = mapped_column(JSONBVariant, nullable=False, default=list)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    declared_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class ReviewReport(Base, TenantScopedMixin):
     """Review report submitted by a reviewer (one per assignment).
 
@@ -151,4 +191,4 @@ class ReviewReport(Base, TenantScopedMixin):
     assignment = relationship("ReviewAssignment", back_populates="report")
 
 
-__all__ = ["ReviewAssignment", "ReviewReport"]
+__all__ = ["ReviewAssignment", "ReviewReport", "ReviewerConflictDeclaration"]

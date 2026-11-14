@@ -155,6 +155,18 @@ class Submission(Base, TenantScopedMixin):
     # 编辑 4 元决定（accept/minor_revision/major_revision/reject）的备注，
     # 区别于 admin_note（兼容旧 review 端点的备注字段）
     editor_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # P1-9 两段式初筛：编辑先做 triage（送外审 / 退回修改 / 直接拒稿），
+    # 之后才进入分派与同行评审。旧库迁移时按 status 回填，避免把已在外审
+    # 的稿件重新排进初筛队列。
+    # pending=待初筛, passed=已送外审, rework=退回修改, rejected=直接拒稿
+    triage_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default="pending", index=True
+    )
+    triage_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triaged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    triaged_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # 封面图（作者上传 / 编辑指定）。存储 key 与 file_path 同族，
     # 物化到 catalog.resources.cover_image 时原样带过去。
     # 空 = 未上传，前端回退到按学科自动分配的默认封面。

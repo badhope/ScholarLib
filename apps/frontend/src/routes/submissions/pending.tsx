@@ -964,6 +964,11 @@ function AssignReviewerDialog({
   const [externalAffiliation, setExternalAffiliation] = useState('')
 
   const toggle = (id: number) => {
+    const candidate = candidates.find((item) => item.id === id)
+    if (candidate?.conflict) {
+      toast.error('该审稿人已声明与作者存在利益冲突，不能指派')
+      return
+    }
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 3 ? prev : [...prev, id],
     )
@@ -1019,14 +1024,26 @@ function AssignReviewerDialog({
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={Boolean(u.conflict)}
                       onChange={() => toggle(u.id)}
                       className="h-4 w-4"
                     />
                     <span className="font-medium">{u.username}</span>
                     <span className="text-xs text-muted-foreground">{u.email}</span>
-                  {typeof u.score === "number" && u.score > 0 ? (
-                    <Badge variant="outline" className="text-[10px]">匹配 {u.score}</Badge>
-                  ) : null}
+                    {typeof u.score === 'number' && u.score > 0 ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        匹配 {u.score}
+                      </Badge>
+                    ) : null}
+                    {u.conflict ? (
+                      <Badge variant="destructive" className="text-[10px]" title={(u.conflict_reasons ?? []).join('、')}>
+                        利益冲突
+                      </Badge>
+                    ) : !u.coi_declared ? (
+                      <Badge variant="outline" className="text-[10px]">
+                        未声明
+                      </Badge>
+                    ) : null}
                     {selected.includes(u.id) && (
                       <span className="ml-auto text-xs text-primary">已选</span>
                     )}

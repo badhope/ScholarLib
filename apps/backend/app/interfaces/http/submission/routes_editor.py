@@ -36,6 +36,12 @@ from app.domain.submission._helpers import (
     _materialize_resource_from_submission,
 )
 from app.domain.submission.models import Submission
+from app.interfaces.http.review.coi import (
+    current_coi_year,
+    declaration_matches,
+    declarations_for_reviewers,
+    ensure_no_declared_conflict,
+)
 from app.interfaces.http.review.schemas import (
     AssignmentCreate,
     AssignmentListResponse,
@@ -54,11 +60,149 @@ from app.interfaces.http.submission.schemas import (
     SubmissionListResponse,
     SubmissionResponse,
     SubmissionReview,
+    TriageRequest,
     WaiveReviewRequest,
 )
 from app.models import AuditLog, Role, User, UserRole
 
 logger = get_logger("rubbish.submission.editor")
+
+
+@router.get("/triage", response_model=SubmissionListResponse)
+async def list_triage_queue(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    _: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionListResponse:
+    """P1-9 初筛队列：只返回尚未初筛的 pending 稿件，最老的排前面。"""
+    tenant_id = require_tenant_id()
+    base = select(Submission).where(
+        Submission.tenant_id == tenant_id,
+        Submission.status == "pending",
+        Submission.triage_status == "pending",
+    )
+    total = int(
+        (
+            await db.execute(
+                select(func.count(Submission.id)).where(
+                    Submission.tenant_id == tenant_id,
+                    Submission.status == "pending",
+                    Submission.triage_status == "pending",
+                )
+            )
+        ).scalar_one()
+    )
+    rows = (
+        (
+            await db.execute(
+                base.order_by(Submission.submitted_at.asc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return SubmissionListResponse(
+        data=[_to_response(row) for row in rows],
+        meta=PaginationMeta(
+            total=total,
+            page=page,
+            page_size=page_size,
+            total_pages=(total + page_size - 1) // page_size,
+        ),
+    )
+
+
+@router.post("/{submission_id}/triage", response_model=SubmissionResponse)
+async def triage_submission(
+    submission_id: int,
+    body: TriageRequest,
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> SubmissionResponse:
+    """P1-9 两段式初筛：先由编辑判断，再进入同行评审或退回。
+
+    - send_to_review：记录“已送外审”，状态仍为 pending，随后分派审稿人；
+    - return_for_revision：置 major_revision，作者可修改后重投；
+    - desk_reject：直接拒稿，不进入同行评审。
+    """
+    entry = await _get_or_404(db, submission_id)
+    if current_user.id == entry.submitted_by:
+        raise HTTPException(status_code=403, detail="Cannot triage own submission")
+    if entry.status not in ("pending", "resubmitted"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot triage submission in status '{entry.status}'",
+        )
+    if (entry.triage_status or "pending") != "pending":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Submission already triaged as '{entry.triage_status}'",
+        )
+    note = body.note.strip()
+    if body.decision in ("return_for_revision", "desk_reject") and len(note) < 10:
+        raise HTTPException(
+            status_code=422,
+            detail="退回修改或直接拒稿必须写至少 10 字理由，作者需要知道下一步怎么做。",
+        )
+
+    now = utcnow()
+    entry.triage_note = note or None
+    entry.triaged_at = now
+    entry.triaged_by = current_user.id
+    if body.decision == "send_to_review":
+        entry.triage_status = "passed"
+    elif body.decision == "return_for_revision":
+        entry.triage_status = "rework"
+        entry.status = "major_revision"
+        entry.editor_note = note
+        entry.reviewed_by = current_user.id
+        entry.reviewed_at = now
+    else:
+        entry.triage_status = "rejected"
+        entry.status = "rejected"
+        entry.editor_note = note
+        entry.reviewed_by = current_user.id
+        entry.reviewed_at = now
+
+    if body.decision in ("return_for_revision", "desk_reject"):
+        await notifications.create(
+            db,
+            tenant_id=entry.tenant_id,
+            user_id=entry.submitted_by,
+            type_=(
+                "submission.triage_rework"
+                if body.decision == "return_for_revision"
+                else "submission.triage_rejected"
+            ),
+            title=(
+                f"稿件需要修改：{entry.title}"
+                if body.decision == "return_for_revision"
+                else f"稿件未通过初筛：{entry.title}"
+            ),
+            body=(
+                f"稿件 #{entry.id} 已完成编辑部初筛。\n"
+                f"{'修改后可在「我的提交」中重新提交。' if body.decision == 'return_for_revision' else '本次不进入同行评审。'}\n"
+                f"编辑部说明：{note}"
+            ),
+            related_type="submission",
+            related_id=str(entry.id),
+        )
+    db.add(
+        AuditLog(
+            tenant_id=current_user.tenant_id,
+            actor_user_id=current_user.id,
+            action="submission.triage",
+            target_type="submission",
+            target_id=str(entry.id),
+            payload={"decision": body.decision, "note": note},
+        )
+    )
+    await db.commit()
+    await db.refresh(entry)
+    return _to_response(entry)
 
 
 @router.get("/pending", response_model=SubmissionListResponse)
@@ -183,7 +327,9 @@ async def list_reviewer_candidates(
             )
         ).scalar_one_or_none()
         if current is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found"
+            )
 
     # One aggregate query for completed history and one for active load,
     # instead of N+1 per candidate.
@@ -215,6 +361,11 @@ async def list_reviewer_candidates(
         ).all()
     )
 
+    coi_year = current_coi_year()
+    declarations = await declarations_for_reviewers(
+        db, tenant_id=tenant_id, reviewer_ids=reviewer_ids, year=coi_year
+    )
+
     candidates: list[ReviewerCandidate] = []
     for row in rows:
         history = history_by_reviewer.get(row.id, [])
@@ -223,6 +374,12 @@ async def list_reviewer_candidates(
             current=current,
             history=history,
             active_count=active_count,
+        )
+        declaration = declarations.get(row.id)
+        conflict_reasons = (
+            declaration_matches(declaration, current)
+            if current is not None and declaration is not None
+            else []
         )
         candidates.append(
             ReviewerCandidate(
@@ -234,6 +391,10 @@ async def list_reviewer_candidates(
                 completed_reviews=len(history),
                 matched_keywords=matched,
                 match_reasons=reasons,
+                coi_declared=declaration is not None,
+                coi_year=coi_year,
+                conflict=bool(conflict_reasons),
+                conflict_reasons=conflict_reasons,
             )
         )
     if current is not None:
@@ -394,6 +555,17 @@ async def assign_reviewer(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Assigned user is not a reviewer",
         )
+    await ensure_no_declared_conflict(
+        db,
+        tenant_id=entry.tenant_id,
+        reviewer_id=reviewer.id,
+        submission=entry,
+    )
+    if (entry.triage_status or "pending") in ("pending", "rework"):
+        entry.triage_status = "passed"
+        entry.triaged_at = utcnow()
+        entry.triaged_by = current_user.id
+
     existing_all = (
         (
             await db.execute(

@@ -41,6 +41,7 @@ from app.domain.notifications import services as notifications
 from app.domain.notifications.models import EmailDigestRecord
 from app.domain.review.models import ReviewAssignment, ReviewReport
 from app.domain.submission.models import Submission
+from app.interfaces.http.review.coi import ensure_no_declared_conflict
 from app.models import AuditLog, User
 
 router = APIRouter(tags=["workbench"])
@@ -582,6 +583,24 @@ async def batch_assign(
                     }
                 )
                 continue
+            try:
+                await ensure_no_declared_conflict(
+                    db, tenant_id=tenant_id, reviewer_id=rid, submission=sub
+                )
+            except HTTPException as exc:
+                skipped.append(
+                    {
+                        "submission_id": item.submission_id,
+                        "reviewer_id": rid,
+                        "reason": "declared_conflict",
+                        "message": (
+                            exc.detail.get("message")
+                            if isinstance(exc.detail, dict)
+                            else str(exc.detail)
+                        ),
+                    }
+                )
+                continue
 
             dup = (
                 await db.execute(
@@ -610,6 +629,10 @@ async def batch_assign(
             )
             db.add(a)
             await db.flush()
+            if (sub.triage_status or "pending") in ("pending", "rework"):
+                sub.triage_status = "passed"
+                sub.triaged_at = utcnow()
+                sub.triaged_by = current_user.id
 
             # 站内通知（同事务）
             await notifications.create(

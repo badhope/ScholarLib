@@ -62,6 +62,8 @@ import { Route as CatalogIndexRouteImport } from './routes/catalog/index'
 import { Route as CatalogResourceIdRouteImport } from './routes/catalog/$resourceId'
 import { Route as CatalogNewRouteImport } from './routes/catalog/new'
 import { Route as ClaimResourceIdRouteImport } from './routes/claim/$resourceId'
+import { Route as EditorCalibrationRouteImport } from './routes/editor/calibration'
+import { Route as EditorTriageRouteImport } from './routes/editor/triage'
 import { Route as EditorWorkbenchRouteImport } from './routes/editor/workbench'
 import { Route as FollowsIndexRouteImport } from './routes/follows/index'
 import { Route as ForumIndexRouteImport } from './routes/forum/index'
@@ -348,6 +350,16 @@ const ClaimResourceIdRoute = ClaimResourceIdRouteImport.update({
   path: '/claim/$resourceId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EditorCalibrationRoute = EditorCalibrationRouteImport.update({
+  id: '/editor/calibration',
+  path: '/editor/calibration',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorTriageRoute = EditorTriageRouteImport.update({
+  id: '/editor/triage',
+  path: '/editor/triage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditorWorkbenchRoute = EditorWorkbenchRouteImport.update({
   id: '/editor/workbench',
   path: '/editor/workbench',
@@ -501,6 +513,8 @@ export interface FileRoutesByFullPath {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/calibration': typeof EditorCalibrationRoute
+  '/editor/triage': typeof EditorTriageRoute
   '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
@@ -576,6 +590,8 @@ export interface FileRoutesByTo {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/calibration': typeof EditorCalibrationRoute
+  '/editor/triage': typeof EditorTriageRoute
   '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
@@ -652,6 +668,8 @@ export interface FileRoutesById {
   '/catalog/$resourceId': typeof CatalogResourceIdRoute
   '/catalog/new': typeof CatalogNewRoute
   '/claim/$resourceId': typeof ClaimResourceIdRoute
+  '/editor/calibration': typeof EditorCalibrationRoute
+  '/editor/triage': typeof EditorTriageRoute
   '/editor/workbench': typeof EditorWorkbenchRoute
   '/forum/$topicId': typeof ForumTopicIdRoute
   '/library/$listId': typeof LibraryListIdRoute
@@ -729,6 +747,8 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/calibration'
+    | '/editor/triage'
     | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
@@ -804,6 +824,8 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/calibration'
+    | '/editor/triage'
     | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
@@ -879,6 +901,8 @@ export interface FileRouteTypes {
     | '/catalog/$resourceId'
     | '/catalog/new'
     | '/claim/$resourceId'
+    | '/editor/calibration'
+    | '/editor/triage'
     | '/editor/workbench'
     | '/forum/$topicId'
     | '/library/$listId'
@@ -955,6 +979,8 @@ export interface RootRouteChildren {
   CatalogResourceIdRoute: typeof CatalogResourceIdRoute
   CatalogNewRoute: typeof CatalogNewRoute
   ClaimResourceIdRoute: typeof ClaimResourceIdRoute
+  EditorCalibrationRoute: typeof EditorCalibrationRoute
+  EditorTriageRoute: typeof EditorTriageRoute
   EditorWorkbenchRoute: typeof EditorWorkbenchRoute
   ForumTopicIdRoute: typeof ForumTopicIdRoute
   LibraryListIdRoute: typeof LibraryListIdRoute
@@ -1352,6 +1378,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ClaimResourceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/editor/calibration': {
+      id: '/editor/calibration'
+      path: '/editor/calibration'
+      fullPath: '/editor/calibration'
+      preLoaderRoute: typeof EditorCalibrationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor/triage': {
+      id: '/editor/triage'
+      path: '/editor/triage'
+      fullPath: '/editor/triage'
+      preLoaderRoute: typeof EditorTriageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/editor/workbench': {
       id: '/editor/workbench'
       path: '/editor/workbench'
@@ -1547,6 +1587,8 @@ const rootRouteChildren: RootRouteChildren = {
   CatalogResourceIdRoute: CatalogResourceIdRoute,
   CatalogNewRoute: CatalogNewRoute,
   ClaimResourceIdRoute: ClaimResourceIdRoute,
+  EditorCalibrationRoute: EditorCalibrationRoute,
+  EditorTriageRoute: EditorTriageRoute,
   EditorWorkbenchRoute: EditorWorkbenchRoute,
   ForumTopicIdRoute: ForumTopicIdRoute,
   LibraryListIdRoute: LibraryListIdRoute,

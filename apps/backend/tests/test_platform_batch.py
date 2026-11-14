@@ -153,7 +153,7 @@ async def test_system_health_requires_admin(
     assert any(c["key"] == "database" for c in body["checks"])
     # 迁移图里有元组 down_revision 与重复 revision id，健康页必须用
     # Alembic 自己的图取 head，不能靠正则差集。
-    assert body["code_revision"] == "041_content_reports_api_tokens"
+    assert body["code_revision"] == "043_submission_triage"
 
 
 @pytest.mark.asyncio

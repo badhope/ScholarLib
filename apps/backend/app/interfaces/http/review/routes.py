@@ -49,6 +49,9 @@ from app.domain.review.blinding import (
 )
 from app.domain.review.models import ReviewAssignment, ReviewReport
 from app.domain.submission.models import Submission
+from app.interfaces.http.review.calibration import router as calibration_router
+from app.interfaces.http.review.coi import ensure_no_declared_conflict
+from app.interfaces.http.review.coi import router as coi_router
 from app.interfaces.http.review.schemas import (
     AssignmentListResponse,
     AssignmentResponse,
@@ -59,6 +62,8 @@ from app.interfaces.http.submission.schemas import SubmissionResponse
 from app.models import User
 
 router = APIRouter(prefix="/review", tags=["review"])
+router.include_router(coi_router)
+router.include_router(calibration_router)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
@@ -382,6 +387,14 @@ async def accept_assignment(
     a = await _get_assignment_for_reviewer(db, assignment_id, current_user.id)
     if a.submission is None or a.submission.submitted_by == current_user.id:
         raise HTTPException(status_code=403, detail="Cannot review own submission")
+    if a.submission is not None:
+        # 接受邀请时再核一次：审稿人可能在收到邀请后才补报冲突。
+        await ensure_no_declared_conflict(
+            db,
+            tenant_id=current_user.tenant_id,
+            reviewer_id=current_user.id,
+            submission=a.submission,
+        )
     if a.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -785,6 +798,7 @@ async def assign_reviewers(
             or await user_has_role(db, reviewer, ROLE_SENIOR_REVIEWER)
         ):
             raise HTTPException(status_code=422, detail=f"User {rid} is not a reviewer")
+        await ensure_no_declared_conflict(db, tenant_id=tenant_id, reviewer_id=rid, submission=sub)
         # 同一轮内已邀请过的不重复；旧轮 cancelled/declined 不拦新一轮
         dup = await db.execute(
             select(ReviewAssignment).where(
@@ -814,6 +828,10 @@ async def assign_reviewers(
         db.add(a)
         created.append(a)
 
+    if created and (sub.triage_status or "pending") in ("pending", "rework"):
+        sub.triage_status = "passed"
+        sub.triaged_at = utcnow()
+        sub.triaged_by = current_user.id
     if sub.status == "pending" and created:
         sub.status = "under_review"
     await db.flush()
@@ -1003,6 +1021,9 @@ async def assign_adjudicator(
         )
     if any(a.reviewer_id == body.reviewer_id for a in assignments):
         raise HTTPException(status_code=409, detail="该审稿人已参与本稿评审，不能兼任第三方裁决人")
+    await ensure_no_declared_conflict(
+        db, tenant_id=tenant_id, reviewer_id=body.reviewer_id, submission=sub
+    )
 
     due = utcnow() + timedelta(days=body.due_days)
     slot = max((a.slot or 0) for a in assignments) + 1

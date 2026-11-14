@@ -138,6 +138,13 @@ class AnonymizedFileUpdate(BaseModel):
     anonymized_file_url: AnyHttpUrl | None = None
 
 
+class TriageRequest(BaseModel):
+    """P1-9 初筛决定：送外审 / 退回修改 / 直接拒稿。"""
+
+    decision: Literal["send_to_review", "return_for_revision", "desk_reject"]
+    note: str = Field(default="", max_length=2000)
+
+
 class ReworkRequest(BaseModel):
     """打回稿件：必须列出具体修改要求。
 
@@ -225,6 +232,11 @@ class SubmissionResponse(BaseModel):
     submitted_at: datetime
     reviewed_by: int | None = None
     reviewed_at: datetime | None = None
+    # P1-9 两段式初筛：pending/passed/rework/rejected。
+    triage_status: str | None = None
+    triage_note: str | None = None
+    triaged_at: datetime | None = None
+    triaged_by: int | None = None
     # 结构报告：仅上传文件端点返回（详情/列表不返回，避免重复计算）
     format_report: FormatReport | None = None
     # 上传结果提示（P0）：扩展名与实际格式不一致、needs_docx 原因、
@@ -259,6 +271,12 @@ class ReviewerCandidate(BaseModel):
     completed_reviews: int = 0
     matched_keywords: list[str] = Field(default_factory=list)
     match_reasons: list[str] = Field(default_factory=list)
+    # P1-8：年度利益冲突声明。未声明不拦分派，但编辑能看见；声明命中
+    # 作者姓名/通讯邮箱时 conflict=True，分派接口会 409。
+    coi_declared: bool = False
+    coi_year: int | None = None
+    conflict: bool = False
+    conflict_reasons: list[str] = Field(default_factory=list)
 
 
 class ReviewerCandidateListResponse(BaseModel):

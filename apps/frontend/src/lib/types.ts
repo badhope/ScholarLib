@@ -582,6 +582,11 @@ export interface SubmissionResponse {
   submitted_at: string
   reviewed_by?: number | null
   reviewed_at?: string | null
+  /** P1-9 两段式初筛：pending/passed/rework/rejected */
+  triage_status?: 'pending' | 'passed' | 'rework' | 'rejected' | null
+  triage_note?: string | null
+  triaged_at?: string | null
+  triaged_by?: number | null
   /** 结构报告：仅上传文件端点返回 */
   format_report?: FormatReport | null
   /** 质量评分（物化后的资源上读取；投稿阶段可能为空） */
