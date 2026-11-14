@@ -164,6 +164,53 @@ async def test_reviewer_workbench_completed_column(
     assert body["completed"]["items"][0]["recommendation"] == "minor_revision"
 
 
+async def test_reviewer_workload_stats(
+    client: AsyncClient, admin_user: dict, test_user: dict, db_session: AsyncSession
+) -> None:
+    """主编负载表：接受中 / 已完成 / 累计邀请按审稿人聚合。"""
+    await client.get("/api/health")
+    tenant = (await db_session.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
+    reviewer = await _register_reviewer(client, db_session, tenant, "wb4")
+    subs = [
+        await _create_submission(client, test_user, "WB workload active"),
+        await _create_submission(client, test_user, "WB workload done"),
+    ]
+    batch = await client.post(
+        "/api/editor/workbench/batch-assign",
+        json={
+            "items": [
+                {"submission_id": subs[0]["id"], "reviewer_ids": [reviewer["user_id"]]},
+                {"submission_id": subs[1]["id"], "reviewer_ids": [reviewer["user_id"]]},
+            ],
+            "due_days": 7,
+        },
+        headers=auth_headers(admin_user),
+    )
+    assert batch.status_code == 201, batch.text
+    done_id = batch.json()["created"][1]["assignment_id"]
+    await client.post(f"/api/review/assignments/{done_id}/accept", headers=auth_headers(reviewer))
+    rep = await client.post(
+        f"/api/review/assignments/{done_id}/submit",
+        json={
+            "recommendation": "accept",
+            "scores": review_scores(80),
+            "comments_to_author": "ok",
+        },
+        headers=auth_headers(reviewer),
+    )
+    assert rep.status_code == 201, rep.text
+
+    resp = await client.get("/api/editor/workbench/reviewers", headers=auth_headers(admin_user))
+    assert resp.status_code == 200, resp.text
+    row = next(i for i in resp.json()["items"] if i["username"] == "reviewer_wb4")
+    assert row["active_count"] == 1
+    assert row["completed_count"] == 1
+    assert row["overdue_count"] == 0
+    assert row["total_count"] == 2
+    forbidden = await client.get("/api/editor/workbench/reviewers", headers=auth_headers(reviewer))
+    assert forbidden.status_code == 403
+
+
 # ---------------------------------------------------------------------------
 # Editor workbench
 # ---------------------------------------------------------------------------
