@@ -1199,7 +1199,7 @@ function HomePage() {
 
         {/* ── 页脚：深色收底，替代浅灰双线 ── */}
         <footer className="bg-primary text-primary-foreground">
-          <div className="mx-auto grid max-w-6xl gap-8 py-12 md:grid-cols-4">
+          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:px-6 md:grid-cols-4">
             <div className="md:col-span-2">
               <p className="text-3xl" style={{ fontFamily: DISPLAY_FONT, fontWeight: 600 }}>
                 Rubbish
@@ -1310,16 +1310,16 @@ function HomePage() {
                 <li>
                   <a
                     href="mailto:Rubbish_EB@qun.mail.163.com"
-                    className="text-primary-foreground/75 transition-colors hover:text-primary-foreground"
+                    className="block break-all !text-white/80 transition-colors hover:!text-white hover:underline"
                   >
-                    联系编辑部
+                    联系编辑部 · Rubbish_EB@qun.mail.163.com
                   </a>
                 </li>
               </ul>
             </div>
           </div>
           <div className="border-t border-primary-foreground/15">
-            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 text-xs text-primary-foreground/60">
+            <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-primary-foreground/60 sm:px-6">
               <span>
                 © {new Date().getFullYear()} Rubbish · An Open Access Journal
               </span>

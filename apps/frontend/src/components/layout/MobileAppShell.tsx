@@ -196,13 +196,15 @@ export function MobileAppShell() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <AmbientBackdrop />
-        <main className="relative z-10 flex-1 pb-[calc(8rem+env(safe-area-inset-bottom))]">
+        <main className="relative z-10 min-w-0 flex-1 overflow-x-hidden pb-[calc(8rem+env(safe-area-inset-bottom))]">
           <CookieBanner />
-          <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
-            <PageTransition>
-              <Outlet />
-            </PageTransition>
-          </ModuleErrorBoundary>
+          <div className="mx-auto w-full max-w-screen-sm overflow-x-clip px-4">
+            <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
+              <PageTransition>
+                <Outlet />
+              </PageTransition>
+            </ModuleErrorBoundary>
+          </div>
         </main>
         {bottomTab}
       </div>
@@ -299,7 +301,7 @@ export function MobileAppShell() {
       {/* 内容区：底部留白避开固定 Tab 栏 */}
       <main
         className={cn(
-          'relative z-10 flex-1 overflow-y-auto',
+          'relative z-10 min-w-0 flex-1 overflow-y-auto overflow-x-hidden',
           hasOwnBottomBar
             ? 'pb-[calc(8.5rem+env(safe-area-inset-bottom))]'
             : immersive
@@ -309,7 +311,7 @@ export function MobileAppShell() {
                 : 'pb-4',
         )}
       >
-        <div className="mx-auto w-full max-w-screen-sm px-4 py-4">
+        <div className="mx-auto w-full max-w-screen-sm overflow-x-clip px-4 py-4">
           <CookieBanner />
           <ModuleErrorBoundary name="页面" resetKeys={[location.pathname]}>
             <PageTransition>

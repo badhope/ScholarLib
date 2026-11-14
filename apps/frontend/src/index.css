@@ -361,7 +361,7 @@
     background-color: var(--background);
     color: var(--foreground);
     overflow-x: clip;
-    /* 滚动条出现/消失不再引起布局横向抖动 */
+    /* 桌面端才预留滚动条槽；移动端预留会让左右留白不对称 */
     scrollbar-gutter: stable;
   }
   /* 长单词 / 长 URL / 中文混排统一切断，避免把容器撑破 */
@@ -1465,4 +1465,8 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .seg-link { transition: none; }
   .seg-link:hover { transform: none; }
+}
+
+@media (max-width: 767px) {
+  body { scrollbar-gutter: auto; }
 }

@@ -62,7 +62,7 @@ export function FeedbackLauncher() {
     }
   }
 
-  // 全站常驻（含投稿向导）：移动端做成 44px 圆钮抬在 Tab 栏与 Cookie 条之上；
+  // 全站常驻（含投稿向导）：移动端做成贴右边中部的竖条入口，避开 Tab 栏、Cookie 条和正文控件；
   // 桌面端放在视口右侧中部，做成常驻竖边入口——不占正文、不和底部同意条打架。
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -72,10 +72,13 @@ export function FeedbackLauncher() {
           aria-label="给编辑部提问题"
           data-testid="feedback-launcher"
           title="给编辑部提问题"
-          className="fixed bottom-[calc(13rem+env(safe-area-inset-bottom))] right-3 z-40 inline-flex h-11 w-11 items-center justify-center gap-1.5 rounded-full border bg-card/95 text-xs font-medium text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/50 hover:text-primary sm:right-4 sm:h-10 sm:w-auto sm:px-3 md:bottom-auto md:top-1/2 md:right-0 md:h-auto md:w-auto md:-translate-y-1/2 md:rounded-l-xl md:rounded-r-none md:border-r-0 md:px-2.5 md:py-3 md:text-sm"
+          className="fixed right-[-10px] top-[42%] z-40 inline-flex h-20 w-9 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-l-lg border border-r-0 bg-card/95 text-xs font-medium text-foreground shadow-lg backdrop-blur transition-colors hover:border-primary/50 hover:text-primary md:right-0 md:top-1/2 md:h-auto md:w-auto md:flex-row md:rounded-l-xl md:px-2.5 md:py-3 md:text-sm"
         >
           <MessageSquareText className="h-4 w-4" />
-          <span className="hidden sm:inline">提问题</span>
+          <span className="hidden md:inline">提问题</span>
+          <span className="text-[10px] leading-[1.15] tracking-[0.14em] [writing-mode:vertical-rl] md:hidden">
+            提问题
+          </span>
         </button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
