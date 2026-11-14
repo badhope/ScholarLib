@@ -419,3 +419,38 @@ async def test_forum_image_upload_and_public_read(client: AsyncClient, test_user
     assert fetched.status_code == 200
     assert fetched.headers["content-type"] == "image/png"
     assert fetched.content == png
+
+
+@pytest.mark.asyncio
+async def test_parent_board_slug_filters_descendant_topics(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    """多级版块：父板块 slug 必须能筛出后代版块的帖子（不能 422）。"""
+    parent = await client.post(
+        "/api/forum/admin/boards",
+        json={"slug": "test-parent", "name": "测试父板块"},
+        headers=auth_headers(admin_user),
+    )
+    assert parent.status_code == 201, parent.text
+    child = await client.post(
+        "/api/forum/admin/boards",
+        json={"slug": "test-child", "name": "测试子板块", "parent_id": parent.json()["id"]},
+        headers=auth_headers(admin_user),
+    )
+    assert child.status_code == 201, child.text
+
+    created = await client.post(
+        "/api/forum/topics",
+        json={
+            "title": "子板块里的帖子",
+            "body": "验证父板块聚合。",
+            "board_id": child.json()["id"],
+        },
+        headers=auth_headers(test_user),
+    )
+    assert created.status_code == 201, created.text
+
+    for param in (f"category={parent.json()['slug']}", f"board={parent.json()['slug']}"):
+        listing = await client.get(f"/api/forum/topics?{param}")
+        assert listing.status_code == 200, listing.text
+        assert listing.json()["meta"]["total"] == 1

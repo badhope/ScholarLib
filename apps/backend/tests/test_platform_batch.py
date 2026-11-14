@@ -13,7 +13,9 @@ from tests.test_submission import _PAYLOAD
 
 
 @pytest.mark.asyncio
-async def test_forum_board_tree_and_board_topic(client: AsyncClient, admin_user: dict, test_user: dict) -> None:
+async def test_forum_board_tree_and_board_topic(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
     parent = await client.post(
         "/api/forum/admin/boards",
         json={"slug": "academic", "name": "学术交流", "sort_order": 1},
@@ -68,7 +70,11 @@ async def test_site_similarity_flags_copy_of_resource(
 ) -> None:
     resource = await client.post(
         "/api/catalog",
-        json={**_SAMPLE, "title": "站内相似度基准标题", "abstract": "这是一段用于站内相似度比对的稳定摘要文本，包含足够多的中文字符来形成 shingle。"},
+        json={
+            **_SAMPLE,
+            "title": "站内相似度基准标题",
+            "abstract": "这是一段用于站内相似度比对的稳定摘要文本，包含足够多的中文字符来形成 shingle。",
+        },
         headers=auth_headers(admin_user),
     )
     assert resource.status_code == 201
@@ -135,7 +141,9 @@ async def test_comment_notifies_owner_and_preferences_roundtrip(
 
 
 @pytest.mark.asyncio
-async def test_system_health_requires_admin(client: AsyncClient, admin_user: dict, test_user: dict) -> None:
+async def test_system_health_requires_admin(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
     forbidden = await client.get("/api/admin/system/health", headers=auth_headers(test_user))
     assert forbidden.status_code in (401, 403)
     ok = await client.get("/api/admin/system/health", headers=auth_headers(admin_user))
@@ -153,7 +161,9 @@ async def test_submission_edit_recomputes_similarity(
     client: AsyncClient, admin_user: dict, test_user: dict
 ) -> None:
     original = "原创摘要：讨论可复现实验的登记、版本锁定与失败样本归档，不涉及任何已有站内文本。"
-    copied = "站内相似度编辑重算：这段摘要会故意与站内资源保持一致，用来验证修改后的重算链路是否生效。"
+    copied = (
+        "站内相似度编辑重算：这段摘要会故意与站内资源保持一致，用来验证修改后的重算链路是否生效。"
+    )
     resource = await client.post(
         "/api/catalog",
         json={**_SAMPLE, "title": "编辑重算基准", "abstract": copied},
@@ -162,7 +172,12 @@ async def test_submission_edit_recomputes_similarity(
     assert resource.status_code == 201
     created = await client.post(
         "/api/submissions",
-        json={**_PAYLOAD, "title": "编辑重算前的原创标题", "abstract": original, "doi": "10.1234/edit.001"},
+        json={
+            **_PAYLOAD,
+            "title": "编辑重算前的原创标题",
+            "abstract": original,
+            "doi": "10.1234/edit.001",
+        },
         headers=auth_headers(test_user),
     )
     assert created.status_code == 201, created.text
@@ -184,7 +199,11 @@ async def test_comment_report_enters_unified_queue(
 ) -> None:
     resource = await client.post(
         "/api/catalog",
-        json={**_SAMPLE, "title": "举报队列基准文章", "abstract": "用于评论举报链路的公开文章摘要。"},
+        json={
+            **_SAMPLE,
+            "title": "举报队列基准文章",
+            "abstract": "用于评论举报链路的公开文章摘要。",
+        },
         headers=auth_headers(admin_user),
     )
     assert resource.status_code == 201, resource.text
@@ -219,9 +238,7 @@ async def test_comment_report_enters_unified_queue(
     )
     assert handled.status_code == 200, handled.text
     assert handled.json()["status"] == "resolved"
-    after = await client.get(
-        "/api/comments", params={"resource_id": rid, "page_size": 50}
-    )
+    after = await client.get("/api/comments", params={"resource_id": rid, "page_size": 50})
     assert all(c["id"] != cid for c in after.json()["data"])
 
 
@@ -262,9 +279,7 @@ async def test_ai_token_submission_idempotent_and_revocable(
     assert replay.status_code == 201, replay.text
     assert replay.json()["id"] == sid
 
-    revoked = await client.delete(
-        f"/api/ai/tokens/{token_id}", headers=auth_headers(test_user)
-    )
+    revoked = await client.delete(f"/api/ai/tokens/{token_id}", headers=auth_headers(test_user))
     assert revoked.status_code == 200, revoked.text
     denied = await client.post(
         "/api/ai/submissions",

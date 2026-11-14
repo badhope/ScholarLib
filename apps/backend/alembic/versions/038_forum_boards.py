@@ -113,7 +113,9 @@ def upgrade() -> None:
         paper = create(tenant_id, academic, "paper", "论文沙龙", "逐篇聊论文：方法、结论、复现", 0)
         create(tenant_id, paper, "paper-reading", "论文精读", "精读一篇：问题、方法、证据、局限", 0)
         create(tenant_id, paper, "paper-repro", "复现与数据", "复现实验、数据与代码问题", 1)
-        method = create(tenant_id, academic, "method", "方法与写作", "选题、统计、审稿意见、拒稿复盘", 1)
+        method = create(
+            tenant_id, academic, "method", "方法与写作", "选题、统计、审稿意见、拒稿复盘", 1
+        )
         create(tenant_id, method, "writing", "写作与投稿", "论文结构、语言、投稿信与返修", 0)
         create(tenant_id, method, "stats", "统计与方法", "统计口径、实验设计与可复现性", 1)
         create(tenant_id, academic, "life", "学术生存", "读研、投稿、毕业与情绪", 2)

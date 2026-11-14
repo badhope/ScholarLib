@@ -69,7 +69,7 @@ export const MOBILE_MORE: MobileMoreItem[] = [
   { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '我的' },
   { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '我的' },
   { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '我的' },
-  { to: '/review/assignments', label: '审稿工作台', icon: ClipboardCheck, auth: true, roles: ['reviewer'], group: '工作台' },
+  { to: '/review/assignments', label: '审稿工作台', icon: ClipboardCheck, auth: true, roles: ['reviewer', 'editor_in_chief'], group: '工作台' },
   {
     to: '/editor/workbench',
     label: '主编工作台',

@@ -1187,7 +1187,6 @@ async def edit_submission_authors(
     return {"submission_id": submission_id, "authors": sub.authors}
 
 
-
 def _alembic_head() -> str | None:
     """用 Alembic 自己的迁移图取 head。
 
@@ -1222,17 +1221,18 @@ async def system_health(
     try:
         await db.execute(text("SELECT 1"))
         db_latency_ms = round((time.perf_counter() - started) * 1000, 1)
-        row = (await db.execute(text("SELECT version_num FROM alembic_version"))).scalar_one_or_none()
+        row = (
+            await db.execute(text("SELECT version_num FROM alembic_version"))
+        ).scalar_one_or_none()
         db_revision = str(row) if row else None
-        for table, label in (
-            ("users", "users"),
-            ("resources", "resources"),
-            ("submissions", "submissions"),
-        ):
+        table_queries = {
+            "users": "SELECT count(*) FROM users",
+            "resources": "SELECT count(*) FROM resources",
+            "submissions": "SELECT count(*) FROM submissions",
+        }
+        for label, sql in table_queries.items():
             try:
-                counts[label] = int(
-                    (await db.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one()
-                )
+                counts[label] = int((await db.execute(text(sql))).scalar_one())
             except Exception:
                 counts[label] = -1
     except Exception:
@@ -1254,9 +1254,7 @@ async def system_health(
         ),
     ):
         try:
-            counts[key] = int(
-                (await db.execute(text(sql), {"cutoff": cutoff})).scalar_one()
-            )
+            counts[key] = int((await db.execute(text(sql), {"cutoff": cutoff})).scalar_one())
         except Exception:
             counts[key] = -1
 
@@ -1265,9 +1263,7 @@ async def system_health(
     try:
         pending_reports = int(
             (
-                await db.execute(
-                    text("SELECT count(*) FROM forum_reports WHERE status = 'open'")
-                )
+                await db.execute(text("SELECT count(*) FROM forum_reports WHERE status = 'open'"))
             ).scalar_one()
         )
     except Exception:
@@ -1275,9 +1271,7 @@ async def system_health(
     try:
         pending_comments = int(
             (
-                await db.execute(
-                    text("SELECT count(*) FROM comments WHERE status = 'pending'")
-                )
+                await db.execute(text("SELECT count(*) FROM comments WHERE status = 'pending'"))
             ).scalar_one()
         )
     except Exception:
@@ -1285,7 +1279,7 @@ async def system_health(
 
     try:
         disk = shutil.disk_usage("/")
-        disk_free_gb = round(disk.free / (1024 ** 3), 1)
+        disk_free_gb = round(disk.free / (1024**3), 1)
         disk_used_pct = round(disk.used / disk.total * 100, 1)
     except Exception:
         disk_free_gb = None
@@ -1317,9 +1311,7 @@ async def system_health(
         {
             "key": "disk",
             "label": "磁盘",
-            "status": "ok"
-            if disk_used_pct is not None and disk_used_pct < 85
-            else "warn",
+            "status": "ok" if disk_used_pct is not None and disk_used_pct < 85 else "warn",
             "detail": f"已用 {disk_used_pct}% · 剩余 {disk_free_gb} GB"
             if disk_used_pct is not None
             else "无法读取",
@@ -1348,15 +1340,16 @@ async def system_health(
             "key": "anomaly",
             "label": "异常频率（24h）",
             "status": "warn"
-            if counts.get("new_users_24h", 0) >= 20
-            or counts.get("coin_issued_24h", 0) >= 5000
+            if counts.get("new_users_24h", 0) >= 20 or counts.get("coin_issued_24h", 0) >= 5000
             else "ok",
             "detail": f"新用户 {counts.get('new_users_24h', -1)} · "
             f"发放 R 币 {counts.get('coin_issued_24h', -1)}",
         },
     ]
-    overall = "fail" if any(c["status"] == "fail" for c in checks) else (
-        "warn" if any(c["status"] == "warn" for c in checks) else "ok"
+    overall = (
+        "fail"
+        if any(c["status"] == "fail" for c in checks)
+        else ("warn" if any(c["status"] == "warn" for c in checks) else "ok")
     )
     return {
         "status": overall,

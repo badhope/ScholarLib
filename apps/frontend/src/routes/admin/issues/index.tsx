@@ -21,7 +21,7 @@ interface IssuesSearch {
   volume?: string
 }
 
-export const Route = createFileRoute('/admin/issues')({
+export const Route = createFileRoute('/admin/issues/')({
   beforeLoad: () => {
     requireAdminGuard()
   },

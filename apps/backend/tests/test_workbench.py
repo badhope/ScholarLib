@@ -470,9 +470,7 @@ async def test_batch_assign_handles_long_submission_title(
     resp = await client.post(
         "/api/editor/workbench/batch-assign",
         json={
-            "items": [
-                {"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}
-            ],
+            "items": [{"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}],
             "due_days": 10,
         },
         headers=auth_headers(admin_user),

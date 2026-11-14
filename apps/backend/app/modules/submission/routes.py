@@ -241,9 +241,7 @@ async def update_submission(
     if "title" in updates or "abstract" in updates:
         blocked = rejection_detail(f"{entry.title}\n{entry.abstract or ''}")
         if blocked is not None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked
-            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked)
         score, matches = await check_against_site(
             db,
             entry.tenant_id,

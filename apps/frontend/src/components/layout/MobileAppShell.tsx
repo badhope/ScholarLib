@@ -128,7 +128,7 @@ export function MobileAppShell() {
   const FAB_ROUTES = ['/dashboard', '/catalog', '/library', '/follows', '/recommendations', '/notifications', '/forum']
   const canIngest =
     isAdmin ||
-    ['author', 'editor', 'section_editor'].some((r) => (user?.roles ?? []).includes(r))
+    ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'].some((r) => (user?.roles ?? []).includes(r))
   const showFab =
     showChrome &&
     isAuthenticated &&

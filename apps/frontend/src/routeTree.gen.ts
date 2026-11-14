@@ -47,7 +47,6 @@ import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminClaimsRouteImport } from './routes/admin/claims'
 import { Route as AdminCommentsRouteImport } from './routes/admin/comments'
 import { Route as AdminForumBoardsRouteImport } from './routes/admin/forum-boards'
-import { Route as AdminIssuesRouteImport } from './routes/admin/issues'
 import { Route as AdminJournalRouteImport } from './routes/admin/journal'
 import { Route as AdminReleasesRouteImport } from './routes/admin/releases'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
@@ -77,6 +76,7 @@ import { Route as SubmissionsIndexRouteImport } from './routes/submissions/index
 import { Route as SubmissionsNewRouteImport } from './routes/submissions/new'
 import { Route as SubmissionsPendingRouteImport } from './routes/submissions/pending'
 import { Route as UUsernameRouteImport } from './routes/u/$username'
+import { Route as AdminIssuesIndexRouteImport } from './routes/admin/issues/index'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
 import { Route as CatalogTrackTrackRouteImport } from './routes/catalog/track.$track'
 import { Route as AdminIssuesVolumeIssueRouteImport } from './routes/admin/issues.$volume.$issue'
@@ -271,11 +271,6 @@ const AdminForumBoardsRoute = AdminForumBoardsRouteImport.update({
   path: '/admin/forum-boards',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminIssuesRoute = AdminIssuesRouteImport.update({
-  id: '/admin/issues',
-  path: '/admin/issues',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminJournalRoute = AdminJournalRouteImport.update({
   id: '/admin/journal',
   path: '/admin/journal',
@@ -421,6 +416,11 @@ const UUsernameRoute = UUsernameRouteImport.update({
   path: '/u/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIssuesIndexRoute = AdminIssuesIndexRouteImport.update({
+  id: '/admin/issues/',
+  path: '/admin/issues/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthOidcCallbackRoute = AuthOidcCallbackRouteImport.update({
   id: '/auth/oidc/callback',
   path: '/auth/oidc/callback',
@@ -432,9 +432,9 @@ const CatalogTrackTrackRoute = CatalogTrackTrackRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIssuesVolumeIssueRoute = AdminIssuesVolumeIssueRouteImport.update({
-  id: '/$volume/$issue',
-  path: '/$volume/$issue',
-  getParentRoute: () => AdminIssuesRoute,
+  id: '/admin/issues/$volume/$issue',
+  path: '/admin/issues/$volume/$issue',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -475,7 +475,6 @@ export interface FileRoutesByFullPath {
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/forum-boards': typeof AdminForumBoardsRoute
-  '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -508,6 +507,7 @@ export interface FileRoutesByFullPath {
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/admin/issues/': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
 export interface FileRoutesByTo {
@@ -548,7 +548,6 @@ export interface FileRoutesByTo {
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/forum-boards': typeof AdminForumBoardsRoute
-  '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -581,6 +580,7 @@ export interface FileRoutesByTo {
   '/submissions': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/admin/issues': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
 export interface FileRoutesById {
@@ -622,7 +622,6 @@ export interface FileRoutesById {
   '/admin/claims': typeof AdminClaimsRoute
   '/admin/comments': typeof AdminCommentsRoute
   '/admin/forum-boards': typeof AdminForumBoardsRoute
-  '/admin/issues': typeof AdminIssuesRouteWithChildren
   '/admin/journal': typeof AdminJournalRoute
   '/admin/releases': typeof AdminReleasesRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -655,6 +654,7 @@ export interface FileRoutesById {
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/admin/issues/': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
 export interface FileRouteTypes {
@@ -697,7 +697,6 @@ export interface FileRouteTypes {
     | '/admin/claims'
     | '/admin/comments'
     | '/admin/forum-boards'
-    | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
     | '/admin/reports'
@@ -730,6 +729,7 @@ export interface FileRouteTypes {
     | '/submissions/'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/admin/issues/'
     | '/admin/issues/$volume/$issue'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -770,7 +770,6 @@ export interface FileRouteTypes {
     | '/admin/claims'
     | '/admin/comments'
     | '/admin/forum-boards'
-    | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
     | '/admin/reports'
@@ -803,6 +802,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/admin/issues'
     | '/admin/issues/$volume/$issue'
   id:
     | '__root__'
@@ -843,7 +843,6 @@ export interface FileRouteTypes {
     | '/admin/claims'
     | '/admin/comments'
     | '/admin/forum-boards'
-    | '/admin/issues'
     | '/admin/journal'
     | '/admin/releases'
     | '/admin/reports'
@@ -876,6 +875,7 @@ export interface FileRouteTypes {
     | '/submissions/'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/admin/issues/'
     | '/admin/issues/$volume/$issue'
   fileRoutesById: FileRoutesById
 }
@@ -917,7 +917,6 @@ export interface RootRouteChildren {
   AdminClaimsRoute: typeof AdminClaimsRoute
   AdminCommentsRoute: typeof AdminCommentsRoute
   AdminForumBoardsRoute: typeof AdminForumBoardsRoute
-  AdminIssuesRoute: typeof AdminIssuesRouteWithChildren
   AdminJournalRoute: typeof AdminJournalRoute
   AdminReleasesRoute: typeof AdminReleasesRoute
   AdminReportsRoute: typeof AdminReportsRoute
@@ -950,6 +949,8 @@ export interface RootRouteChildren {
   SubmissionsIndexRoute: typeof SubmissionsIndexRoute
   AuthOidcCallbackRoute: typeof AuthOidcCallbackRoute
   CatalogTrackTrackRoute: typeof CatalogTrackTrackRoute
+  AdminIssuesIndexRoute: typeof AdminIssuesIndexRoute
+  AdminIssuesVolumeIssueRoute: typeof AdminIssuesVolumeIssueRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1220,13 +1221,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminForumBoardsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/issues': {
-      id: '/admin/issues'
-      path: '/admin/issues'
-      fullPath: '/admin/issues'
-      preLoaderRoute: typeof AdminIssuesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/journal': {
       id: '/admin/journal'
       path: '/admin/journal'
@@ -1430,6 +1424,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/issues/': {
+      id: '/admin/issues/'
+      path: '/admin/issues'
+      fullPath: '/admin/issues/'
+      preLoaderRoute: typeof AdminIssuesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/oidc/callback': {
       id: '/auth/oidc/callback'
       path: '/auth/oidc/callback'
@@ -1446,25 +1447,13 @@ declare module '@tanstack/react-router' {
     }
     '/admin/issues/$volume/$issue': {
       id: '/admin/issues/$volume/$issue'
-      path: '/$volume/$issue'
+      path: '/admin/issues/$volume/$issue'
       fullPath: '/admin/issues/$volume/$issue'
       preLoaderRoute: typeof AdminIssuesVolumeIssueRouteImport
-      parentRoute: typeof AdminIssuesRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
-
-interface AdminIssuesRouteChildren {
-  AdminIssuesVolumeIssueRoute: typeof AdminIssuesVolumeIssueRoute
-}
-
-const AdminIssuesRouteChildren: AdminIssuesRouteChildren = {
-  AdminIssuesVolumeIssueRoute: AdminIssuesVolumeIssueRoute,
-}
-
-const AdminIssuesRouteWithChildren = AdminIssuesRoute._addFileChildren(
-  AdminIssuesRouteChildren,
-)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -1504,7 +1493,6 @@ const rootRouteChildren: RootRouteChildren = {
   AdminClaimsRoute: AdminClaimsRoute,
   AdminCommentsRoute: AdminCommentsRoute,
   AdminForumBoardsRoute: AdminForumBoardsRoute,
-  AdminIssuesRoute: AdminIssuesRouteWithChildren,
   AdminJournalRoute: AdminJournalRoute,
   AdminReleasesRoute: AdminReleasesRoute,
   AdminReportsRoute: AdminReportsRoute,
@@ -1537,6 +1525,8 @@ const rootRouteChildren: RootRouteChildren = {
   SubmissionsIndexRoute: SubmissionsIndexRoute,
   AuthOidcCallbackRoute: AuthOidcCallbackRoute,
   CatalogTrackTrackRoute: CatalogTrackTrackRoute,
+  AdminIssuesIndexRoute: AdminIssuesIndexRoute,
+  AdminIssuesVolumeIssueRoute: AdminIssuesVolumeIssueRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

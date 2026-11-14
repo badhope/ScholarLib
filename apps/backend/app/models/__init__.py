@@ -197,9 +197,7 @@ class User(Base, TenantScopedMixin):
     # --- 通知偏好（迁移 040） ---
     # 只存用户显式改过的键；缺省值由 notifications.services.default_prefs
     # 在读取时合并，避免存量用户补数据。站内默认开、邮件默认关。
-    notification_prefs: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONBVariant, nullable=True
-    )
+    notification_prefs: Mapped[dict[str, Any] | None] = mapped_column(JSONBVariant, nullable=True)
     # --- 可扩展的个人资料（迁移 026） ---
     # 全部可空：存量用户不需要补数据；PATCH /users/me 仅在字段出现时写入。
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -453,9 +451,7 @@ class ApiToken(Base, TenantScopedMixin):
     )
     window_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    __table_args__ = (
-        Index("ix_api_tokens_tenant_user", "tenant_id", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_api_tokens_tenant_user", "tenant_id", "user_id", "created_at"),)
 
 
 __all__ = [

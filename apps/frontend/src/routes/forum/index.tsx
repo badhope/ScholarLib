@@ -178,7 +178,11 @@ function ForumListPage() {
     queryFn: async () =>
       (
         await api.get('/forum/topics', {
-          params: { category: category === 'all' ? undefined : category, page, page_size: 20, sort },
+          // 新版树形版块用 board（父板块聚合后代），旧分类别名仍可用 category。
+          params:
+            category === 'all'
+              ? { page, page_size: 20, sort }
+              : { board: normalizedCategory, page, page_size: 20, sort },
         })
       ).data,
   })

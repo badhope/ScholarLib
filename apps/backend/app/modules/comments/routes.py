@@ -153,9 +153,7 @@ async def create_comment(
         # 评论通知：只通知资源作者（不通知其他读者），自己评论自己不通知。
         owner_id = getattr(resource, "owner_id", None)
         if owner_id and owner_id != current_user.id:
-            owner = (
-                await db.execute(select(User).where(User.id == owner_id))
-            ).scalar_one_or_none()
+            owner = (await db.execute(select(User).where(User.id == owner_id))).scalar_one_or_none()
             if owner is not None:
                 prefs = notifications.merged_prefs(owner)
                 if prefs.get("in_app_comment"):

@@ -82,10 +82,10 @@ const NAV: NavItem[] = [
     label: '审稿工作台',
     icon: ClipboardCheck,
     auth: true,
-    roles: ['reviewer'],
+    roles: ['reviewer', 'editor_in_chief'],
     group: '我的工作',
   },
-  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'], group: '我的工作' },
+  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'], group: '我的工作' },
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '我的工作' },
 
   // 期刊门面：指标并入「关于本刊」的页签，规则并入「投稿指南」。
@@ -98,7 +98,7 @@ const NAV: NavItem[] = [
   // admin 组：用户 → 角色申请 → 期刊四件套（卷/期/信息/设置），审计日志垫底
   { to: '/admin', label: '站点总览', icon: Gavel, auth: true, adminOnly: true, group: '站点管理', subgroup: '总览' },
   { to: '/admin/users', label: '用户管理', icon: Users, auth: true, adminOnly: true, group: '站点管理', subgroup: '用户与权限' },
-  { to: '/admin/shop', label: 'R 币商城', icon: ShoppingBag, auth: true, roles: ['chief_editor', 'deputy_editor', 'shop_manager'], group: '站点管理', subgroup: '内容与社区' },
+  { to: '/admin/shop', label: 'R 币商城', icon: ShoppingBag, auth: true, roles: ['chief_editor', 'deputy_editor', 'editor_in_chief', 'shop_manager'], group: '站点管理', subgroup: '内容与社区' },
   { to: '/admin/claims', label: '认领审批', icon: FileSignature, auth: true, adminOnly: true, group: '站点管理', subgroup: '用户与权限' },
   { to: '/admin/role-applications', label: '角色申请', icon: ClipboardCheck, auth: true, adminOnly: true, group: '站点管理', subgroup: '用户与权限' },
   { to: '/admin/announcements', label: '公告管理', icon: Megaphone, auth: true, adminOnly: true, group: '站点管理', subgroup: '内容与社区' },
@@ -394,7 +394,7 @@ export function AppShell() {
                       {text('账号设置', lang)}
                     </Link>
                   </DropdownMenuItem>
-                  {(user.roles?.includes('reviewer') || isAdmin) && (
+                  {(user.roles?.includes('reviewer') || user.roles?.includes('editor_in_chief') || isAdmin) && (
                     <DropdownMenuItem asChild>
                       <Link to="/review/assignments">
                         <ClipboardCheck className="h-4 w-4" />

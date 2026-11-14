@@ -273,9 +273,7 @@ async def list_resources(
     # Meilisearch documents carry no publication_status, so the relevance
     # ids are re-fetched through the same publication filter as the DB path
     # below — an indexed draft can never leak just because it ranked high.
-    advanced_filters = any(
-        value is not None for value in (year_from, year_to, author, doi)
-    )
+    advanced_filters = any(value is not None for value in (year_from, year_to, author, doi))
     if q is not None and fulltext.search_enabled() and not advanced_filters:
         hit = await fulltext.search_resource_ids(
             tenant_id=str(tenant_id),

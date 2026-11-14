@@ -285,12 +285,16 @@ async def _reaction_summary(
 async def _board_index(db: AsyncSession, tenant_id) -> dict[int, ForumBoard]:
     """当前租户全部版块，供列表页一次解析名称/路径，避免 N+1。"""
     rows = (
-        await db.execute(
-            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
-                ForumBoard.sort_order, ForumBoard.id
+        (
+            await db.execute(
+                select(ForumBoard)
+                .where(ForumBoard.tenant_id == tenant_id)
+                .order_by(ForumBoard.sort_order, ForumBoard.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {b.id: b for b in rows}
 
 
@@ -354,9 +358,7 @@ def _reply_out(
     )
 
 
-def _subtree_ids(
-    boards: list[ForumBoard], root: ForumBoard
-) -> set[int]:
+def _subtree_ids(boards: list[ForumBoard], root: ForumBoard) -> set[int]:
     """父板块筛选时把全部子板块一起带上；3 层也只需一次内存遍历。"""
     children: dict[int, list[ForumBoard]] = {}
     for b in boards:
@@ -402,10 +404,9 @@ async def _resolve_board(
 
 @router.get("/topics", response_model=TopicListOut)
 async def list_topics(
-    category: str | None = Query(
-        default=None,
-        pattern=r"^(paper|method|life|collab|meta|notice|discussion|question|suggestion)$",
-    ),
+    # 兼容旧客户端：既接受旧分类别名，也接受新版树形版块的 slug
+    # （academic / site / paper-reading …）。父板块会聚合全部后代。
+    category: str | None = Query(default=None, pattern=r"^[a-z0-9-]{2,40}$"),
     board: str | None = Query(
         default=None,
         pattern=r"^[a-z0-9-]{2,40}$",
@@ -420,12 +421,16 @@ async def list_topics(
     """帖子列表：置顶优先。latest 按最近活跃，hot 按回复数再按活跃。"""
     tenant_id = require_tenant_id()
     all_boards = (
-        await db.execute(
-            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
-                ForumBoard.sort_order, ForumBoard.id
+        (
+            await db.execute(
+                select(ForumBoard)
+                .where(ForumBoard.tenant_id == tenant_id)
+                .order_by(ForumBoard.sort_order, ForumBoard.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     stmt = select(ForumTopic).where(
         ForumTopic.tenant_id == tenant_id,
         ForumTopic.deleted_at.is_(None),
@@ -436,7 +441,9 @@ async def list_topics(
     if board:
         root = next((b for b in all_boards if b.slug == board), None)
         if root is None:
-            return TopicListOut(data=[], meta={"total": 0, "page": page, "page_size": page_size, "total_pages": 0})
+            return TopicListOut(
+                data=[], meta={"total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+            )
         subtree = _subtree_ids(list(all_boards), root)
         selected_ids = subtree
         selected_slugs = {b.slug for b in all_boards if b.id in subtree}
@@ -444,9 +451,15 @@ async def list_topics(
         # 旧分类别名映射到新版块，再带上子板块
         slug = next((b for b in all_boards if b.slug == category), None)
         if slug is None:
-            slug = next((b for b in all_boards if b.slug == next(
-                (k for k, v in CATEGORY_BOARD.items() if category in v), category
-            )), None)
+            slug = next(
+                (
+                    b
+                    for b in all_boards
+                    if b.slug
+                    == next((k for k, v in CATEGORY_BOARD.items() if category in v), category)
+                ),
+                None,
+            )
         if slug is not None:
             subtree = _subtree_ids(list(all_boards), slug)
             selected_ids = subtree
@@ -505,12 +518,16 @@ async def board_stats(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     """
     tenant_id = require_tenant_id()
     boards = (
-        await db.execute(
-            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
-                ForumBoard.sort_order, ForumBoard.id
+        (
+            await db.execute(
+                select(ForumBoard)
+                .where(ForumBoard.tenant_id == tenant_id)
+                .order_by(ForumBoard.sort_order, ForumBoard.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     raw_counts = (
         await db.execute(
             select(
@@ -1147,18 +1164,26 @@ async def list_reports(
     rows = (await db.execute(stmt)).scalars().all()
     topic_ids = {r.topic_id for r in rows if r.topic_id}
     reply_ids = {r.reply_id for r in rows if r.reply_id}
-    topics = {
-        t.id: t
-        for t in (
-            await db.execute(select(ForumTopic).where(ForumTopic.id.in_(topic_ids)))
-        ).scalars().all()
-    } if topic_ids else {}
-    replies = {
-        r.id: r
-        for r in (
-            await db.execute(select(ForumReply).where(ForumReply.id.in_(reply_ids)))
-        ).scalars().all()
-    } if reply_ids else {}
+    topics = (
+        {
+            t.id: t
+            for t in (await db.execute(select(ForumTopic).where(ForumTopic.id.in_(topic_ids))))
+            .scalars()
+            .all()
+        }
+        if topic_ids
+        else {}
+    )
+    replies = (
+        {
+            r.id: r
+            for r in (await db.execute(select(ForumReply).where(ForumReply.id.in_(reply_ids))))
+            .scalars()
+            .all()
+        }
+        if reply_ids
+        else {}
+    )
     target_author_ids = {
         *(t.author_id for t in topics.values()),
         *(r.author_id for r in replies.values()),
@@ -1204,18 +1229,26 @@ async def list_reports(
     )
     comment_ids = {r.target_id for r in content_rows if r.target_type == "comment"}
     submission_ids = {r.target_id for r in content_rows if r.target_type == "submission"}
-    comments = {
-        c.id: c
-        for c in (
-            await db.execute(select(Comment).where(Comment.id.in_(comment_ids)))
-        ).scalars().all()
-    } if comment_ids else {}
-    submissions = {
-        x.id: x
-        for x in (
-            await db.execute(select(Submission).where(Submission.id.in_(submission_ids)))
-        ).scalars().all()
-    } if submission_ids else {}
+    comments = (
+        {
+            c.id: c
+            for c in (await db.execute(select(Comment).where(Comment.id.in_(comment_ids))))
+            .scalars()
+            .all()
+        }
+        if comment_ids
+        else {}
+    )
+    submissions = (
+        {
+            x.id: x
+            for x in (await db.execute(select(Submission).where(Submission.id.in_(submission_ids))))
+            .scalars()
+            .all()
+        }
+        if submission_ids
+        else {}
+    )
     content_author_ids = {
         *(c.user_id for c in comments.values()),
         *(x.submitted_by for x in submissions.values()),
@@ -1262,9 +1295,7 @@ class ContentReportCreate(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
-@router.post(
-    "/content-reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED
-)
+@router.post("/content-reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED)
 async def create_content_report(
     payload: ContentReportCreate,
     current_user: User = Depends(get_current_user),
@@ -1301,9 +1332,7 @@ async def create_content_report(
         ).scalar_one_or_none()
         if target is None:
             raise HTTPException(status_code=404, detail="投稿不存在")
-        is_staff = current_user.is_admin or await user_has_role(
-            db, current_user, ROLE_EDITOR
-        )
+        is_staff = current_user.is_admin or await user_has_role(db, current_user, ROLE_EDITOR)
         if target.submitted_by != current_user.id and not is_staff:
             raise HTTPException(status_code=403, detail="无权举报该投稿")
         target_author_id = target.submitted_by
@@ -1312,16 +1341,20 @@ async def create_content_report(
         raise HTTPException(status_code=400, detail="不能举报自己的内容")
 
     existing = (
-        await db.execute(
-            select(ContentReport).where(
-                ContentReport.tenant_id == tenant_id,
-                ContentReport.reporter_id == current_user.id,
-                ContentReport.target_type == payload.target_type,
-                ContentReport.target_id == payload.target_id,
-                ContentReport.status == "open",
+        (
+            await db.execute(
+                select(ContentReport).where(
+                    ContentReport.tenant_id == tenant_id,
+                    ContentReport.reporter_id == current_user.id,
+                    ContentReport.target_type == payload.target_type,
+                    ContentReport.target_id == payload.target_id,
+                    ContentReport.status == "open",
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if existing is not None:
         authors = await _author_map(db, {existing.reporter_id, target_author_id})
         return ReportOut(
@@ -1586,7 +1619,9 @@ async def handle_report(
     await db.refresh(report)
     authors = await _author_map(db, {report.reporter_id, target.author_id})
     excerpt = (
-        f"{topic.title} · {topic.body[:120]}" if topic is not None else (reply.body[:140] if reply is not None else None)
+        f"{topic.title} · {topic.body[:120]}"
+        if topic is not None
+        else (reply.body[:140] if reply is not None else None)
     )
     return ReportOut(
         id=report.id,
@@ -1636,12 +1671,16 @@ async def admin_list_boards(
     """管理员版块列表（含停用项，方便恢复）。"""
     tenant_id = require_tenant_id()
     rows = (
-        await db.execute(
-            select(ForumBoard).where(ForumBoard.tenant_id == tenant_id).order_by(
-                ForumBoard.sort_order, ForumBoard.id
+        (
+            await db.execute(
+                select(ForumBoard)
+                .where(ForumBoard.tenant_id == tenant_id)
+                .order_by(ForumBoard.sort_order, ForumBoard.id)
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "data": [
             {
@@ -1680,9 +1719,7 @@ async def create_board(
             raise HTTPException(status_code=404, detail="父版块不存在")
     exists = (
         await db.execute(
-            select(ForumBoard.id).where(
-                ForumBoard.tenant_id == tenant_id, ForumBoard.slug == slug
-            )
+            select(ForumBoard.id).where(ForumBoard.tenant_id == tenant_id, ForumBoard.slug == slug)
         )
     ).scalar_one_or_none()
     if exists is not None:
@@ -1763,13 +1800,17 @@ async def update_board(
                 raise HTTPException(status_code=422, detail="父版块会形成循环")
             seen.add(cursor.id)
             cursor = (
-                await db.execute(
-                    select(ForumBoard).where(
-                        ForumBoard.id == cursor.parent_id,
-                        ForumBoard.tenant_id == tenant_id,
+                (
+                    await db.execute(
+                        select(ForumBoard).where(
+                            ForumBoard.id == cursor.parent_id,
+                            ForumBoard.tenant_id == tenant_id,
+                        )
                     )
-                )
-            ).scalar_one_or_none() if cursor.parent_id else None
+                ).scalar_one_or_none()
+                if cursor.parent_id
+                else None
+            )
         board.parent_id = payload.parent_id
     if payload.name is not None:
         board.name = payload.name.strip()
@@ -1782,7 +1823,9 @@ async def update_board(
     if payload.slug is not None:
         slug = payload.slug.strip().lower()
         if not _BOARD_SLUG.match(slug):
-            raise HTTPException(status_code=422, detail="slug 只能是小写字母、数字、连字符（2-40 位）")
+            raise HTTPException(
+                status_code=422, detail="slug 只能是小写字母、数字、连字符（2-40 位）"
+            )
         if slug != board.slug:
             exists = (
                 await db.execute(
@@ -1801,14 +1844,17 @@ async def update_board(
             action="forum.board.update",
             target_type="forum_board",
             target_id=str(board.id),
-            payload={"before": before, "after": {
-                "parent_id": board.parent_id,
-                "slug": board.slug,
-                "name": board.name,
-                "description": board.description,
-                "sort_order": board.sort_order,
-                "is_active": board.is_active,
-            }},
+            payload={
+                "before": before,
+                "after": {
+                    "parent_id": board.parent_id,
+                    "slug": board.slug,
+                    "name": board.name,
+                    "description": board.description,
+                    "sort_order": board.sort_order,
+                    "is_active": board.is_active,
+                },
+            },
         )
     )
     await db.commit()

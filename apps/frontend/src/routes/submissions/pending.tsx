@@ -76,7 +76,7 @@ const REVIEWER_CANDIDATE_LIMIT = 200
 
 export const Route = createFileRoute('/submissions/pending')({
   beforeLoad: () => {
-    // 编辑工作台对 editor / section_editor / admin 开放；具体权限由后端
+    // 初筛工作台对 editor / section_editor / admin 开放；具体权限由后端
     // require_editor 强制，这里只挡掉完全无关的访客与普通作者。
     const { isAuthenticated, isAdmin, user } = getAuthState()
     if (!isAuthenticated) throw redirect({ to: '/login' })
@@ -133,7 +133,7 @@ function reportDimensionEntries(scores: Record<string, unknown>): [string, Repor
     .map(([key, value]) => [key, { score: value as number }])
 }
 
-// 编辑工作台状态 tab：全部 + 7 种 submission status
+// 初筛工作台状态 tab：全部 + 7 种 submission status
 type StatusTab = SubmissionStatus | 'all'
 const STATUS_TABS: { value: StatusTab; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -239,7 +239,7 @@ function PendingSubmissionsPage() {
   // 职权分离（与后端 require_chief_editor 同口径）：四元最终决定是
   // 最终裁决是执行编辑/主编的职权；栏目编辑只有初审、送审与推荐权。
   const { isAdmin, user } = useAuth()
-  const isChief = isAdmin || (user?.roles ?? []).includes('editor')
+  const isChief = isAdmin || (user?.roles ?? []).some((r) => ['editor', 'editor_in_chief'].includes(r))
   const isSectionOnly = !isChief && (user?.roles ?? []).includes('section_editor')
 
   const { data, isLoading, isError, refetch } = useAllSubmissions(
@@ -332,7 +332,7 @@ function PendingSubmissionsPage() {
   return (
     <div>
       <PageHeader
-        title="编辑工作台"
+        title="初筛工作台"
         description="分配审稿人、查看审稿报告、做最终决定。支持按状态筛选全部提交。"
       />
 

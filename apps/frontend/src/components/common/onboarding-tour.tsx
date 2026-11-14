@@ -9,8 +9,8 @@ const KEY = 'rubbish.onboarding.v1'
 /** 首次使用手把手引导：可跳过，只在本机显示一次。 */
 export function OnboardingTour() {
   const { user, isAuthenticated, isAdmin } = useAuth()
-  const isEditor = isAdmin || (user?.roles ?? []).some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'].includes(r))
-  const isReviewer = (user?.roles ?? []).includes('reviewer')
+  const isEditor = isAdmin || (user?.roles ?? []).some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'].includes(r))
+  const isReviewer = (user?.roles ?? []).some((r) => ['reviewer', 'editor_in_chief'].includes(r))
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const [expanded, setExpanded] = useState(false)

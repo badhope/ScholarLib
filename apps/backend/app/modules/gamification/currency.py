@@ -174,7 +174,10 @@ async def award(
         return False
 
     policy = await _load_policy(db, user)
-    if reason not in DAILY_CAP_EXEMPT_REASONS and await _daily_earned(db, user) + value > policy.daily_earn_cap:
+    if (
+        reason not in DAILY_CAP_EXEMPT_REASONS
+        and await _daily_earned(db, user) + value > policy.daily_earn_cap
+    ):
         return False
     if await monthly_issued(db, user.tenant_id) + value > policy.monthly_issue_cap:
         return False
