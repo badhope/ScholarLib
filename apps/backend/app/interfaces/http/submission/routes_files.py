@@ -273,7 +273,10 @@ async def preview_uploaded_source_pages(
 
 
 @router.get("/source-preview/{token}.pdf")
-async def preview_uploaded_source_pdf(token: str) -> Response:
+async def preview_uploaded_source_pdf(
+    token: str,
+    current_user: User = Depends(get_current_user),
+) -> Response:
     """token 对应的预览 PDF，供“直接下载原件”兜底。"""
     from fastapi.responses import FileResponse
 
@@ -290,7 +293,11 @@ async def preview_uploaded_source_pdf(token: str) -> Response:
 
 
 @router.get("/source-preview/{token}/{page}.png")
-async def preview_uploaded_source_page(token: str, page: int) -> Response:
+async def preview_uploaded_source_page(
+    token: str,
+    page: int,
+    current_user: User = Depends(get_current_user),
+) -> Response:
     """按需把缓存的预览 PDF 渲染成分页 PNG。"""
     import pymupdf
 

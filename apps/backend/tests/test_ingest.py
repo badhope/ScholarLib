@@ -15,6 +15,7 @@ canned ``httpx.Response`` for every ``get()`` call.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -269,6 +270,70 @@ async def test_parse_csv_records_line_number_in_errors(
     assert len(body["errors"]) == 1
     assert body["errors"][0]["line"] == 2
     assert "type" in body["errors"][0]["error"]
+
+
+# ---------------------------------------------------------------------------
+# Parse: JSON (round-trips the export format)
+# ---------------------------------------------------------------------------
+
+
+async def test_parse_json_accepts_exported_array(
+    client: AsyncClient, test_user: dict[str, Any]
+) -> None:
+    payload = [
+        {
+            "title": "JSON Paper",
+            "type": "paper",
+            "authors": ["Alice Author", "Bob Coauthor"],
+            "year": 2024,
+            "venue": "Journal of JSON",
+            "tags": ["json", "import"],
+            "abstract": "A short abstract.",
+            "doi": "10.1234/json.001",
+            "source_id": 9,
+            "external_url": "https://example.org/paper",
+        }
+    ]
+    response = await client.post(
+        "/api/ingest/parse",
+        json={"format": "json", "content": json.dumps(payload, ensure_ascii=False)},
+        headers=auth_headers(test_user),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 1
+    assert body["errors"] == []
+    entry = body["data"][0]
+    assert entry["title"] == "JSON Paper"
+    assert entry["authors"] == ["Alice Author", "Bob Coauthor"]
+    assert entry["tags"] == ["json", "import"]
+    assert entry["doi"] == "10.1234/json.001"
+
+
+async def test_parse_json_reports_bad_entry_and_bad_document(
+    client: AsyncClient, test_user: dict[str, Any]
+) -> None:
+    response = await client.post(
+        "/api/ingest/parse",
+        json={
+            "format": "json",
+            "content": json.dumps([{"title": "No authors", "type": "paper"}]),
+        },
+        headers=auth_headers(test_user),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["count"] == 0
+    assert body["errors"][0]["line"] == 1
+    assert "authors" in body["errors"][0]["error"]
+
+    response = await client.post(
+        "/api/ingest/parse",
+        json={"format": "json", "content": "{not json"},
+        headers=auth_headers(test_user),
+    )
+    assert response.status_code == 200
+    assert response.json()["errors"][0]["error"].startswith("JSON parse failed")
 
 
 # ---------------------------------------------------------------------------

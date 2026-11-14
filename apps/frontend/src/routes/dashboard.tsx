@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import {
+  ArrowRight,
   BookOpen,
   CalendarCheck,
+  ClipboardCheck,
   ClipboardList,
+  Clock3,
   Flame,
   Lightbulb,
   Bell,
@@ -24,6 +27,7 @@ import {
   useDailyCheckin,
   useGamificationProfile,
   useMyRecommendations,
+  useMyReviewAssignments,
   useMySubmissions,
   useNotifications,
   usePendingSubmissions,
@@ -59,7 +63,9 @@ function SectionHeading({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="mt-8 mb-3">
       <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? (
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   )
 }
@@ -84,7 +90,9 @@ function CheckinBanner() {
     try {
       const r = await checkin.mutateAsync()
       if (r.bonus_awarded) {
-        toast.success(`连续签到 ${r.streak} 天，额外 +${r.weekly_bonus_xp} XP！`)
+        toast.success(
+          `连续签到 ${r.streak} 天，额外 +${r.weekly_bonus_xp} XP！`,
+        )
       } else if (r.awarded) {
         toast.success(`签到成功，+${r.daily_xp} XP`)
       } else {
@@ -142,8 +150,96 @@ function CheckinBanner() {
             : undefined
         }
       >
-        {st?.checked_in_today ? '已签到' : checkin.isPending ? '签到中…' : '签到'}
+        {st?.checked_in_today
+          ? '已签到'
+          : checkin.isPending
+            ? '签到中…'
+            : '签到'}
       </Button>
+    </div>
+  )
+}
+
+/** 审稿人 Today：只回答“今天有几件事、先点哪里”，不把审稿台再抄一遍。 */
+function ReviewerTodayCard() {
+  const { user, isAdmin } = useAuth()
+  const roles = user?.roles ?? []
+  const canReview =
+    isAdmin ||
+    roles.some((role) =>
+      ['reviewer', 'senior_reviewer', 'editor_in_chief'].includes(role),
+    )
+  const pending = useMyReviewAssignments('pending', 1, 5, {
+    enabled: canReview,
+  })
+  const accepted = useMyReviewAssignments('accepted', 1, 5, {
+    enabled: canReview,
+  })
+
+  if (!canReview) return null
+
+  const pendingRows = pending.data?.data ?? []
+  const acceptedRows = accepted.data?.data ?? []
+  const pendingCount = pending.data?.meta.total ?? pendingRows.length
+  const acceptedCount = accepted.data?.meta.total ?? acceptedRows.length
+  const nextDue = [...pendingRows, ...acceptedRows]
+    .map((row) => row.due_date)
+    .filter((value): value is string => Boolean(value))
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())[0]
+  const loading = pending.isLoading || accepted.isLoading
+
+  return (
+    <div
+      className="mt-3 rounded-lg border bg-card px-4 py-3"
+      data-testid="reviewer-today"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300">
+            <ClipboardCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-medium">今天要审的稿</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {loading
+                ? '正在读取审稿任务…'
+                : pendingCount + acceptedCount > 0
+                  ? `待回应 ${pendingCount} 个邀请 · 已接受 ${acceptedCount} 篇待完成`
+                  : '今天没有待审任务，保持这个节奏。'}
+            </p>
+          </div>
+        </div>
+        <Link
+          to="/review/assignments"
+          className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          审稿台 <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <Link
+          to="/review/assignments"
+          search={{ status: 'pending' }}
+          className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/30"
+        >
+          <span className="text-xs text-muted-foreground">待回应邀请</span>
+          <span className="font-semibold tabular-nums">{pendingCount}</span>
+        </Link>
+        <Link
+          to="/review/assignments"
+          search={{ status: 'accepted' }}
+          className="flex items-center justify-between rounded-md border border-dashed px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/30"
+        >
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock3 className="h-3.5 w-3.5" />
+            {nextDue
+              ? `最近截止 ${new Date(nextDue).toLocaleDateString('zh-CN')}`
+              : '最近截止 待定'}
+          </span>
+          <span className="font-semibold tabular-nums">{acceptedCount}</span>
+        </Link>
+      </div>
     </div>
   )
 }
@@ -177,7 +273,9 @@ function ContinueReadingCard() {
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary/70"
-                  style={{ width: `${Math.min(100, Math.round(h.progress_percent ?? 0))}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.round(h.progress_percent ?? 0))}%`,
+                  }}
                 />
               </div>
               <span className="text-xs tabular-nums text-muted-foreground">
@@ -220,7 +318,10 @@ function BadgeProgressStrip() {
               </span>
             </div>
             <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-amber-500/80" style={{ width: `${pct}%` }} />
+              <div
+                className="h-full rounded-full bg-amber-500/80"
+                style={{ width: `${pct}%` }}
+              />
             </div>
           </div>
         )
@@ -235,7 +336,11 @@ function BadgeProgressStrip() {
 function DashboardPage() {
   const { user, isAdmin } = useAuth()
   const roles = user?.roles ?? []
-  const isEditorial = isAdmin || roles.some((r) => ['editor', 'section_editor', 'editor_in_chief'].includes(r))
+  const isEditorial =
+    isAdmin ||
+    roles.some((r) =>
+      ['editor', 'section_editor', 'editor_in_chief'].includes(r),
+    )
 
   const profile = useGamificationProfile()
   const stats = useCatalogStats()
@@ -255,8 +360,18 @@ function DashboardPage() {
   // 角色感知统计：所有人看得到的通知/目录 + 按身份就近放最常用的两块。
   // 一次最多 4 张，避免信息过载（渐进披露：完整列表点卡片进入对应页）。
   const cards: StatCard[] = [
-    { label: '资源总数', value: stats.data?.total ?? '—', to: '/catalog', icon: BookOpen },
-    { label: '未读通知', value: unread.data?.unread ?? '—', to: '/notifications', icon: Bell },
+    {
+      label: '资源总数',
+      value: stats.data?.total ?? '—',
+      to: '/catalog',
+      icon: BookOpen,
+    },
+    {
+      label: '未读通知',
+      value: unread.data?.unread ?? '—',
+      to: '/notifications',
+      icon: Bell,
+    },
   ]
   if (isEditorial) {
     cards.push({
@@ -265,14 +380,32 @@ function DashboardPage() {
       to: '/submissions/pending',
       icon: ClipboardList,
     })
-  } else if (roles.includes('author') || (profile.data?.level.level ?? 0) >= 3) {
-    cards.push({ label: '我的投稿', value: mine.data?.meta.total ?? '—', to: '/submissions', icon: ScrollText })
+  } else if (
+    roles.includes('author') ||
+    (profile.data?.level.level ?? 0) >= 3
+  ) {
+    cards.push({
+      label: '我的投稿',
+      value: mine.data?.meta.total ?? '—',
+      to: '/submissions',
+      icon: ScrollText,
+    })
   }
   if (cards.length < 4) {
-    cards.push({ label: '阅读列表', value: lists.data?.meta.total ?? '—', to: '/library', icon: Library })
+    cards.push({
+      label: '阅读列表',
+      value: lists.data?.meta.total ?? '—',
+      to: '/library',
+      icon: Library,
+    })
   }
   if (cards.length < 4) {
-    cards.push({ label: '我的推荐', value: recs.data?.meta.total ?? '—', to: '/recommendations', icon: Lightbulb })
+    cards.push({
+      label: '我的推荐',
+      value: recs.data?.meta.total ?? '—',
+      to: '/recommendations',
+      icon: Lightbulb,
+    })
   }
 
   const level = profile.data?.level
@@ -291,14 +424,21 @@ function DashboardPage() {
         }
       />
 
-      <SectionHeading title="今日与成长" hint="签到、等级进度与连续阅读，先看今天要做什么。" />
+      <SectionHeading
+        title="今日与成长"
+        hint="签到、等级进度与连续阅读，先看今天要做什么。"
+      />
       <CheckinBanner />
+      <ReviewerTodayCard />
 
       <div className="mt-3">
         <BadgeProgressStrip />
       </div>
 
-      <SectionHeading title="阅读与发现" hint="继续上次的阅读，或从推荐里找下一篇。" />
+      <SectionHeading
+        title="阅读与发现"
+        hint="继续上次的阅读，或从推荐里找下一篇。"
+      />
       <div className="mt-3">
         <ContinueReadingCard />
       </div>
@@ -323,7 +463,10 @@ function DashboardPage() {
               />
             ))}
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-3" data-testid="mobile-quick-actions">
+          <div
+            className="mt-4 grid grid-cols-3 gap-3"
+            data-testid="mobile-quick-actions"
+          >
             <Button asChild className="flex-col gap-1 py-3" variant="outline">
               <Link to="/catalog">
                 <BookOpen className="h-5 w-5" />
@@ -377,12 +520,18 @@ function DashboardPage() {
         </div>
       )}
 
-      <SectionHeading title="社区与消息" hint="推荐、通知与社区动态按用途分开，不再混在一条信息流里。" />
+      <SectionHeading
+        title="社区与消息"
+        hint="推荐、通知与社区动态按用途分开，不再混在一条信息流里。"
+      />
       <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">为你推荐</CardTitle>
-            <Link to="/recommendations" className="text-xs text-primary hover:underline">
+            <Link
+              to="/recommendations"
+              className="text-xs text-primary hover:underline"
+            >
               查看全部
             </Link>
           </CardHeader>
@@ -394,15 +543,21 @@ function DashboardPage() {
             ) : recs.data?.data.length ? (
               <ul className="space-y-3">
                 {recs.data.data.slice(0, 5).map((r) => (
-                  <li key={r.id} className="border-b pb-2 last:border-0 last:pb-0">
+                  <li
+                    key={r.id}
+                    className="border-b pb-2 last:border-0 last:pb-0"
+                  >
                     <Link
                       to="/catalog/$resourceId"
                       params={{ resourceId: String(r.id) }}
                       className="block hover:text-primary"
                     >
-                      <p className="line-clamp-1 text-sm font-medium">{r.title}</p>
+                      <p className="line-clamp-1 text-sm font-medium">
+                        {r.title}
+                      </p>
                       <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                        {r.authors.join(', ')} · {recommendationReason(r.reason)}
+                        {r.authors.join(', ')} ·{' '}
+                        {recommendationReason(r.reason)}
                       </p>
                     </Link>
                   </li>
@@ -421,7 +576,10 @@ function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">最新通知</CardTitle>
-            <Link to="/notifications" className="text-xs text-primary hover:underline">
+            <Link
+              to="/notifications"
+              className="text-xs text-primary hover:underline"
+            >
               查看全部
             </Link>
           </CardHeader>
@@ -433,7 +591,10 @@ function DashboardPage() {
             ) : notifs.data?.data.length ? (
               <ul className="space-y-3">
                 {notifs.data.data.slice(0, 5).map((n) => (
-                  <li key={n.id} className="border-b pb-2 last:border-0 last:pb-0">
+                  <li
+                    key={n.id}
+                    className="border-b pb-2 last:border-0 last:pb-0"
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
                         <p className="text-sm font-medium">{n.title}</p>
@@ -443,7 +604,11 @@ function DashboardPage() {
                           </p>
                         )}
                       </div>
-                      {!n.is_read && <Badge variant="secondary" className="shrink-0">新</Badge>}
+                      {!n.is_read && (
+                        <Badge variant="secondary" className="shrink-0">
+                          新
+                        </Badge>
+                      )}
                     </div>
                   </li>
                 ))}

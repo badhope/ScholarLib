@@ -90,19 +90,20 @@ export const keys = {
   submission: {
     // page 必须进 key：queryFn 用了它，key 里没有就会出现「翻页后 60 秒内
     // 仍显示上一页」（staleTime 内命中同一 key 不会 refetch）。
-    mine: (status?: string, page = 1) =>
-      ['submissions', 'mine', status ?? 'all', page] as const,
-    all: (status?: string, page = 1) =>
-      ['submissions', 'all', status ?? 'all', page] as const,
-    pending: (page = 1) => ['submissions', 'pending', page] as const,
+    mine: (status?: string, page = 1, pageSize = 20) =>
+      ['submissions', 'mine', status ?? 'all', page, pageSize] as const,
+    all: (status?: string, page = 1, pageSize = 20) =>
+      ['submissions', 'all', status ?? 'all', page, pageSize] as const,
+    pending: (page = 1, pageSize = 20) =>
+      ['submissions', 'pending', page, pageSize] as const,
     detail: (id: number) => ['submissions', 'detail', id] as const,
     assignments: (id: number) => ['submissions', id, 'assignments'] as const,
     reports: (id: number) => ['submissions', id, 'reports'] as const,
     versions: (id: number) => ['submissions', id, 'versions'] as const,
   },
   review: {
-    myAssignments: (status?: string, page = 1) =>
-      ['review', 'my-assignments', status ?? 'all', page] as const,
+    myAssignments: (status?: string, page = 1, pageSize = 20) =>
+      ['review', 'my-assignments', status ?? 'all', page, pageSize] as const,
     assignment: (id: number) => ['review', 'assignment', id] as const,
     // 审稿人查看分配稿件的完整内容
     submission: (assignmentId: number) =>
@@ -353,7 +354,7 @@ export function useCreateSubmission() {
 
 export function useMySubmissions(status?: string, page = 1, pageSize = 20) {
   return useQuery<SubmissionListResponse>({
-    queryKey: keys.submission.mine(status, page),
+    queryKey: keys.submission.mine(status, page, pageSize),
     queryFn: async () =>
       (await api.get<SubmissionListResponse>('/submissions/me', {
         params: { status, page, page_size: pageSize },
@@ -363,7 +364,7 @@ export function useMySubmissions(status?: string, page = 1, pageSize = 20) {
 
 export function useAllSubmissions(status?: string, page = 1, pageSize = 20) {
   return useQuery<SubmissionListResponse>({
-    queryKey: keys.submission.all(status, page),
+    queryKey: keys.submission.all(status, page, pageSize),
     queryFn: async () =>
       (await api.get<SubmissionListResponse>('/submissions', {
         params: { status, page, page_size: pageSize },
@@ -375,15 +376,21 @@ export interface ReviewerCandidate {
   id: number
   username: string
   email: string
+  /** 可解释匹配分；未传 submissionId 时为 0。 */
+  score?: number
+  active_assignments?: number
+  completed_reviews?: number
+  matched_keywords?: string[]
+  match_reasons?: string[]
 }
 
-export function useReviewerCandidates(limit = 200) {
+export function useReviewerCandidates(limit = 200, submissionId?: number) {
   return useQuery<ReviewerCandidate[]>({
-    queryKey: ['submissions', 'reviewer-candidates', limit] as const,
+    queryKey: ['submissions', 'reviewer-candidates', limit, submissionId] as const,
     queryFn: async () =>
       (
         await api.get<{ data: ReviewerCandidate[] }>('/submissions/reviewer-candidates', {
-          params: { limit },
+          params: { limit, ...(submissionId ? { submission_id: submissionId } : {}) },
         })
       ).data.data,
     staleTime: 60_000,
@@ -416,7 +423,7 @@ export function usePendingSubmissions(
   options?: { enabled?: boolean },
 ) {
   return useQuery<SubmissionListResponse>({
-    queryKey: keys.submission.pending(page),
+    queryKey: keys.submission.pending(page, pageSize),
     queryFn: async () =>
       (await api.get<SubmissionListResponse>('/submissions/pending', {
         params: { page, page_size: pageSize },
@@ -837,13 +844,19 @@ export function useSubmissionReports(id: number) {
 }
 
 // --- Reviewer side ---
-export function useMyReviewAssignments(status?: string, page = 1, pageSize = 20) {
+export function useMyReviewAssignments(
+  status?: string,
+  page = 1,
+  pageSize = 20,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery<AssignmentListResponse>({
-    queryKey: keys.review.myAssignments(status, page),
+    queryKey: keys.review.myAssignments(status, page, pageSize),
     queryFn: async () =>
       (await api.get<AssignmentListResponse>('/review/assignments/me', {
         params: { status, page, page_size: pageSize },
       })).data,
+    enabled: options.enabled ?? true,
   })
 }
 

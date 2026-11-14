@@ -954,7 +954,7 @@ function AssignReviewerDialog({
 }) {
   // 专供编辑的候选端点：只返回持 reviewer 角色且启用的账号，非 admin 的
   // editor 也能用（此前走 /admin/users 会 403，下拉永远是空的）。
-  const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT)
+  const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT, submission.id)
   const candidates = candidateData ?? []
   const truncated = candidates.length >= REVIEWER_CANDIDATE_LIMIT
   const assignMut = useAssignReviewersBulk()
@@ -1024,6 +1024,9 @@ function AssignReviewerDialog({
                     />
                     <span className="font-medium">{u.username}</span>
                     <span className="text-xs text-muted-foreground">{u.email}</span>
+                  {typeof u.score === "number" && u.score > 0 ? (
+                    <Badge variant="outline" className="text-[10px]">匹配 {u.score}</Badge>
+                  ) : null}
                     {selected.includes(u.id) && (
                       <span className="ml-auto text-xs text-primary">已选</span>
                     )}
@@ -1243,7 +1246,7 @@ function AdjudicateDialog({
   matrix: ReviewMatrixResponse
   onClose: () => void
 }) {
-  const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT)
+  const { data: candidateData, isLoading } = useReviewerCandidates(REVIEWER_CANDIDATE_LIMIT, submission.id)
   const candidates = (candidateData ?? []).filter(
     (u) => !matrix.assignments.some((a) => a.reviewer_id === u.id),
   )
@@ -1304,6 +1307,9 @@ function AdjudicateDialog({
                   />
                   <span className="font-medium">{u.username}</span>
                   <span className="text-xs text-muted-foreground">{u.email}</span>
+                  {typeof u.score === "number" && u.score > 0 ? (
+                    <Badge variant="outline" className="text-[10px]">匹配 {u.score}</Badge>
+                  ) : null}
                 </label>
               ))
             )}

@@ -32,6 +32,7 @@ const FORMAT_OPTIONS: { value: ParseFormat; label: string }[] = [
   { value: 'bibtex', label: 'BibTeX' },
   { value: 'ris', label: 'RIS' },
   { value: 'csv', label: 'CSV' },
+  { value: 'json', label: 'JSON' },
 ]
 
 const SOURCE_OPTIONS: { value: FetchSource; label: string; hint: string }[] = [
@@ -47,6 +48,7 @@ const FILE_FORMATS: Record<string, ParseFormat> = {
   bibtex: 'bibtex',
   ris: 'ris',
   csv: 'csv',
+  json: 'json',
 }
 
 function formatFromFilename(name: string): ParseFormat | null {
@@ -170,7 +172,7 @@ function IngestPage() {
     <div>
       <PageHeader
         title="导入"
-        description="读取 BibTeX / RIS / CSV 文件，或按 DOI、PubMed、arXiv、OpenAlex、Semantic Scholar 查询后导入。"
+        description="读取 BibTeX / RIS / CSV / JSON 文件，或按 DOI、PubMed、arXiv、OpenAlex、Semantic Scholar 查询后导入。"
       />
 
       <Tabs defaultValue="parse">
@@ -213,7 +215,7 @@ function IngestPage() {
                       <input
                         ref={fileRef}
                         type="file"
-                        accept=".bib,.bibtex,.ris,.csv,text/plain"
+                        accept=".bib,.bibtex,.ris,.csv,.json,application/json,text/plain"
                         className="hidden"
                         onChange={onPickFile}
                       />
@@ -258,7 +260,7 @@ function IngestPage() {
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    支持 UTF-8 的 .bib / .bibtex / .ris / .csv，最大 2MB；读取后仍可手工修改再解析。
+                    支持 UTF-8 的 .bib / .bibtex / .ris / .csv / .json，最大 2MB；读取后仍可手工修改再解析。
                   </p>
                 </div>
                 <Button

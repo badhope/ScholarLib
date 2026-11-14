@@ -22,7 +22,7 @@ from app.domain.ingest.fetchers import (
     fetch_pubmed,
     fetch_semantic_scholar,
 )
-from app.domain.ingest.parsers import parse_bibtex, parse_csv, parse_ris
+from app.domain.ingest.parsers import parse_bibtex, parse_csv, parse_json, parse_ris
 from app.interfaces.http.ingest.schemas import (
     FetchRequest,
     IngestResource,
@@ -37,6 +37,7 @@ _PARSERS = {
     "bibtex": parse_bibtex,
     "ris": parse_ris,
     "csv": parse_csv,
+    "json": parse_json,
 }
 
 
@@ -45,7 +46,7 @@ async def parse_endpoint(
     payload: ParseRequest,
     _: User = Depends(get_current_user),
 ) -> ParseResponse:
-    """Parse a BibTeX/RIS/CSV string into a list of normalised resources.
+    """Parse a BibTeX/RIS/CSV/JSON string into a list of normalised resources.
 
     Per-entry parse failures are returned in ``errors`` (with a 1-based
     line/index); the whole request still returns 200 so the caller can

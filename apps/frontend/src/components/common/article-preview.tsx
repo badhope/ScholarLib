@@ -18,7 +18,7 @@ export interface ArticlePreviewProps {
 
 function stripDuplicatePreviewParts(body: string, title: string): string {
   let md = body.trim()
-  const firstHeading = md.match(/^#\s+([^\n]+)\n+/)
+  const firstHeading = md.match(/^#{1,6}\s+([^\n]+)\n+/)
   if (firstHeading && firstHeading[1].trim() === title.trim()) {
     md = md.slice(firstHeading[0].length)
   }
@@ -62,7 +62,7 @@ export function ArticlePreview({
         {abstract.trim() && (
           <section className="md-abstract markdown-body mb-5 rounded-lg border-l-4 border-primary/70 bg-primary/5 px-4 py-3">
             <h2 className="mb-2 text-xs font-bold tracking-[0.2em] text-primary">摘要</h2>
-            <p className="whitespace-pre-wrap text-sm leading-7">{abstract}</p>
+            <MarkdownContent text={abstract} className="text-sm leading-7" />
           </section>
         )}
         {keywords.length > 0 && (

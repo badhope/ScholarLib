@@ -83,6 +83,42 @@ const markdownComponents: Components = {
   ),
 }
 
+/**
+ * CommonMark 的左右侧翼规则对「**作者：**马必略」这类中文相邻的强调标记
+ * 常判为不合法，渲染后会露出字面 **。这里在 mdast 文本节点上兜底，
+ * 只处理文本节点，不碰代码块/公式；编辑器预览、投稿预览和文章页共用。
+ */
+type MdNode = {
+  type?: string
+  value?: string
+  children?: MdNode[]
+}
+
+export function remarkCjkStrong() {
+  return (tree: MdNode) => {
+    const repair = (node: MdNode) => {
+      if (!Array.isArray(node.children)) return
+      const out: MdNode[] = []
+      for (const child of node.children) {
+        if (child.type === 'text' && typeof child.value === 'string' && child.value.includes('**')) {
+          const parts = child.value.split(/(\*\*[^*\n]+\*\*)/g)
+          for (const part of parts) {
+            if (!part) continue
+            const match = /^\*\*([^*\n]+)\*\*$/.exec(part)
+            if (match) out.push({ type: 'strong', children: [{ type: 'text', value: match[1] }] })
+            else if (part !== '**') out.push({ type: 'text', value: part.replace(/\*\*/g, '') })
+          }
+        } else {
+          repair(child)
+          out.push(child)
+        }
+      }
+      node.children = out
+    }
+    repair(tree)
+  }
+}
+
 export function markdownUrlTransform(url: string): string {
   return url.startsWith('data:image/') ? url : defaultUrlTransform(url)
 }
@@ -97,7 +133,7 @@ export function MarkdownContent({
   return (
     <div className={cn('markdown-body', className)}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkGfm, remarkCjkStrong, remarkMath]}
         rehypePlugins={[
           rehypeRaw,
           [rehypeSanitize, markdownSanitizeSchema],

@@ -21,7 +21,11 @@ import 'katex/dist/katex.min.css'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Loading } from '@/components/common/state'
-import { markdownSanitizeSchema, markdownUrlTransform } from '@/components/common/markdown-content'
+import {
+  markdownSanitizeSchema,
+  markdownUrlTransform,
+  remarkCjkStrong,
+} from '@/components/common/markdown-content'
 
 // 在线阅读的 Markdown 渲染视图（0.7.0）。
 // - 数据：GET /api/catalog/{id}/manuscript（text/markdown，公开边界与
@@ -868,40 +872,6 @@ function decorateInline(nodes: ReactNode): ReactNode {
     }
     return node
   })
-}
-
-// CommonMark 的左右侧翼规则对「**作者：**马必略」这类中文相邻的强调标记
-// 常常判为不合法，结果整段显示成字面 **。这里在 mdast 文本节点上兜底：
-// 把残留的 **…** 直接转成 strong 节点，只处理文本节点，不碰代码块/公式。
-type MdNode = {
-  type?: string
-  value?: string
-  children?: MdNode[]
-}
-
-function remarkCjkStrong() {
-  return (tree: MdNode) => {
-    const repair = (node: MdNode) => {
-      if (!Array.isArray(node.children)) return
-      const out: MdNode[] = []
-      for (const child of node.children) {
-        if (child.type === 'text' && typeof child.value === 'string' && child.value.includes('**')) {
-          const parts = child.value.split(/(\*\*[^*\n]+\*\*)/g)
-          for (const part of parts) {
-            if (!part) continue
-            const m = /^\*\*([^*\n]+)\*\*$/.exec(part)
-            if (m) out.push({ type: 'strong', children: [{ type: 'text', value: m[1] }] })
-            else if (part !== '**') out.push({ type: 'text', value: part.replace(/\*\*/g, '') })
-          }
-        } else {
-          repair(child)
-          out.push(child)
-        }
-      }
-      node.children = out
-    }
-    repair(tree)
-  }
 }
 
 const markdownComponents: Components = {

@@ -82,18 +82,74 @@ async def list_pending_submissions(
     return await _list_submissions(db, query, page, page_size)
 
 
+def _norm_terms(values: list[str] | None) -> set[str]:
+    """Normalize free-text keywords/tags for overlap scoring."""
+    return {str(value).strip().lower() for value in (values or []) if str(value).strip()}
+
+
+def _candidate_score(
+    *,
+    current: Submission | None,
+    history: list[Submission],
+    active_count: int,
+) -> tuple[int, list[str], list[str]]:
+    """A transparent, explainable 0–100 match score.
+
+    This is deliberately not a black-box model: editors must be able to see
+    why someone ranks first. We use the metadata that already exists (discipline,
+    subdiscipline, keywords/tags, review history, current load) rather than
+    pretending the platform has expertise tags it does not have yet.
+    """
+    reasons: list[str] = []
+    matched: list[str] = []
+    score = 0
+    if current is not None:
+        if current.discipline and any(item.discipline == current.discipline for item in history):
+            score += 40
+            reasons.append(f"同学科：{current.discipline}")
+        if current.subdiscipline and any(
+            item.subdiscipline == current.subdiscipline for item in history
+        ):
+            score += 15
+            reasons.append(f"同子领域：{current.subdiscipline}")
+
+        current_terms = _norm_terms([*current.keywords, *current.tags])
+        history_terms: set[str] = set()
+        for item in history:
+            history_terms.update(_norm_terms([*item.keywords, *item.tags]))
+        overlap = sorted(current_terms & history_terms)
+        if overlap:
+            score += min(30, len(overlap) * 6)
+            matched = overlap[:5]
+            reasons.append(f"关键词重合：{', '.join(matched)}")
+
+    completed = len(history)
+    if completed:
+        score += min(10, completed * 2)
+        reasons.append(f"已完成 {completed} 篇审稿")
+    if active_count:
+        score -= min(20, active_count * 5)
+        reasons.append(f"当前在审 {active_count} 篇")
+    else:
+        reasons.append("当前无在审任务")
+
+    return max(0, min(100, score)), reasons, matched
+
+
 @router.get("/reviewer-candidates", response_model=ReviewerCandidateListResponse)
 async def list_reviewer_candidates(
     limit: int = Query(default=200, ge=1, le=200),
+    submission_id: int | None = Query(default=None, ge=1),
     _: User = Depends(require_editor),
     db: AsyncSession = Depends(get_db),
 ) -> ReviewerCandidateListResponse:
-    """可被指派的审稿人（持 reviewer / senior_reviewer 角色且账号启用）。
+    """可被指派的审稿人 + 可解释匹配分。
 
     供编辑工作台的下拉使用：之前走 /admin/users，非 admin 的 editor
-    会拿到 403，导致「没有可指派的审稿人」。此端点只暴露分配所需的最小
-    字段（id / username / email），且同样要求 editor 权限。L6 资深审稿人
-    与 L5 共用候选池（与 require_reviewer 同口径）。
+    会拿到 403，导致「没有可指派的审稿人」。L6 资深审稿人与 L5 共用
+    候选池（与 require_reviewer 同口径）。传 ``submission_id`` 时按
+    学科/子领域/关键词重合、历史审稿量与当前负载排序；不传时仍按
+    用户名返回，保持旧调用兼容。
     """
     tenant_id = require_tenant_id()
     rows = (
@@ -112,9 +168,77 @@ async def list_reviewer_candidates(
             .limit(limit)
         )
     ).all()
-    return ReviewerCandidateListResponse(
-        data=[ReviewerCandidate(id=row.id, username=row.username, email=row.email) for row in rows]
+    reviewer_ids = [row.id for row in rows]
+    if not reviewer_ids:
+        return ReviewerCandidateListResponse(data=[])
+
+    current = None
+    if submission_id is not None:
+        current = (
+            await db.execute(
+                select(Submission).where(
+                    Submission.id == submission_id,
+                    Submission.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if current is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found")
+
+    # One aggregate query for completed history and one for active load,
+    # instead of N+1 per candidate.
+    history_rows = (
+        await db.execute(
+            select(ReviewAssignment.reviewer_id, Submission)
+            .join(Submission, ReviewAssignment.submission_id == Submission.id)
+            .where(
+                ReviewAssignment.tenant_id == tenant_id,
+                ReviewAssignment.reviewer_id.in_(reviewer_ids),
+                ReviewAssignment.status == "completed",
+                Submission.tenant_id == tenant_id,
+            )
+        )
+    ).all()
+    history_by_reviewer: dict[int, list[Submission]] = {}
+    for reviewer_id, submission in history_rows:
+        history_by_reviewer.setdefault(reviewer_id, []).append(submission)
+
+    active_counts = dict(
+        (
+            await db.execute(
+                select(ReviewAssignment.reviewer_id, func.count(ReviewAssignment.id)).where(
+                    ReviewAssignment.tenant_id == tenant_id,
+                    ReviewAssignment.reviewer_id.in_(reviewer_ids),
+                    ReviewAssignment.status.in_(["pending", "accepted"]),
+                )
+            )
+        ).all()
     )
+
+    candidates: list[ReviewerCandidate] = []
+    for row in rows:
+        history = history_by_reviewer.get(row.id, [])
+        active_count = int(active_counts.get(row.id, 0))
+        score, reasons, matched = _candidate_score(
+            current=current,
+            history=history,
+            active_count=active_count,
+        )
+        candidates.append(
+            ReviewerCandidate(
+                id=row.id,
+                username=row.username,
+                email=row.email,
+                score=score if current is not None else 0,
+                active_assignments=active_count,
+                completed_reviews=len(history),
+                matched_keywords=matched,
+                match_reasons=reasons,
+            )
+        )
+    if current is not None:
+        candidates.sort(key=lambda item: (-item.score, item.active_assignments, item.username))
+    return ReviewerCandidateListResponse(data=candidates)
 
 
 @router.get("", response_model=SubmissionListResponse)

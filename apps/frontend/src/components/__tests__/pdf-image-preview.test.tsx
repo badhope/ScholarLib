@@ -15,14 +15,22 @@ beforeEach(() => {
 
 describe('PdfImagePreview', () => {
   it('resets to page 1 when the resource changes', async () => {
-    const { rerender } = render(<PdfImagePreview resourceId={91} version="21" />)
-    await waitFor(() => expect(screen.getByText('1 / 3 页')).toBeInTheDocument())
+    const { rerender } = render(
+      <PdfImagePreview resourceId={91} version="21" />,
+    )
+    await waitFor(() =>
+      expect(screen.getByText('1 / 3 页')).toBeInTheDocument(),
+    )
 
     fireEvent.click(screen.getByText('下一页'))
-    await waitFor(() => expect(screen.getByAltText('PDF 第 2 页')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByAltText('PDF 第 2 页')).toBeInTheDocument(),
+    )
 
     rerender(<PdfImagePreview resourceId={3} version="21" />)
-    await waitFor(() => expect(screen.getByAltText('PDF 第 1 页')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByAltText('PDF 第 1 页')).toBeInTheDocument(),
+    )
   })
 
   it('fetches page count once per resource, not on every page turn', async () => {
@@ -32,12 +40,16 @@ describe('PdfImagePreview', () => {
     fireEvent.click(screen.getByText('下一页'))
     fireEvent.click(screen.getByText('下一页'))
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.getByAltText('PDF 第 3 页')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByAltText('PDF 第 3 页')).toBeInTheDocument(),
+    )
   })
 
   it('offers a retry after an image error', async () => {
     render(<PdfImagePreview resourceId={91} version="21" />)
-    await waitFor(() => expect(screen.getByText('1 / 3 页')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByText('1 / 3 页')).toBeInTheDocument(),
+    )
     fireEvent.error(screen.getByAltText('PDF 第 1 页'))
     expect(screen.getByText('重新加载本页')).toBeInTheDocument()
 
@@ -49,4 +61,20 @@ describe('PdfImagePreview', () => {
       ),
     )
   })
+})
+
+it('jumps to a page, zooms, and supports keyboard paging', async () => {
+  render(<PdfImagePreview resourceId={91} version="21" />)
+  await waitFor(() => expect(screen.getByText('1 / 3 页')).toBeInTheDocument())
+
+  const jump = screen.getByLabelText('跳转页码')
+  fireEvent.change(jump, { target: { value: '3' } })
+  fireEvent.submit(jump.closest('form')!)
+  expect(screen.getByText('3 / 3 页')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByLabelText('放大'))
+  expect(screen.getByText('110%')).toBeInTheDocument()
+
+  fireEvent.keyDown(screen.getByLabelText('PDF 预览'), { key: 'ArrowLeft' })
+  expect(screen.getByText('2 / 3 页')).toBeInTheDocument()
 })

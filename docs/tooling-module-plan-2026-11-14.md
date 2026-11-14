@@ -14,21 +14,21 @@
 
 | 类别 | 模块 / 文件 | 现有能力 | 当前问题（审计结论） |
 |---|---|---|---|
-| 编辑器 | `components/common/markdown-editor.tsx`（396 行） | 标题/加粗/斜体/段落/插入、编辑/分栏/预览、字数、图片上传接口 | 投稿页未接图片上传；Tab 只插两个空格，不支持多行缩进/反缩进；块级模板会覆盖选中文本；缺少撤销/重做、查找、目录、版本对比 |
+| 编辑器 | `components/common/markdown-editor.tsx`（396 行） | 标题/加粗/斜体/段落/插入、编辑/分栏/预览、字数、图片上传 | 已接投稿正文插图；Tab/Shift+Tab 多行缩进；仍缺少撤销/重做、查找、目录、版本对比 |
 | 编辑器 | `components/common/markdown-field.tsx`（118 行） | 表单内编辑/预览、模板、字数 | 预览与正文渲染链一致，但没有自动保存、没有快捷键说明 |
-| 编辑页 | `routes/submissions/new.tsx`（1624 行） | 上传 Word/PDF 识别、在线正文、发布预览、分步表单 | 页面过大；编辑器与预览拆成两套渲染；图片只能随 DOCX/PDF 进，在线写作不能插图 |
-| 预览 | `components/common/article-preview.tsx`（102 行） | 标题/作者/摘要/关键词/正文预览 | 单独用一套 ReactMarkdown，不支持编辑器写入的 `<u>/<mark>/<sup>/<sub>`，与文章页不一致 |
-| 渲染 | `components/common/markdown-content.tsx`（140 行） | GFM、公式、raw HTML、sanitize、data 图 | 已是较完整的共享渲染器，但文章页没有复用它 |
-| 查看器 | `components/common/manuscript-view.tsx`（1406 行） | 正文、目录、参考文献折叠、阅读偏好、进度、移动端 | 单文件过大；不渲染 raw HTML（编辑器写的下划线/高亮到发布页会变成字面标签）；目录/折叠/清洗规则混在一起 |
-| 查看器 | `components/pdf-image-preview.tsx`（122 行） | 分页 PNG 预览、总页数、下载兜底 | 切换资源时页码不重置；无重试；无预取 |
-| 查看器 | `components/source-preview-png.tsx`（98 行） | 投稿原件分页预览 | 切换 token 时页码不重置；无重试；与 `AuthPngPreview` 三套相似逻辑 |
-| 查看器 | `components/auth-png-preview.tsx`（120 行） | 鉴权分页 PNG、缓存、重试 | 缓存无上限；与上面两个组件重复 |
-| 转换 | `domain/export/exporters.py`（388 行） | BibTeX/RIS/CSV/JSON/JATS | RIS 页码只写 `SP - 1-20`；BibTeX 作者/关键词未转义；中文标题 citation key 退化成 `untitled`；错误文案未列 JATS |
+| 编辑页 | `routes/submissions/new.tsx`（1624 行） | 上传 Word/PDF 识别、在线正文、发布预览、分步表单 | 页面仍过大；在线正文已可插图；编辑器/预览已走共享渲染 |
+| 预览 | `components/common/article-preview.tsx`（102 行） | 标题/作者/摘要/关键词/正文预览 | 已改用共享 `MarkdownContent`；摘要也按 Markdown 渲染 |
+| 渲染 | `components/common/markdown-content.tsx`（140 行） | GFM、公式、raw HTML、sanitize、data 图、中文紧邻加粗 | 已是编辑器/预览/文章页/评审报告共用的唯一渲染器；后续只需处理更复杂的 Markdown 扩展 |
+| 查看器 | `components/common/manuscript-view.tsx`（1406 行） | 正文、目录、参考文献折叠、阅读偏好、进度、移动端 | 单文件仍过大；已接入 raw HTML 清洗；目录/折叠/清洗规则仍混在一起 |
+| 查看器 | `components/pdf-image-preview.tsx`（122 行） | 分页 PNG 预览、总页数、下载兜底 | 换资源重置页码、失败重试已修；仍无预取 |
+| 查看器 | `components/source-preview-png.tsx`（98 行） | 投稿原件分页预览 | 已并入 `AuthPngPreview`（2026-11-14 续）；旧组件删除，不再维护三套相似逻辑 |
+| 查看器 | `components/auth-png-preview.tsx`（120 行） | 鉴权分页 PNG、缓存、重试、图片解码失败态 | 已用于投稿原件预览；分页缓存上限 20；与 `PdfImagePreview` 仍有结构相似，后续可合并 |
+| 转换 | `domain/export/exporters.py`（388 行） | BibTeX/RIS/CSV/JSON/JATS | 页码拆分、作者/关键词转义、中文 citation key 兜底、JATS 文案已修；仍需字段级往返夹具 |
 | 转换 | `domain/submission/export_docs.py`（465 行） | MD→HTML→PDF、MD→DOCX、整期 PDF、DOCX→PDF | PDF 字体/图片压缩有兜底；LibreOffice 缺失时回退路径需可观测；公式在 PDF 中可能丢失 |
 | 转换 | `domain/submission/docx_template.py`（1199 行） | 品牌 Word 模板、题录、表格、图注、页眉 | 单文件巨大；表格跨页、图注孤页、图片尺寸规则散落；缺独立回归夹具 |
-| 导入 | `domain/ingest/parsers.py` | BibTeX/RIS/CSV | 无 JSON 导入；CSV 别名不全；错误定位只到行号 |
-| 导入 | `domain/ingest/fetchers.py` | Crossref/arXiv/PubMed/OpenAlex/Semantic Scholar | 后端支持 5 个源，前端只显示 Crossref/arXiv |
-| 导入页 | `routes/ingest/index.tsx`（255 行） | 粘贴文本解析、单条查询 | 只能粘贴，不能选文件/拖拽；不能编辑解析结果；不能批量选择 |
+| 导入 | `domain/ingest/parsers.py` | BibTeX/RIS/CSV/JSON | 已支持 JSON 回导；CSV 别名仍未完全对齐；错误定位只到行号 |
+| 导入 | `domain/ingest/fetchers.py` | Crossref/arXiv/PubMed/OpenAlex/Semantic Scholar | 后端 5 个源已在前端全部可选；字段映射仍未做 |
+| 导入页 | `routes/ingest/index.tsx`（255 行） | 粘贴文本解析、文件选择/拖拽、五源查询 | 仍不能编辑解析结果、批量勾选；字段映射未做 |
 | 导出页 | `interfaces/http/export/routes.py` | 批量引用导出 5 种格式 | 注释仍写“四选一”；无导出前预览/字段校验 |
 
 ## 2. 本轮 P0：先修“会丢内容 / 会出错 / 会误导”
@@ -66,16 +66,33 @@
 
 - [x] P0-1 统一渲染链：`ArticlePreview` 改用共享 `MarkdownContent`；`ManuscriptView` 接入同一套 `rehypeRaw + rehypeSanitize`；新增投稿预览/文章页 raw HTML 回归测试。
 - [x] P0-2 转换器：RIS 页码拆 `SP/EP`、换行压平；BibTeX 作者/关键词转义；中文标题 citation key 用资源 id 兜底；错误文案补 JATS；路由注释改“五选一”。
-- [x] P0-3 预览器：`SourcePreviewPng` / `PdfImagePreview` / `AuthPngPreview` 换 token/资源时页码同帧归 1，按总页数夹取；两个预览补“重新加载本页”；PDF info 只在资源/版本变化时请求，不再每翻一页重复请求。
+- [x] P0-3 预览器：`PdfImagePreview` / `AuthPngPreview` 换 token/资源时页码同帧归 1，按总页数夹取；两个预览补“重新加载本页”；PDF info 只在资源/版本变化时请求，不再每翻一页重复请求。投稿原件预览统一收口到 `AuthPngPreview`，旧的 `SourcePreviewPng` 已删除，三套相似逻辑不再并行维护。
 - [x] P0-4 导入入口：补齐 PubMed/OpenAlex/Semantic Scholar；前端 `FetchSource` 类型同步；支持 `.bib/.bibtex/.ris/.csv` 文件选择与拖拽读取，自动识别格式。
 - [x] P0-5 编辑器：Tab/Shift+Tab 多行缩进与反缩进；`Ctrl+U` 下划线；工具栏/textarea 补 accessible name。
 - [x] P0-6 预览缓存：`/source-preview` 临时 PDF 加 6 小时 TTL + 200 份上限清理，避免 `/tmp` 被登录用户反复上传堆满。
 - [x] 额外：新增通用 `/api/media/images`（submission/forum/note），投稿正文在线编辑器现在可以直接插图；论坛新图也走同一端点，旧 `/api/forum/images` 保留兼容。
 - [x] 测试：后端新增导出器、JATS 路由、媒体上传、预览缓存测试；前端新增投稿预览、正文 raw HTML、分页预览、编辑器缩进测试。
-- [x] 回归：后端全量 `1171 passed, 1 skipped`；前端 `26 files / 150 tests passed`；`lint`、`typecheck`、`build` 均通过；E2E 使用系统 Chromium 全量 `75 passed`（19.2m）。
+- [x] 回归（第一轮记录）：后端全量 `1171 passed, 1 skipped`；前端 `26 files / 150 tests passed`；`lint`、`typecheck`、`build` 均通过；E2E 使用系统 Chromium 全量 `75 passed`（19.2m）。第二轮回归见 2.3。
 - [x] 回归中顺手收口：导入页保留稳定 placeholder（避免 E2E 选择器失效）；主页保存 toast 固定 id（连续保存不再堆叠两条相同提示）；管理员角色菜单用例改用真实点击（Radix 菜单项由 roving tabindex 管理焦点）。
 
 对应提交与 CI 结果：本地提交见下方“交付记录”；推送后由远程 CI 触发，结果在交付说明中回填。
+
+### 2.2 横向补充（2026-11-14 续，计划外发现并已修）
+
+- [x] 中文紧邻加粗：把 `ManuscriptView` 原有的 `remarkCjkStrong` 移到共享 `markdown-content.tsx` 并导出，编辑预览、投稿预览、文章页、评审报告共用同一规则；`**作者：**马必略` 不再露出字面 `**`。
+- [x] 引用格式：文章页引用卡从固定 `[Z]` 改为按资源类型生成 `[J]/[M]/[DS]/[EB/OL]`，新增 GB/T 7714、APA、MLA 三种格式复制，默认仍展示 GB/T。
+- [x] JSON 回导：`POST /api/ingest/parse` 支持 `format=json`，接受导出数组、单对象和 `data`/`items` 包装；忽略 `source_id`/`external_url` 等导出专用字段，前端格式下拉和文件 accept 同步支持 `.json`。
+- [x] 投稿原件预览鉴权：`GET /source-preview/{token}.pdf` 与分页 PNG 补登录校验；投稿页改用 `AuthPngPreview` 走带 Authorization 的 blob 请求，避免拿到 32 位 token 即可读草稿原件。
+- [x] 预览失败态：`AuthPngPreview` 的 `<img>` 补 `onLoad/onError`，后端已返回图片但浏览器解码失败时也能显示“重试”，不会停在空白页。
+- [x] 投稿预览摘要一致性：`ArticlePreview` 的摘要从纯文本 `<p>` 改为共享 `MarkdownContent`，摘要里的公式、`<mark>`、`<u>` 与文章页表现一致。
+- [x] 预览标题去重：`ArticlePreview` 从只匹配 `#` 一级标题扩展到 `#{1,6}`，`## 标题` 也不会在预览里重复出现。
+- [x] 测试：新增 `citation.test.ts`、JSON 导入后端测试、`auth-png-preview.test.tsx`、投稿原件预览鉴权测试；补充 `MarkdownContent` 中文加粗、`ArticlePreview` 摘要/标题去重断言。
+
+### 2.3 第二轮回归（2026-11-14 续）
+
+- [x] 后端全量：`1176 passed, 1 skipped`（12m05s）。
+- [x] 前端全量：`28 files / 157 tests passed`（9m23s）；`lint`、`typecheck`、`build` 通过。
+- [x] E2E 全量：`75 passed`（27.1m），2FA 用例 48.1s；使用系统 Chromium。
 
 ## 3. 后续 P1：按市面常见能力补齐
 
@@ -135,3 +152,15 @@
 - 本地提交：`d37b6b9 fix(tooling): unify markdown render and close preview/import/export bugs`
 - 验证：后端 `1171 passed, 1 skipped`；前端 `150 passed`；`lint` / `typecheck` / `build` 通过；E2E `75 passed`。
 - 远程推送与 CI 结果：见最终交付说明（远程 CI 由推送触发，不在本地伪造结果）。
+
+## 8. 2026-11-14 续批状态
+
+- [x] 3.1 撤销/重做（Ctrl+Z / Ctrl+Shift+Z，100 步上限）、查找/替换、文档大纲、专注模式；已补 3 个前端测试。
+- [x] 3.2 抽出通用 `PagedPdfPreview`，`PdfImagePreview` 与 `AuthPngPreview` 改为薄包装；统一换稿归位、页码夹取、重试、页码跳转、缩放、键盘翻页；已补页码跳转/缩放/键盘测试。
+- [ ] 3.2 `ManuscriptView` 拆分为 render/toc/reference/reading-prefs 四模块；当前仍是单文件。
+- [ ] 3.2 表格/CSV/代码/图片按内容类型分流查看器。
+- [ ] 3.3 批量导出、统一转换契约测试、导出前字段校验。
+- [ ] 3.4 独立引用生成器、图表/参考文献编号检查、批量导入字段映射。
+- [x] 分页缓存键修正：`useMySubmissions` / `usePendingSubmissions` / `useMyReviewAssignments` 等把 `pageSize` 纳入 query key，避免 Dashboard 用 1 条把列表页 20 条的缓存覆盖。
+- [x] 期号页 JSON-LD `PublicationIssue`，与 canonical 路由、整期 PDF 一并落地。
+- [x] P2-11 第一版 `/desk`：主编桌，三根内容支柱 + 真实卷首手记，不伪造个人头衔或数据；尚未接入独立域名/邮件订阅。

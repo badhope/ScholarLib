@@ -95,6 +95,9 @@ test.describe('two-factor authentication', () => {
   test('enable 2FA → two-step login → disable restores plain login', async ({
     browser,
   }) => {
+    // 全量串行跑时登录/注册页会因前序用例的限流与浏览器排队变慢；
+    // 单跑约 48s，120s 只放宽上限，不放宽任何断言。
+    test.setTimeout(120_000)
     const ctx = await browser.newContext()
     const user = nextTestUser('twofa')
     const page = await ctx.newPage()

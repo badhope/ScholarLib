@@ -17,6 +17,7 @@ import { Route as ArchiveRouteImport } from './routes/archive'
 import { Route as AuthorsRouteImport } from './routes/authors'
 import { Route as BrowseRouteImport } from './routes/browse'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DeskRouteImport } from './routes/desk'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FunRouteImport } from './routes/fun'
@@ -79,6 +80,7 @@ import { Route as UUsernameRouteImport } from './routes/u/$username'
 import { Route as AdminIssuesIndexRouteImport } from './routes/admin/issues/index'
 import { Route as AuthOidcCallbackRouteImport } from './routes/auth/oidc/callback'
 import { Route as CatalogTrackTrackRouteImport } from './routes/catalog/track.$track'
+import { Route as IssuesVolumeIssueRouteImport } from './routes/issues.$volume.$issue'
 import { Route as AdminIssuesVolumeIssueRouteImport } from './routes/admin/issues.$volume.$issue'
 
 const IndexRoute = IndexRouteImport.update({
@@ -119,6 +121,11 @@ const BrowseRoute = BrowseRouteImport.update({
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeskRoute = DeskRouteImport.update({
+  id: '/desk',
+  path: '/desk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FeedbackRoute = FeedbackRouteImport.update({
@@ -431,6 +438,11 @@ const CatalogTrackTrackRoute = CatalogTrackTrackRouteImport.update({
   path: '/catalog/track/$track',
   getParentRoute: () => rootRouteImport,
 } as any)
+const IssuesVolumeIssueRoute = IssuesVolumeIssueRouteImport.update({
+  id: '/issues/$volume/$issue',
+  path: '/issues/$volume/$issue',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIssuesVolumeIssueRoute = AdminIssuesVolumeIssueRouteImport.update({
   id: '/admin/issues/$volume/$issue',
   path: '/admin/issues/$volume/$issue',
@@ -446,6 +458,7 @@ export interface FileRoutesByFullPath {
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/desk': typeof DeskRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/fun': typeof FunRoute
@@ -507,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/issues/$volume/$issue': typeof IssuesVolumeIssueRoute
   '/admin/issues/': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
@@ -519,6 +533,7 @@ export interface FileRoutesByTo {
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/desk': typeof DeskRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/fun': typeof FunRoute
@@ -580,6 +595,7 @@ export interface FileRoutesByTo {
   '/submissions': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/issues/$volume/$issue': typeof IssuesVolumeIssueRoute
   '/admin/issues': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
@@ -593,6 +609,7 @@ export interface FileRoutesById {
   '/authors': typeof AuthorsRoute
   '/browse': typeof BrowseRoute
   '/dashboard': typeof DashboardRoute
+  '/desk': typeof DeskRoute
   '/feedback': typeof FeedbackRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/fun': typeof FunRoute
@@ -654,6 +671,7 @@ export interface FileRoutesById {
   '/submissions/': typeof SubmissionsIndexRoute
   '/auth/oidc/callback': typeof AuthOidcCallbackRoute
   '/catalog/track/$track': typeof CatalogTrackTrackRoute
+  '/issues/$volume/$issue': typeof IssuesVolumeIssueRoute
   '/admin/issues/': typeof AdminIssuesIndexRoute
   '/admin/issues/$volume/$issue': typeof AdminIssuesVolumeIssueRoute
 }
@@ -668,6 +686,7 @@ export interface FileRouteTypes {
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/desk'
     | '/feedback'
     | '/forgot-password'
     | '/fun'
@@ -729,6 +748,7 @@ export interface FileRouteTypes {
     | '/submissions/'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/issues/$volume/$issue'
     | '/admin/issues/'
     | '/admin/issues/$volume/$issue'
   fileRoutesByTo: FileRoutesByTo
@@ -741,6 +761,7 @@ export interface FileRouteTypes {
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/desk'
     | '/feedback'
     | '/forgot-password'
     | '/fun'
@@ -802,6 +823,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/issues/$volume/$issue'
     | '/admin/issues'
     | '/admin/issues/$volume/$issue'
   id:
@@ -814,6 +836,7 @@ export interface FileRouteTypes {
     | '/authors'
     | '/browse'
     | '/dashboard'
+    | '/desk'
     | '/feedback'
     | '/forgot-password'
     | '/fun'
@@ -875,6 +898,7 @@ export interface FileRouteTypes {
     | '/submissions/'
     | '/auth/oidc/callback'
     | '/catalog/track/$track'
+    | '/issues/$volume/$issue'
     | '/admin/issues/'
     | '/admin/issues/$volume/$issue'
   fileRoutesById: FileRoutesById
@@ -888,6 +912,7 @@ export interface RootRouteChildren {
   AuthorsRoute: typeof AuthorsRoute
   BrowseRoute: typeof BrowseRoute
   DashboardRoute: typeof DashboardRoute
+  DeskRoute: typeof DeskRoute
   FeedbackRoute: typeof FeedbackRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FunRoute: typeof FunRoute
@@ -949,6 +974,7 @@ export interface RootRouteChildren {
   SubmissionsIndexRoute: typeof SubmissionsIndexRoute
   AuthOidcCallbackRoute: typeof AuthOidcCallbackRoute
   CatalogTrackTrackRoute: typeof CatalogTrackTrackRoute
+  IssuesVolumeIssueRoute: typeof IssuesVolumeIssueRoute
   AdminIssuesIndexRoute: typeof AdminIssuesIndexRoute
   AdminIssuesVolumeIssueRoute: typeof AdminIssuesVolumeIssueRoute
 }
@@ -1009,6 +1035,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/desk': {
+      id: '/desk'
+      path: '/desk'
+      fullPath: '/desk'
+      preLoaderRoute: typeof DeskRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/feedback': {
@@ -1445,6 +1478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CatalogTrackTrackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/issues/$volume/$issue': {
+      id: '/issues/$volume/$issue'
+      path: '/issues/$volume/$issue'
+      fullPath: '/issues/$volume/$issue'
+      preLoaderRoute: typeof IssuesVolumeIssueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/issues/$volume/$issue': {
       id: '/admin/issues/$volume/$issue'
       path: '/admin/issues/$volume/$issue'
@@ -1464,6 +1504,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorsRoute: AuthorsRoute,
   BrowseRoute: BrowseRoute,
   DashboardRoute: DashboardRoute,
+  DeskRoute: DeskRoute,
   FeedbackRoute: FeedbackRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FunRoute: FunRoute,
@@ -1525,6 +1566,7 @@ const rootRouteChildren: RootRouteChildren = {
   SubmissionsIndexRoute: SubmissionsIndexRoute,
   AuthOidcCallbackRoute: AuthOidcCallbackRoute,
   CatalogTrackTrackRoute: CatalogTrackTrackRoute,
+  IssuesVolumeIssueRoute: IssuesVolumeIssueRoute,
   AdminIssuesIndexRoute: AdminIssuesIndexRoute,
   AdminIssuesVolumeIssueRoute: AdminIssuesVolumeIssueRoute,
 }

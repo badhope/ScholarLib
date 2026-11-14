@@ -22,7 +22,7 @@ IngestResourceType = Literal[
     "tutorial",
 ]
 
-ParseFormat = Literal["bibtex", "ris", "csv"]
+ParseFormat = Literal["bibtex", "ris", "csv", "json"]
 FetchSource = Literal["crossref", "arxiv", "pubmed", "openalex", "semantic_scholar"]
 
 

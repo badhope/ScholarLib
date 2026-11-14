@@ -1,4 +1,4 @@
-"""Bibliographic parsers — BibTeX / RIS / CSV → list[IngestResource].
+"""Bibliographic parsers — BibTeX / RIS / CSV / JSON → list[IngestResource].
 
 Each parser returns ``(resources, errors)`` where ``errors`` carries
 per-entry failures with a 1-based line/index number. A parser only
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -193,6 +194,85 @@ def _ris_entry_to_resource(entry: Mapping[str, Any]) -> IngestResource:
 # CSV column aliases. Aligned with the export module's ``_CSV_COLUMNS``
 # so a CSV produced by ``GET /api/export?format=csv`` re-imports cleanly.
 # We accept any subset; missing optional columns fall back to defaults.
+_JSON_FIELDS = (
+    "title",
+    "type",
+    "authors",
+    "year",
+    "venue",
+    "discipline",
+    "subdiscipline",
+    "tags",
+    "abstract",
+    "doi",
+    "publisher",
+    "volume",
+    "issue",
+    "pages",
+    "issn",
+    "short_container_title",
+)
+
+
+def parse_json(content: str) -> tuple[list[IngestResource], list[ParseError]]:
+    """Parse the JSON array emitted by ``GET /api/export?format=json``.
+
+    Also accepts a single record object or an API-style wrapper with ``data``
+    / ``items``; this keeps exported batches re-importable without a bespoke
+    converter. Extra export-only fields (source_id, external_url, keywords)
+    are ignored by ``IngestResource``.
+    """
+    try:
+        root = json.loads(content)
+    except json.JSONDecodeError as exc:
+        return [], [ParseError(line=1, error=f"JSON parse failed: {exc}")]
+
+    if isinstance(root, list):
+        records: list[Any] = root
+    elif isinstance(root, dict) and isinstance(root.get("data"), list):
+        records = root["data"]
+    elif isinstance(root, dict) and isinstance(root.get("items"), list):
+        records = root["items"]
+    elif isinstance(root, dict):
+        records = [root]
+    else:
+        return [], [ParseError(line=1, error="JSON must be an object or an array of objects")]
+
+    resources: list[IngestResource] = []
+    errors: list[ParseError] = []
+    for idx, row in enumerate(records, start=1):
+        try:
+            resources.append(_json_record_to_resource(row))
+        except ValidationError as exc:
+            errors.append(ParseError(line=idx, error=_format_validation_error(exc)))
+        except ValueError as exc:
+            errors.append(ParseError(line=idx, error=str(exc)))
+    return resources, errors
+
+
+def _json_record_to_resource(row: Any) -> IngestResource:
+    if not isinstance(row, Mapping):
+        raise ValueError("JSON entry must be an object")
+
+    payload: dict[str, Any] = {}
+    for field in _JSON_FIELDS:
+        value = row.get(field)
+        if value is not None:
+            payload[field] = value
+
+    authors = payload.get("authors")
+    if isinstance(authors, str):
+        payload["authors"] = _split_authors(authors)
+    tags = payload.get("tags")
+    if isinstance(tags, str):
+        payload["tags"] = _split_tags(tags)
+    payload.setdefault("type", DEFAULT_TYPE)
+    payload.setdefault("discipline", "unknown")
+    if "abstract" not in payload:
+        payload["abstract"] = ""
+    return IngestResource(**payload)
+
+
 _CSV_ALLOWED_TYPES = {
     "paper",
     "book",

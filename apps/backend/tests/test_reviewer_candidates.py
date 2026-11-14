@@ -36,7 +36,16 @@ async def test_candidates_include_reviewer_role_holders(
     data = r.json()["data"]
     assert [c["username"] for c in data] == ["testuser"]
     # 只暴露分配所需字段，不带 is_admin / 密码类信息
-    assert set(data[0]) == {"id", "username", "email"}
+    assert set(data[0]) == {
+        "id",
+        "username",
+        "email",
+        "score",
+        "active_assignments",
+        "completed_reviews",
+        "matched_keywords",
+        "match_reasons",
+    }
 
 
 async def test_non_editor_gets_403(client: AsyncClient, test_user: dict) -> None:
@@ -102,3 +111,38 @@ async def test_senior_reviewer_can_review_and_enter_pool(
     # 评审侧端点：/review/assignments/me 此前对 senior_reviewer 是 403
     r = await client.get("/api/review/assignments/me", headers=headers)
     assert r.status_code == 200, r.text[:200]
+
+
+def test_candidate_score_is_explainable_and_load_penalized() -> None:
+    """匹配分不应该是黑盒：同学科/关键词要加分，当前负载要减分。"""
+    from types import SimpleNamespace
+
+    from app.interfaces.http.submission.routes_editor import _candidate_score
+
+    current = SimpleNamespace(
+        discipline="计算机科学",
+        subdiscipline="人工智能",
+        keywords=["machine learning", "ethics"],
+        tags=["AI"],
+    )
+    matching = SimpleNamespace(
+        discipline="计算机科学",
+        subdiscipline="人工智能",
+        keywords=["Machine Learning", "fairness"],
+        tags=["ai"],
+    )
+    unrelated = SimpleNamespace(
+        discipline="历史学",
+        subdiscipline=None,
+        keywords=["archives"],
+        tags=[],
+    )
+
+    high, reasons, matched = _candidate_score(
+        current=current, history=[matching, matching], active_count=1
+    )
+    low, _, _ = _candidate_score(current=current, history=[unrelated], active_count=0)
+    assert high > low
+    assert "machine learning" in matched
+    assert any("同子领域" in reason for reason in reasons)
+    assert any("当前在审 1 篇" in reason for reason in reasons)

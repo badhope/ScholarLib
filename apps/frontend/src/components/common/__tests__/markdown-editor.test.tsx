@@ -48,3 +48,38 @@ describe('MarkdownEditor', () => {
     expect(screen.getByLabelText('插入标题')).toBeInTheDocument()
   })
 })
+
+it('undoes and redoes a text change', () => {
+  render(<Harness initial="a" />)
+  const area = screen.getByLabelText('Markdown 正文') as HTMLTextAreaElement
+  fireEvent.change(area, { target: { value: 'ab' } })
+  expect(area.value).toBe('ab')
+
+  fireEvent.click(screen.getByLabelText('撤销（Ctrl+Z）'))
+  expect(area.value).toBe('a')
+  fireEvent.click(screen.getByLabelText('重做（Ctrl+Shift+Z）'))
+  expect(area.value).toBe('ab')
+})
+
+it('replaces all matches from the find panel', () => {
+  render(<Harness initial="alpha beta alpha" />)
+  fireEvent.click(screen.getByLabelText('查找替换'))
+  fireEvent.change(screen.getByLabelText('查找内容'), {
+    target: { value: 'alpha' },
+  })
+  fireEvent.change(screen.getByLabelText('替换为'), {
+    target: { value: 'gamma' },
+  })
+  fireEvent.click(screen.getByText('全部替换'))
+  expect(
+    (screen.getByLabelText('Markdown 正文') as HTMLTextAreaElement).value,
+  ).toBe('gamma beta gamma')
+})
+
+it('builds an outline from headings and enters focus mode', () => {
+  render(<Harness initial={'# 标题\n\n## 小节'} />)
+  fireEvent.click(screen.getByLabelText('文档大纲'))
+  expect(screen.getByText('小节')).toBeInTheDocument()
+  fireEvent.click(screen.getByLabelText('专注模式'))
+  expect(screen.getByTestId('markdown-editor').className).toContain('fixed')
+})

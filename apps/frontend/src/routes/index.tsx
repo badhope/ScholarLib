@@ -1250,6 +1250,14 @@ function HomePage() {
                 </li>
                 <li>
                   <Link
+                    to="/desk"
+                    className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
+                  >
+                    主编桌
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     to="/support"
                     className="text-primary-foreground/60 transition-colors hover:text-primary-foreground"
                   >

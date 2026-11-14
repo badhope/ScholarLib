@@ -16,6 +16,8 @@ describe('MarkdownContent', () => {
           '行内公式 $E=mc^2$',
           '',
           '<mark>高亮</mark> 与 <u>下划线</u>',
+          '',
+          '**作者：**马必略',
         ].join('\n')}
       />,
     )
@@ -24,6 +26,7 @@ describe('MarkdownContent', () => {
     expect(container.querySelector('.katex')).toBeTruthy()
     expect(container.querySelector('mark')?.textContent).toBe('高亮')
     expect(container.querySelector('u')?.textContent).toBe('下划线')
+    expect(container.querySelector('strong')?.textContent).toBe('作者：')
   })
 
   it('keeps figure captions and data images instead of stripping them', () => {

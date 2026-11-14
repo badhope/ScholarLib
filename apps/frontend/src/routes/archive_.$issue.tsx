@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import {
   ArrowLeft,
@@ -81,7 +81,20 @@ const EDITOR_NOTES: Record<string, string> = {
   '05': '游戏是田野，也是镜子。玩家在规则里 improvisation，研究者在截图与日志里找证据。认真玩，和认真研究，本来就不冲突。',
 }
 
-const MONTHS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二']
+const MONTHS = [
+  '一',
+  '二',
+  '三',
+  '四',
+  '五',
+  '六',
+  '七',
+  '八',
+  '九',
+  '十',
+  '十一',
+  '十二',
+]
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '待定'
@@ -106,11 +119,43 @@ function issueRange(items: { publish_at?: string | null }[]): string {
 
 function IssuePage() {
   const { issue: issueParam } = Route.useParams()
+  return <IssuePageContent issueParam={issueParam} />
+}
+
+export function IssuePageContent({
+  issueParam,
+  volumeParam,
+}: {
+  issueParam: string
+  /** canonical /issues/{volume}/{issue} 入口；/archive/{issue} 不传。 */
+  volumeParam?: string
+}) {
   // /archive/1 与 /archive/01 等价：期号在 API 里是两位补零字符串。
   const issue = issueParam.padStart(2, '0')
   const plan = useIssuePlan()
-  const entry = plan.data?.entries.find((e) => e.issue === issue)
+  const entry = plan.data?.entries.find(
+    (e) =>
+      e.issue === issue &&
+      (volumeParam === undefined || String(e.volume) === volumeParam),
+  )
   const issueVolume = entry?.volume ?? plan.data?.volume
+  const canonicalPath = volumeParam
+    ? `/issues/${volumeParam}/${issue}`
+    : `/archive/${issue}`
+
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = `第 ${Number(issue)} 期 · ${issueTitle(issue)} | Rubbish`
+    const existing = document.querySelector('link[rel="canonical"]')
+    const link = existing ?? document.createElement('link')
+    link.setAttribute('rel', 'canonical')
+    link.setAttribute('href', canonicalPath)
+    if (!existing) document.head.appendChild(link)
+    return () => {
+      document.title = previousTitle
+      if (!existing) link.remove()
+    }
+  }, [canonicalPath, issue])
   const { data, isLoading, isError, refetch } = useResources(
     {
       volume: issueVolume,
@@ -123,11 +168,46 @@ function IssuePage() {
   )
 
   const items = useMemo(() => data?.data ?? [], [data])
+
+  // 期号页的机器可读元数据：搜索引擎和引用工具不需要先渲染整页。
+  useEffect(() => {
+    const existing = document.getElementById(
+      'issue-jsonld',
+    ) as HTMLScriptElement | null
+    const script = existing ?? document.createElement('script')
+    script.id = 'issue-jsonld'
+    script.type = 'application/ld+json'
+    script.textContent = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'PublicationIssue',
+      name: `Rubbish 第 ${Number(issue)} 期 · ${issueTitle(issue)}`,
+      issueNumber: Number(issue),
+      url: `${window.location.origin}${canonicalPath}`,
+      datePublished: entry?.publish_at?.slice(0, 10),
+      isPartOf: {
+        '@type': 'PublicationVolume',
+        name: 'Rubbish',
+        volumeNumber: issueVolume,
+      },
+      publisher: { '@type': 'Organization', name: 'Rubbish' },
+    })
+    if (!existing) document.head.appendChild(script)
+    return () => {
+      if (!existing) script.remove()
+    }
+  }, [canonicalPath, entry?.publish_at, issue, issueVolume])
   const palette = ISSUE_PALETTE[issue] ?? ISSUE_PALETTE['01']
-  const papers = useMemo(() => items.filter((r) => r.content_track === 'paper'), [items])
-  const essays = useMemo(() => items.filter((r) => r.content_track !== 'paper'), [items])
+  const papers = useMemo(
+    () => items.filter((r) => r.content_track === 'paper'),
+    [items],
+  )
+  const essays = useMemo(
+    () => items.filter((r) => r.content_track !== 'paper'),
+    [items],
+  )
   const highlights = useMemo(
-    () => [...papers].sort((a, b) => (b.reads ?? 0) - (a.reads ?? 0)).slice(0, 3),
+    () =>
+      [...papers].sort((a, b) => (b.reads ?? 0) - (a.reads ?? 0)).slice(0, 3),
     [papers],
   )
   const disciplines = useMemo(
@@ -138,8 +218,15 @@ function IssuePage() {
   const issueYear =
     entry?.publish_at && !Number.isNaN(new Date(entry.publish_at).getTime())
       ? new Date(entry.publish_at).getFullYear()
-      : items[0]?.year ?? ''
-  const PART_ORDER = ['Editorial', 'Features', 'Articles', 'Reviews', 'News & Views', 'Corrections']
+      : (items[0]?.year ?? '')
+  const PART_ORDER = [
+    'Editorial',
+    'Features',
+    'Articles',
+    'Reviews',
+    'News & Views',
+    'Corrections',
+  ]
   const paperParts = useMemo(() => {
     return papers.reduce<Record<string, typeof papers>>((acc, r) => {
       const key = r.issue_part || 'Articles'
@@ -148,11 +235,20 @@ function IssuePage() {
     }, {})
   }, [papers])
 
-  if (plan.isLoading) return <div className="p-10"><Loading /></div>
+  if (plan.isLoading)
+    return (
+      <div className="p-10">
+        <Loading />
+      </div>
+    )
   if (!entry) throw notFound()
 
-  const prev = plan.data?.entries.find((e) => Number(e.issue) === Number(issue) - 1 && e.state === 'live')
-  const next = plan.data?.entries.find((e) => Number(e.issue) === Number(issue) + 1 && e.state === 'live')
+  const prev = plan.data?.entries.find(
+    (e) => Number(e.issue) === Number(issue) - 1 && e.state === 'live',
+  )
+  const next = plan.data?.entries.find(
+    (e) => Number(e.issue) === Number(issue) + 1 && e.state === 'live',
+  )
 
   return (
     <div className={cn('min-h-screen', palette.paper, palette.ink)}>
@@ -160,16 +256,25 @@ function IssuePage() {
         {/* 报头 */}
         <div className="mb-8 flex flex-wrap items-end justify-between gap-3 border-b-2 border-current/20 pb-4">
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-end sm:gap-4">
-            <Link to="/archive" className="mb-1 inline-flex items-center text-sm opacity-70 hover:opacity-100">
+            <Link
+              to="/archive"
+              className="mb-1 inline-flex items-center text-sm opacity-70 hover:opacity-100"
+            >
               <ArrowLeft className="mr-1 h-4 w-4" /> 卷期归档
             </Link>
             <div>
-              <p className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">Rubbish</p>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.28em] opacity-60">A Journal of Serious Format & Free Subjects</p>
+              <p className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+                Rubbish
+              </p>
+              <p className="mt-1 text-[11px] uppercase tracking-[0.28em] opacity-60">
+                A Journal of Serious Format & Free Subjects
+              </p>
             </div>
           </div>
           <div className="text-right text-xs leading-relaxed opacity-70">
-            <p>第 {issueVolume ?? '—'} 卷 · 第 {issue} 期</p>
+            <p>
+              第 {issueVolume ?? '—'} 卷 · 第 {issue} 期
+            </p>
             <p>{issueRange(items)}</p>
             <p>数字出版 · 滚动刊出</p>
           </div>
@@ -178,9 +283,21 @@ function IssuePage() {
         {/* 封面 + 本期信息 */}
         <div className="grid gap-8 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
           <article className="relative overflow-hidden rounded-sm border border-current/15 bg-white/40 dark:bg-white/[0.05] p-6 shadow-[0_18px_50px_-30px_rgba(0,0,0,0.45)] sm:p-8">
-            <div aria-hidden className={cn('pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent', palette.motif)} />
-            <div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full border border-current/10" />
-            <div aria-hidden className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full border border-current/10" />
+            <div
+              aria-hidden
+              className={cn(
+                'pointer-events-none absolute inset-0 bg-gradient-to-br to-transparent',
+                palette.motif,
+              )}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full border border-current/10"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-8 -top-8 h-36 w-36 rounded-full border border-current/10"
+            />
 
             <div className="relative">
               <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.3em] opacity-60">
@@ -192,15 +309,27 @@ function IssuePage() {
                   {String(Number(issue)).padStart(2, '0')}
                 </p>
                 <div className={cn('mt-6 border-t pt-4', palette.rule)}>
-                  <p className={cn('text-lg font-semibold leading-snug', palette.accent)}>{issueTitle(issue)}</p>
-                  <p className="mt-2 text-xs leading-relaxed opacity-70">第 {issueVolume ?? '—'} 卷 第 {issue} 期 · {issueRange(items)}</p>
+                  <p
+                    className={cn(
+                      'text-lg font-semibold leading-snug',
+                      palette.accent,
+                    )}
+                  >
+                    {issueTitle(issue)}
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed opacity-70">
+                    第 {issueVolume ?? '—'} 卷 第 {issue} 期 ·{' '}
+                    {issueRange(items)}
+                  </p>
                 </div>
               </div>
 
               <div className="mt-16 flex items-end justify-between">
                 <div>
                   <p className="font-serif text-2xl font-semibold">Rubbish</p>
-                  <p className="mt-1 text-[10px] opacity-60">Rubbish 编辑部 · rubbish.argjiemi.cn</p>
+                  <p className="mt-1 text-[10px] opacity-60">
+                    Rubbish 编辑部 · rubbish.argjiemi.cn
+                  </p>
                 </div>
                 <Feather className="h-7 w-7 opacity-30" />
               </div>
@@ -211,14 +340,25 @@ function IssuePage() {
             <div>
               <PageHeader
                 title={`第 ${Number(issue)} 期 · ${issueTitle(issue)}`}
-                description={entry.state === 'live' ? '本期已上线，滚动增补；以下目录按刊出顺序排列。' : '本期尚在排期，以下为已确定篇目。'}
+                description={
+                  entry.state === 'live'
+                    ? '本期已上线，滚动增补；以下目录按刊出顺序排列。'
+                    : '本期尚在排期，以下为已确定篇目。'
+                }
               />
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <Badge variant="outline">{items.length} 篇</Badge>
                 <Badge variant="outline">{papers.length} 论文</Badge>
                 <Badge variant="outline">{essays.length} 副刊</Badge>
                 <Badge variant="outline">{disciplines.length} 个学科</Badge>
-                {special > 0 && <Badge variant="outline" className="border-rose-300 text-rose-700">{special} 篇特别篇</Badge>}
+                {special > 0 && (
+                  <Badge
+                    variant="outline"
+                    className="border-rose-300 text-rose-700"
+                  >
+                    {special} 篇特别篇
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -227,8 +367,12 @@ function IssuePage() {
               <p className="flex items-center gap-2 text-[11px] uppercase tracking-[0.22em] opacity-55">
                 <Quote className="h-3.5 w-3.5" /> 本期编后记
               </p>
-              <p className="mt-3 font-serif text-[15px] leading-8">{EDITOR_NOTES[issue] ?? '本期目录整理中。'}</p>
-              <p className="mt-3 text-right text-xs opacity-55">— Rubbish 编辑部</p>
+              <p className="mt-3 font-serif text-[15px] leading-8">
+                {EDITOR_NOTES[issue] ?? '本期目录整理中。'}
+              </p>
+              <p className="mt-3 text-right text-xs opacity-55">
+                — Rubbish 编辑部
+              </p>
             </div>
 
             {/* 本期要目 */}
@@ -245,10 +389,16 @@ function IssuePage() {
                       params={{ resourceId: String(r.id) }}
                       className="flex items-baseline gap-3 py-2.5 transition-opacity hover:opacity-70"
                     >
-                      <span className="w-5 font-serif text-sm tabular-nums opacity-50">{i + 1}</span>
+                      <span className="w-5 font-serif text-sm tabular-nums opacity-50">
+                        {i + 1}
+                      </span>
                       <span className="min-w-0 flex-1">
-                        <span className="line-clamp-1 font-medium">{r.title}</span>
-                        <span className="mt-0.5 block text-xs opacity-60">{r.authors.join('、')}</span>
+                        <span className="line-clamp-1 font-medium">
+                          {r.title}
+                        </span>
+                        <span className="mt-0.5 block text-xs opacity-60">
+                          {r.authors.join('、')}
+                        </span>
                       </span>
                       <ArrowRight className="h-3.5 w-3.5 shrink-0 opacity-40" />
                     </Link>
@@ -264,7 +414,11 @@ function IssuePage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b-2 border-current/20 pb-2">
             <h2 className="text-lg font-semibold tracking-tight">本期目录</h2>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.print()}
+              >
                 <Printer className="mr-1 h-3.5 w-3.5" /> 打印本期版面
               </Button>
               <a
@@ -283,7 +437,10 @@ function IssuePage() {
           ) : isError ? (
             <ErrorState message="加载本期目录失败" onRetry={() => refetch()} />
           ) : items.length === 0 ? (
-            <EmptyState title="本期暂无文章" description="切换其他已上线期次，或浏览全部目录。" />
+            <EmptyState
+              title="本期暂无文章"
+              description="切换其他已上线期次，或浏览全部目录。"
+            />
           ) : (
             <div className="space-y-8">
               {Object.entries(paperParts)
@@ -295,7 +452,8 @@ function IssuePage() {
                 .map(([part, rows]) => (
                   <div key={part}>
                     <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.24em] opacity-55">
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" /> {part} · {rows.length} 篇
+                      <span className="h-1.5 w-1.5 rounded-full bg-current" />{' '}
+                      {part} · {rows.length} 篇
                     </p>
                     <ol className="divide-y divide-current/10 border-y border-current/10">
                       {rows.map((r, idx) => (
@@ -305,22 +463,39 @@ function IssuePage() {
                             params={{ resourceId: String(r.id) }}
                             className="group grid gap-2 py-4 transition-opacity hover:opacity-70 sm:grid-cols-[2.5rem_minmax(0,1fr)_11.5rem]"
                           >
-                            <span className="font-serif text-sm tabular-nums opacity-50">{r.pages || String(idx + 1).padStart(2, '0')}</span>
+                            <span className="font-serif text-sm tabular-nums opacity-50">
+                              {r.pages || String(idx + 1).padStart(2, '0')}
+                            </span>
                             <span className="min-w-0">
                               <span className="flex flex-wrap items-center gap-1.5">
-                                <span className="font-medium leading-snug">{r.title}</span>
+                                <span className="font-medium leading-snug">
+                                  {r.title}
+                                </span>
                                 {r.is_special_issue && (
-                                  <Badge variant="outline" className="border-rose-300 text-[10px] text-rose-700">特别篇</Badge>
+                                  <Badge
+                                    variant="outline"
+                                    className="border-rose-300 text-[10px] text-rose-700"
+                                  >
+                                    特别篇
+                                  </Badge>
                                 )}
                               </span>
                               <span className="mt-1 block text-xs opacity-60">
-                                {r.authors.join('、')} · {displayTypeLabel(r.type, r.content_category, r.content_track, r.track)}
+                                {r.authors.join('、')} ·{' '}
+                                {displayTypeLabel(
+                                  r.type,
+                                  r.content_category,
+                                  r.content_track,
+                                  r.track,
+                                )}
                                 {r.clc_code ? ` · CLC ${r.clc_code}` : ''}
                               </span>
                             </span>
                             <span className="whitespace-nowrap text-left text-[11px] opacity-55 sm:text-right">
                               {r.discipline}
-                              {r.publish_at ? ` · ${fmtDate(r.publish_at)}` : ''}
+                              {r.publish_at
+                                ? ` · ${fmtDate(r.publish_at)}`
+                                : ''}
                             </span>
                           </Link>
                         </li>
@@ -331,15 +506,26 @@ function IssuePage() {
               {essays.length > 0 && (
                 <div>
                   <p className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.24em] opacity-55">
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" /> 副刊与随笔 · {essays.length} 篇
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />{' '}
+                    副刊与随笔 · {essays.length} 篇
                   </p>
                   <ol className="divide-y divide-current/10 border-y border-current/10">
                     {essays.map((r, idx) => (
                       <li key={r.id}>
-                        <Link to="/catalog/$resourceId" params={{ resourceId: String(r.id) }} className="group grid gap-2 py-4 transition-opacity hover:opacity-70 sm:grid-cols-[2.5rem_minmax(0,1fr)_11.5rem]">
-                          <span className="font-serif text-sm tabular-nums opacity-50">{String(idx + 1).padStart(2, '0')}</span>
-                          <span className="min-w-0 font-medium leading-snug">{r.title}</span>
-                          <span className="text-[11px] opacity-55 sm:text-right">{r.discipline}</span>
+                        <Link
+                          to="/catalog/$resourceId"
+                          params={{ resourceId: String(r.id) }}
+                          className="group grid gap-2 py-4 transition-opacity hover:opacity-70 sm:grid-cols-[2.5rem_minmax(0,1fr)_11.5rem]"
+                        >
+                          <span className="font-serif text-sm tabular-nums opacity-50">
+                            {String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <span className="min-w-0 font-medium leading-snug">
+                            {r.title}
+                          </span>
+                          <span className="text-[11px] opacity-55 sm:text-right">
+                            {r.discipline}
+                          </span>
                         </Link>
                       </li>
                     ))}
@@ -354,21 +540,32 @@ function IssuePage() {
         <footer className="mt-14 border-t-2 border-current/20 pt-5">
           <div className="grid gap-6 text-xs leading-relaxed opacity-65 sm:grid-cols-3">
             <div>
-              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">出版</p>
+              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">
+                出版
+              </p>
               <p>Rubbish 编辑部</p>
               <p>纯数字出版 · 滚动刊出</p>
               <p>rubbish.argjiemi.cn</p>
             </div>
             <div>
-              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">编辑</p>
+              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">
+                编辑
+              </p>
               <p>主编 陆止于海</p>
               <p>副主编 沈知非 · 顾荒唐</p>
               <p>编委 白鹿原上 · 林一苇 · R. 编辑部</p>
             </div>
             <div>
-              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">本版</p>
-              <p>第 {issueVolume ?? '—'} 卷 第 {issue} 期 · {issueRange(items)}</p>
-              <p>共 {items.length} 篇 · {papers.length} 篇论文 · {essays.length} 篇副刊</p>
+              <p className="mb-2 font-semibold uppercase tracking-[0.2em]">
+                本版
+              </p>
+              <p>
+                第 {issueVolume ?? '—'} 卷 第 {issue} 期 · {issueRange(items)}
+              </p>
+              <p>
+                共 {items.length} 篇 · {papers.length} 篇论文 · {essays.length}{' '}
+                篇副刊
+              </p>
               <p>版式：Rubbish 数字刊版式</p>
             </div>
           </div>
@@ -376,17 +573,30 @@ function IssuePage() {
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="flex gap-4">
               {prev ? (
-                <Link to="/archive/$issue" params={{ issue: prev.issue }} className="inline-flex items-center gap-1 opacity-70 hover:opacity-100">
-                  <ArrowLeft className="h-3.5 w-3.5" /> 第 {Number(prev.issue)} 期
+                <Link
+                  to="/archive/$issue"
+                  params={{ issue: prev.issue }}
+                  className="inline-flex items-center gap-1 opacity-70 hover:opacity-100"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> 第 {Number(prev.issue)}{' '}
+                  期
                 </Link>
               ) : null}
               {next ? (
-                <Link to="/archive/$issue" params={{ issue: next.issue }} className="inline-flex items-center gap-1 opacity-70 hover:opacity-100">
-                  第 {Number(next.issue)} 期 <ArrowRight className="h-3.5 w-3.5" />
+                <Link
+                  to="/archive/$issue"
+                  params={{ issue: next.issue }}
+                  className="inline-flex items-center gap-1 opacity-70 hover:opacity-100"
+                >
+                  第 {Number(next.issue)} 期{' '}
+                  <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               ) : null}
             </div>
-            <Link to="/archive" className="inline-flex items-center gap-1 opacity-70 hover:opacity-100">
+            <Link
+              to="/archive"
+              className="inline-flex items-center gap-1 opacity-70 hover:opacity-100"
+            >
               <CalendarDays className="h-3.5 w-3.5" /> 全部卷期
             </Link>
           </div>

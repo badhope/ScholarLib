@@ -34,7 +34,7 @@ import {
 import { MarkdownEditor } from '@/components/common/markdown-editor'
 import { ArticlePreview } from '@/components/common/article-preview'
 import { uploadMediaImage } from '@/lib/media'
-import SourcePreviewPng from '@/components/source-preview-png'
+import AuthPngPreview from '@/components/auth-png-preview'
 import {
   Dialog,
   DialogContent,
@@ -1333,7 +1333,10 @@ function StepUpload({
           </DialogHeader>
           <div className="min-h-0 flex-1 p-2">
             {sourcePreview ? (
-              <SourcePreviewPng token={sourcePreview.token} pages={sourcePreview.pages} />
+              <AuthPngPreview
+                baseUrl={`/submissions/source-preview/${sourcePreview.token}`}
+                pages={sourcePreview.pages}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 正在生成原件预览…

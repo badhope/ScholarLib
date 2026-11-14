@@ -252,6 +252,13 @@ class ReviewerCandidate(BaseModel):
     id: int
     username: str
     email: str
+    # 可解释匹配分：传 submission_id 时按学科/关键词/负载计算；不传时
+    # score=0，但 active/completed 仍可用于展示审稿人经验。
+    score: int = 0
+    active_assignments: int = 0
+    completed_reviews: int = 0
+    matched_keywords: list[str] = Field(default_factory=list)
+    match_reasons: list[str] = Field(default_factory=list)
 
 
 class ReviewerCandidateListResponse(BaseModel):
