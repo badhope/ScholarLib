@@ -129,3 +129,9 @@
 - 不引入 TipTap/ProseMirror 这类富文本内核替换现有 Markdown：当前内容是 Markdown 单一真相，换内核会带来双向转换和迁移风险。
 - 不为“看起来功能多”把 20 个按钮重新平铺；工具栏继续分组。
 - 不把代码备份进仓库；远程仓库是代码的唯一备份，数据备份仍只做 DB + uploads。
+
+## 7. 交付记录
+
+- 本地提交：`d37b6b9 fix(tooling): unify markdown render and close preview/import/export bugs`
+- 验证：后端 `1171 passed, 1 skipped`；前端 `150 passed`；`lint` / `typecheck` / `build` 通过；E2E `75 passed`。
+- 远程推送与 CI 结果：见最终交付说明（远程 CI 由推送触发，不在本地伪造结果）。
