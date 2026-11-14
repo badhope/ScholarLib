@@ -35,13 +35,15 @@ type ReportAction = 'dismiss' | 'remove_content' | 'suspend_author'
 
 interface ForumReportRow {
   id: number
+  source?: 'forum' | 'content'
+  target_id?: number | null
   topic_id: number | null
   reply_id: number | null
   reason: string
   status: ReportStatus
   created_at: string
   resolved_at: string | null
-  target_type: 'topic' | 'reply' | null
+  target_type: 'topic' | 'reply' | 'comment' | 'submission' | null
   target_excerpt: string | null
   target_author: { id: number; username: string; display_name?: string | null } | null
   reporter: { id: number; username: string; display_name?: string | null } | null
@@ -80,8 +82,20 @@ function AdminReportsPage() {
   })
 
   const handleMut = useMutation({
-    mutationFn: async (payload: { id: number; action: ReportAction; note?: string }) =>
-      (await api.patch(`/forum/reports/${payload.id}`, payload)).data,
+    mutationFn: async (payload: {
+      id: number
+      source?: 'forum' | 'content'
+      action: ReportAction
+      note?: string
+    }) =>
+      (
+        await api.patch(
+          payload.source === 'content'
+            ? `/forum/content-reports/${payload.id}`
+            : `/forum/reports/${payload.id}`,
+          payload,
+        )
+      ).data,
     onSuccess: () => {
       toast.success('举报已处理')
       setTarget(null)
@@ -97,7 +111,7 @@ function AdminReportsPage() {
     <div>
       <PageHeader
         title="举报处置"
-        description="统一查看帖子/回复举报；移除内容走软删除，停用作者会立即让登录态失效。所有动作写入审计日志。"
+        description="统一查看帖子、回复、评论与投稿举报；移除内容走软删除或下架，停用作者会立即让登录态失效。所有动作写入审计日志。"
       />
 
       <Tabs
@@ -128,13 +142,21 @@ function AdminReportsPage() {
       ) : (
         <div className="space-y-2">
           {rows.map((row) => (
-            <Card key={row.id}>
+            <Card key={`${row.source ?? 'forum'}-${row.id}`}>
               <CardContent className="space-y-2 p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={row.status === 'open' ? 'destructive' : 'outline'}>
                     {TABS.find((t) => t.value === row.status)?.label ?? row.status}
                   </Badge>
-                  <Badge variant="secondary">{row.target_type === 'reply' ? '回帖' : '帖子'}</Badge>
+                  <Badge variant="secondary">
+                    {row.target_type === 'reply'
+                      ? '回帖'
+                      : row.target_type === 'comment'
+                        ? '评论'
+                        : row.target_type === 'submission'
+                          ? '投稿'
+                          : '帖子'}
+                  </Badge>
                   <span className="text-xs text-muted-foreground">
                     举报人：{row.reporter?.display_name || row.reporter?.username || '已注销'}
                   </span>
@@ -156,7 +178,13 @@ function AdminReportsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleMut.mutate({ id: row.id, action: 'dismiss' })}
+                      onClick={() =>
+                        handleMut.mutate({
+                          id: row.id,
+                          source: row.source,
+                          action: 'dismiss',
+                        })
+                      }
                       disabled={handleMut.isPending}
                     >
                       <Check className="h-3.5 w-3.5" />
@@ -165,7 +193,9 @@ function AdminReportsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setTarget({ row, action: 'remove_content' })}
+                      onClick={() =>
+                        setTarget({ row, action: 'remove_content' })
+                      }
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       移除内容
@@ -195,8 +225,8 @@ function AdminReportsPage() {
             </DialogTitle>
             <DialogDescription>
               {target?.action === 'suspend_author'
-                ? '会软删被举报内容，并停用作者账号（现有登录态立即失效）。请确认举报属实。'
-                : '会软删被举报内容，帖子/回复从列表和详情中隐藏。'}
+                ? '会下架被举报内容，并停用作者账号（现有登录态立即失效）。请确认举报属实。'
+                : '会下架被举报内容；帖子/回复软删，评论转为拒绝，投稿转为 rejected。'}
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -215,6 +245,7 @@ function AdminReportsPage() {
                 target &&
                 handleMut.mutate({
                   id: target.row.id,
+                  source: target.row.source,
                   action: target.action,
                   note: note.trim() || undefined,
                 })

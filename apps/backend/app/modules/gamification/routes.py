@@ -16,7 +16,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     get_current_user,
     require_admin,
-    require_role,
     require_tenant_id,
     user_has_role,
 )

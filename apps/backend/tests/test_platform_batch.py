@@ -145,7 +145,7 @@ async def test_system_health_requires_admin(client: AsyncClient, admin_user: dic
     assert any(c["key"] == "database" for c in body["checks"])
     # 迁移图里有元组 down_revision 与重复 revision id，健康页必须用
     # Alembic 自己的图取 head，不能靠正则差集。
-    assert body["code_revision"] == "040_user_notification_prefs"
+    assert body["code_revision"] == "041_content_reports_api_tokens"
 
 
 @pytest.mark.asyncio
@@ -176,3 +176,99 @@ async def test_submission_edit_recomputes_similarity(
     body = patched.json()
     assert body["similarity_score"] >= 35
     assert body["similarity_matches"]
+
+
+@pytest.mark.asyncio
+async def test_comment_report_enters_unified_queue(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    resource = await client.post(
+        "/api/catalog",
+        json={**_SAMPLE, "title": "举报队列基准文章", "abstract": "用于评论举报链路的公开文章摘要。"},
+        headers=auth_headers(admin_user),
+    )
+    assert resource.status_code == 201, resource.text
+    rid = resource.json()["id"]
+    comment = await client.post(
+        "/api/comments",
+        json={"resource_id": rid, "body": "这是一条会被举报的评论"},
+        headers=auth_headers(admin_user),
+    )
+    assert comment.status_code == 201, comment.text
+    cid = comment.json()["id"]
+
+    report = await client.post(
+        "/api/forum/content-reports",
+        json={"target_type": "comment", "target_id": cid, "reason": "测试举报原因"},
+        headers=auth_headers(test_user),
+    )
+    assert report.status_code == 201, report.text
+    assert report.json()["source"] == "content"
+    assert report.json()["target_type"] == "comment"
+
+    queue = await client.get(
+        "/api/forum/reports", params={"status_filter": "open"}, headers=auth_headers(admin_user)
+    )
+    assert queue.status_code == 200, queue.text
+    assert any(r["source"] == "content" and r["target_id"] == cid for r in queue.json())
+
+    handled = await client.patch(
+        f"/api/forum/content-reports/{report.json()['id']}",
+        json={"action": "remove_content", "note": "测试下架"},
+        headers=auth_headers(admin_user),
+    )
+    assert handled.status_code == 200, handled.text
+    assert handled.json()["status"] == "resolved"
+    after = await client.get(
+        "/api/comments", params={"resource_id": rid, "page_size": 50}
+    )
+    assert all(c["id"] != cid for c in after.json()["data"])
+
+
+@pytest.mark.asyncio
+async def test_ai_token_submission_idempotent_and_revocable(
+    client: AsyncClient, test_user: dict
+) -> None:
+    created = await client.post(
+        "/api/ai/tokens",
+        json={"name": "pytest MCP", "expires_in_days": 30},
+        headers=auth_headers(test_user),
+    )
+    assert created.status_code == 201, created.text
+    token = created.json()["token"]
+    assert token.startswith("rbk_")
+    token_id = created.json()["id"]
+
+    payload = {
+        **_PAYLOAD,
+        "title": "AI 投稿幂等测试",
+        "abstract": "这是通过个人 API Token 提交的测试摘要，内容为原创且用于验证幂等链路。",
+        "doi": "10.1234/ai.001",
+        "preview": "AI 投稿幂等测试",
+    }
+    first = await client.post(
+        "/api/ai/submissions",
+        json=payload,
+        headers={"X-API-Key": token, "Idempotency-Key": "pytest-ai-001"},
+    )
+    assert first.status_code == 201, first.text
+    sid = first.json()["id"]
+
+    replay = await client.post(
+        "/api/ai/submissions",
+        json=payload,
+        headers={"X-API-Key": token, "Idempotency-Key": "pytest-ai-001"},
+    )
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == sid
+
+    revoked = await client.delete(
+        f"/api/ai/tokens/{token_id}", headers=auth_headers(test_user)
+    )
+    assert revoked.status_code == 200, revoked.text
+    denied = await client.post(
+        "/api/ai/submissions",
+        json=payload,
+        headers={"X-API-Key": token, "Idempotency-Key": "pytest-ai-002"},
+    )
+    assert denied.status_code == 401, denied.text

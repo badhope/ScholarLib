@@ -30,6 +30,7 @@ from tenacity import (
 from app import __version__
 from app.api import (
     admin,
+    ai,
     auth,
     capabilities,
     gdpr,
@@ -312,6 +313,7 @@ app.include_router(capabilities.router, prefix="/api")
 app.include_router(seo.router)
 app.include_router(two_factor.router, prefix="/api")
 app.include_router(gdpr.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(me.router, prefix="/api")

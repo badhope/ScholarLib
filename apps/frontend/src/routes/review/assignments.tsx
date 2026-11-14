@@ -49,6 +49,38 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { waitingChip } from '@/components/common/waiting-chip'
 
+function SimilarityNotice({
+  score,
+  matches,
+}: {
+  score?: number | null
+  matches?: Array<{ kind: 'resource' | 'submission'; id: number; title: string; score: number }>
+}) {
+  if (score == null || score < 35) return null
+  return (
+    <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 text-xs dark:bg-amber-950/20">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">站内相似度 {score.toFixed(1)} / 100</Badge>
+        <span className="text-muted-foreground">
+          {score >= 70 ? '高度重复，建议核对' : '建议核对'} · 仅比对本站资源与已接收投稿，不是 CNKI/CrossCheck 结论
+        </span>
+      </div>
+      {(matches?.length ?? 0) > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {matches!.slice(0, 3).map((m) => (
+            <li key={`${m.kind}-${m.id}`} className="flex justify-between gap-3">
+              <span className="min-w-0 truncate">
+                {m.kind === 'resource' ? '已刊' : '投稿'}：{m.title}
+              </span>
+              <span className="shrink-0 tabular-nums">{m.score.toFixed(1)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
 export const Route = createFileRoute('/review/assignments')({
   beforeLoad: () => {
     // 审稿工作台需要登录；具体 reviewer 角色由后端强制（403 由 UI 兜底）
@@ -613,6 +645,7 @@ function ReviewManuscriptPane({ assignmentId }: { assignmentId: number }) {
         <div className="text-xs text-muted-foreground">摘要</div>
         <p className="whitespace-pre-wrap leading-relaxed">{data.abstract || '—'}</p>
       </div>
+      <SimilarityNotice score={data.similarity_score} matches={data.similarity_matches} />
       {data.preview && (
         <div>
           <div className="text-xs text-muted-foreground">正文预览</div>
@@ -701,6 +734,7 @@ function SubmissionDetailDialog({
                 {data.abstract || '—'}
               </p>
             </div>
+            <SimilarityNotice score={data.similarity_score} matches={data.similarity_matches} />
             {data.preview && (
               <div>
                 <div className="text-xs text-muted-foreground">预览</div>

@@ -140,7 +140,48 @@ async def robots(request: Request) -> Response:
     lines.append(f"Sitemap: {_root(request)}/sitemap.xml")
     lines.append(f"# OAI-PMH: {_root(request)}/oai")
     lines.append(f"# LLM guide: {_root(request)}/llms.txt")
+    lines.append(f"# AI agent policy: {_root(request)}/ai.txt")
     body = "\n".join(lines) + "\n"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Type": "text/plain; charset=utf-8"},
+    )
+
+
+@router.get("/ai.txt", response_class=Response, include_in_schema=False)
+async def ai_txt(request: Request) -> Response:
+    """给 AI Agent 的机器可读边界说明。
+
+    公开文章可以读；管理端、个人数据与写接口必须走授权。
+    投稿不接受账号密码，只能用用户在设置页创建的个人 Token。
+    """
+    root = _root(request)
+    body = f"""# Rubbish AI Agent Policy
+
+## 可以做什么
+- 读取公开文章、目录、论坛与 OAI-PMH：允许，遵守 /robots.txt。
+- 引用时保留标题、作者、出处与原文链接。
+- 通过 MCP 或 REST 投稿：需要用户本人在 {root}/settings?tab=ai 创建的个人 Token。
+
+## 不可以做什么
+- 不要尝试登录、抓取 /admin、/settings、/review、/submissions 或他人数据。
+- 不接受账号密码、Cookie 或会话令牌作为投稿凭据。
+- 不要绕过限流、验证码、敏感词或站内相似度检查。
+- 不要批量注册账号、刷 R 币或伪造引用。
+
+## API
+- 能力说明：GET {root}/api/ai/capabilities
+- 投稿：POST {root}/api/ai/submissions
+- 认证：X-API-Key: rbk_...（用户可随时撤销）
+- 幂等：Idempotency-Key
+- 限流：每个 Token 每小时 10 篇
+- 机器可读站点说明：{root}/llms.txt
+
+## 联系方式
+- 站点政策：{root}/policies
+- 滥用举报：{root}/support
+"""
     return Response(
         content=body.encode("utf-8"),
         media_type="text/plain; charset=utf-8",
@@ -254,6 +295,13 @@ async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
             "- 文章页含 citation_* 与 ScholarlyArticle JSON-LD。",
             "- 允许检索与 AI 爬虫抓取公开页面；/admin、/review、/submissions 等私有路径禁止。",
             f"- Sitemap: {root}/sitemap.xml",
+            "",
+            "## AI 投稿",
+            f"- 能力说明：GET {root}/api/ai/capabilities",
+            f"- 用户创建 Token：{root}/settings?tab=ai",
+            f"- 投稿端点：POST {root}/api/ai/submissions（X-API-Key: rbk_...）",
+            "- 不接受账号密码；Token 可撤销，每 Token 每小时最多 10 篇。",
+            f"- Agent 边界：{root}/ai.txt",
             "",
         ]
     )

@@ -1025,7 +1025,9 @@ class ReportOut(BaseModel):
     status: str
     created_at: datetime
     resolved_at: datetime | None = None
+    source: str = "forum"
     target_type: str | None = None
+    target_id: int | None = None
     target_excerpt: str | None = None
     target_author: AuthorBrief | None = None
     reporter: AuthorBrief | None = None
@@ -1187,7 +1189,300 @@ async def list_reports(
                 reporter=authors.get(r.reporter_id),
             )
         )
+    # 合并评论/投稿举报：与论坛举报同一队列、同一套处置动作。
+    from app.models import ContentReport
+    from app.modules.comments.models import Comment
+    from app.modules.submission.models import Submission
+
+    content_stmt = select(ContentReport).where(ContentReport.tenant_id == tenant_id)
+    if status_filter:
+        content_stmt = content_stmt.where(ContentReport.status == status_filter)
+    content_rows = (
+        (await db.execute(content_stmt.order_by(ContentReport.created_at.desc()).limit(200)))
+        .scalars()
+        .all()
+    )
+    comment_ids = {r.target_id for r in content_rows if r.target_type == "comment"}
+    submission_ids = {r.target_id for r in content_rows if r.target_type == "submission"}
+    comments = {
+        c.id: c
+        for c in (
+            await db.execute(select(Comment).where(Comment.id.in_(comment_ids)))
+        ).scalars().all()
+    } if comment_ids else {}
+    submissions = {
+        x.id: x
+        for x in (
+            await db.execute(select(Submission).where(Submission.id.in_(submission_ids)))
+        ).scalars().all()
+    } if submission_ids else {}
+    content_author_ids = {
+        *(c.user_id for c in comments.values()),
+        *(x.submitted_by for x in submissions.values()),
+    }
+    content_authors = await _author_map(
+        db, {r.reporter_id for r in content_rows} | content_author_ids
+    )
+    for r in content_rows:
+        author_id: int | None = None
+        excerpt: str | None = None
+        if r.target_type == "comment":
+            comment = comments.get(r.target_id)
+            if comment is not None:
+                author_id = comment.user_id
+                excerpt = comment.body[:140]
+        else:
+            submission = submissions.get(r.target_id)
+            if submission is not None:
+                author_id = submission.submitted_by
+                excerpt = f"{submission.title} · {submission.abstract[:120]}"
+        out.append(
+            ReportOut(
+                id=r.id,
+                topic_id=None,
+                reply_id=None,
+                source="content",
+                target_type=r.target_type,
+                target_id=r.target_id,
+                reason=r.reason,
+                status=r.status,
+                created_at=r.created_at,
+                resolved_at=r.resolved_at,
+                target_excerpt=excerpt,
+                target_author=content_authors.get(author_id) if author_id else None,
+                reporter=content_authors.get(r.reporter_id),
+            )
+        )
     return out
+
+
+class ContentReportCreate(BaseModel):
+    target_type: Literal["comment", "submission"]
+    target_id: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=200)
+
+
+@router.post(
+    "/content-reports", response_model=ReportOut, status_code=status.HTTP_201_CREATED
+)
+async def create_content_report(
+    payload: ContentReportCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReportOut:
+    """举报评论或投稿。登录即可；同一用户同一对象只保留一条 open。"""
+    from app.models import ContentReport
+    from app.modules.comments.models import Comment
+    from app.modules.submission.models import Submission
+
+    tenant_id = require_tenant_id()
+    target_author_id: int
+    excerpt: str
+    if payload.target_type == "comment":
+        target = (
+            await db.execute(
+                select(Comment).where(
+                    Comment.id == payload.target_id, Comment.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None or target.status == "rejected":
+            raise HTTPException(status_code=404, detail="评论不存在")
+        target_author_id = target.user_id
+        excerpt = target.body[:140]
+    else:
+        target = (
+            await db.execute(
+                select(Submission).where(
+                    Submission.id == payload.target_id,
+                    Submission.tenant_id == tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(status_code=404, detail="投稿不存在")
+        is_staff = current_user.is_admin or await user_has_role(
+            db, current_user, ROLE_EDITOR
+        )
+        if target.submitted_by != current_user.id and not is_staff:
+            raise HTTPException(status_code=403, detail="无权举报该投稿")
+        target_author_id = target.submitted_by
+        excerpt = f"{target.title} · {target.abstract[:120]}"
+    if target_author_id == current_user.id:
+        raise HTTPException(status_code=400, detail="不能举报自己的内容")
+
+    existing = (
+        await db.execute(
+            select(ContentReport).where(
+                ContentReport.tenant_id == tenant_id,
+                ContentReport.reporter_id == current_user.id,
+                ContentReport.target_type == payload.target_type,
+                ContentReport.target_id == payload.target_id,
+                ContentReport.status == "open",
+            )
+        )
+    ).scalars().first()
+    if existing is not None:
+        authors = await _author_map(db, {existing.reporter_id, target_author_id})
+        return ReportOut(
+            id=existing.id,
+            topic_id=None,
+            reply_id=None,
+            source="content",
+            target_type=existing.target_type,
+            target_id=existing.target_id,
+            reason=existing.reason,
+            status=existing.status,
+            created_at=existing.created_at,
+            resolved_at=existing.resolved_at,
+            target_excerpt=excerpt,
+            target_author=authors.get(target_author_id),
+            reporter=authors.get(existing.reporter_id),
+        )
+
+    report = ContentReport(
+        tenant_id=tenant_id,
+        reporter_id=current_user.id,
+        target_type=payload.target_type,
+        target_id=payload.target_id,
+        reason=payload.reason.strip(),
+        status="open",
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    authors = await _author_map(db, {current_user.id, target_author_id})
+    return ReportOut(
+        id=report.id,
+        topic_id=None,
+        reply_id=None,
+        source="content",
+        target_type=report.target_type,
+        target_id=report.target_id,
+        reason=report.reason,
+        status=report.status,
+        created_at=report.created_at,
+        resolved_at=report.resolved_at,
+        target_excerpt=excerpt,
+        target_author=authors.get(target_author_id),
+        reporter=authors.get(report.reporter_id),
+    )
+
+
+@router.patch("/content-reports/{report_id}", response_model=ReportOut)
+async def handle_content_report(
+    report_id: int,
+    payload: ReportAction,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> ReportOut:
+    """评论/投稿举报处置：驳回 / 下架 / 停用作者。"""
+    from app.models import ContentReport
+    from app.modules.comments.models import Comment
+    from app.modules.submission.models import Submission
+
+    tenant_id = require_tenant_id()
+    report = (
+        await db.execute(
+            select(ContentReport).where(
+                ContentReport.id == report_id, ContentReport.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if report is None:
+        raise HTTPException(status_code=404, detail="举报不存在")
+    if report.status != "open":
+        raise HTTPException(status_code=409, detail="该举报已处理")
+    author: User | None = None
+    excerpt: str | None = None
+    if report.target_type == "comment":
+        target = (
+            await db.execute(
+                select(Comment).where(
+                    Comment.id == report.target_id, Comment.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(status_code=404, detail="被举报评论已被删除")
+        author = (
+            await db.execute(select(User).where(User.id == target.user_id))
+        ).scalar_one_or_none()
+        excerpt = target.body[:140]
+    else:
+        target = (
+            await db.execute(
+                select(Submission).where(
+                    Submission.id == report.target_id, Submission.tenant_id == tenant_id
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            raise HTTPException(status_code=404, detail="被举报投稿已被删除")
+        author = (
+            await db.execute(select(User).where(User.id == target.submitted_by))
+        ).scalar_one_or_none()
+        excerpt = f"{target.title} · {target.abstract[:120]}"
+
+    now = utcnow()
+    if payload.action == "dismiss":
+        report.status = "rejected"
+    else:
+        if report.target_type == "comment":
+            target.status = "rejected"
+            target.moderated_by = current_user.id
+            target.moderated_at = now
+            target.moderation_note = payload.note
+        else:
+            target.status = "rejected"
+            target.admin_note = payload.note or "举报处置：下架"
+            target.reviewed_at = now
+        report.status = "resolved"
+    report.resolved_at = now
+    if payload.action == "suspend_author" and author is not None:
+        if author.id != current_user.id:
+            author.is_active = False
+            author.token_version = (author.token_version or 0) + 1
+            db.add(
+                AuditLog(
+                    tenant_id=tenant_id,
+                    actor_user_id=current_user.id,
+                    action="content.report.suspend_author",
+                    target_type="user",
+                    target_id=str(author.id),
+                    payload={"report_id": report.id, "note": payload.note},
+                )
+            )
+    db.add(
+        AuditLog(
+            tenant_id=tenant_id,
+            actor_user_id=current_user.id,
+            action=f"content.report.{payload.action}",
+            target_type=report.target_type,
+            target_id=str(report.target_id),
+            payload={"report_id": report.id, "note": payload.note},
+        )
+    )
+    await db.commit()
+    await db.refresh(report)
+    authors = await _author_map(
+        db, {report.reporter_id, author.id} if author is not None else {report.reporter_id}
+    )
+    return ReportOut(
+        id=report.id,
+        topic_id=None,
+        reply_id=None,
+        source="content",
+        target_type=report.target_type,
+        target_id=report.target_id,
+        reason=report.reason,
+        status=report.status,
+        created_at=report.created_at,
+        resolved_at=report.resolved_at,
+        target_excerpt=excerpt,
+        target_author=authors.get(author.id) if author is not None else None,
+        reporter=authors.get(report.reporter_id),
+    )
 
 
 class ReportAction(BaseModel):

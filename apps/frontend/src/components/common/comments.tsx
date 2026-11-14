@@ -1,8 +1,17 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Loader2, MessageSquare, Trash2 } from 'lucide-react'
+import { Flag, Loader2, MessageSquare, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -47,6 +56,8 @@ export function Comments({ resourceId }: { resourceId: number }) {
   const { isAuthenticated } = useAuth()
   const [page, setPage] = useState(1)
   const [draft, setDraft] = useState('')
+  const [reporting, setReporting] = useState<{ id: number; body: string } | null>(null)
+  const [reportLoading, setReportLoading] = useState(false)
   const { data, isLoading, isError, refetch } = useComments(resourceId, page)
   const createMut = useCreateComment(resourceId)
   const deleteMut = useDeleteComment(resourceId)
@@ -77,6 +88,27 @@ export function Comments({ resourceId }: { resourceId: number }) {
       toast.success('已删除')
     } catch {
       toast.error('删除失败')
+    }
+  }
+
+  async function submitReport() {
+    if (!reporting || !reporting.body.trim()) return
+    setReportLoading(true)
+    try {
+      await api.post('/forum/content-reports', {
+        target_type: 'comment',
+        target_id: reporting.id,
+        reason: reporting.body.trim(),
+      })
+      toast.success('举报已提交，管理员会处理')
+      setReporting(null)
+    } catch (err) {
+      toast.error(
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
+          '举报失败，稍后再试',
+      )
+    } finally {
+      setReportLoading(false)
     }
   }
 
@@ -161,6 +193,15 @@ export function Comments({ resourceId }: { resourceId: number }) {
                       <time className="text-xs text-muted-foreground">
                         {formatDateTime(c.created_at)}
                       </time>
+                      {!mine && isAuthenticated ? (
+                        <button
+                          onClick={() => setReporting({ id: c.id, body: '' })}
+                          aria-label="举报评论"
+                          className="text-muted-foreground transition-colors hover:text-amber-600"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
                       {(mine || user?.is_admin) && (
                         <button
                           onClick={() => onDelete(c.id)}
@@ -204,6 +245,37 @@ export function Comments({ resourceId }: { resourceId: number }) {
           </div>
         )}
       </CardContent>
+
+      <Dialog open={Boolean(reporting)} onOpenChange={(o) => !o && setReporting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>举报这条评论</DialogTitle>
+            <DialogDescription>
+              写清问题（广告、辱骂、侵权等）。恶意举报会被记录；管理员可驳回、下架评论或停用作者。
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={reporting?.body ?? ''}
+            onChange={(e) =>
+              setReporting((prev) => (prev ? { ...prev, body: e.target.value } : prev))
+            }
+            maxLength={200}
+            rows={3}
+            placeholder="举报原因（≤200 字）"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReporting(null)}>
+              取消
+            </Button>
+            <Button
+              onClick={submitReport}
+              disabled={reportLoading || !reporting?.body.trim()}
+            >
+              {reportLoading ? '提交中…' : '提交举报'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

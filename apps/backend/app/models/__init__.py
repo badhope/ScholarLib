@@ -389,9 +389,80 @@ class EmailLoginCode(Base, TenantScopedMixin):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class ContentReport(Base, TenantScopedMixin):
+    """通用内容举报：评论与投稿。
+
+    论坛帖子/回复继续用历史 ``forum_reports``（已有外键与幂等逻辑），
+    本表只承接后接入的评论与投稿，后台把两类记录合并成同一队列展示。
+    ``target_type`` 目前限定 ``comment`` / ``submission``；``status``
+    与论坛举报一致：open / resolved / rejected。
+    """
+
+    __tablename__ = "content_reports"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    reporter_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    target_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_content_reports_tenant_status", "tenant_id", "status", "created_at"),
+        Index("ix_content_reports_target", "tenant_id", "target_type", "target_id"),
+    )
+
+
+class ApiToken(Base, TenantScopedMixin):
+    """个人 API Token，供 MCP / 脚本以用户身份投稿。
+
+    只存 SHA-256 哈希，明文仅在创建时返回一次；撤销立即生效。
+    作用域目前只有 ``submission:write`` 与 ``profile:read``，避免一个
+    token 意外获得管理权限。``last_used_at`` / ``request_count`` 用于
+    后台审计和异常频率观察。
+    """
+
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    token_prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    scopes: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="submission:write profile:read"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 投稿小时窗：最多 10 篇/小时，防止自动化刷稿。
+    window_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    window_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    __table_args__ = (
+        Index("ix_api_tokens_tenant_user", "tenant_id", "user_id", "created_at"),
+    )
+
+
 __all__ = [
+    "ApiToken",
     "AuditLog",
     "Base",
+    "ContentReport",
     "EmailLoginCode",
     "Role",
     "Tenant",
