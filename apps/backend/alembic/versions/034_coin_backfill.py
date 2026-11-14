@@ -20,6 +20,30 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # ``point_events`` 在部分环境由运行期建表，历史迁移链没有显式建表；
+    # 空库跑 alembic 时必须在写入前补上，否则 034 会直接 failed。
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS point_events (
+            id SERIAL PRIMARY KEY,
+            tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            identity VARCHAR(16) NOT NULL,
+            delta INTEGER NOT NULL DEFAULT 0,
+            reason VARCHAR(64) NOT NULL,
+            ref_type VARCHAR(32) NOT NULL DEFAULT '',
+            ref_id VARCHAR(64) NOT NULL DEFAULT '',
+            note VARCHAR(255),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            CONSTRAINT uq_point_event_identity UNIQUE
+                (tenant_id, user_id, identity, reason, ref_type, ref_id)
+        )
+        """
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS ix_point_events_tenant_user_created "
+        "ON point_events (tenant_id, user_id, created_at DESC)"
+    )
     op.execute(
         """
         INSERT INTO point_events

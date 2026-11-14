@@ -63,7 +63,7 @@ def compare(title: str, abstract: str, other_title: str, other_abstract: str) ->
 
 async def check_against_site(
     db: AsyncSession,
-    tenant_id,
+    tenant_id: Any,
     *,
     title: str,
     abstract: str,

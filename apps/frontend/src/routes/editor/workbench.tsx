@@ -535,7 +535,7 @@ function EditorWorkbenchPage() {
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>批量指派审稿人</DialogTitle>
+            <DialogTitle>{checked.size > 1 ? '批量指派审稿人' : '指派审稿人'}</DialogTitle>
             <DialogDescription>
               已选 {checked.size} 篇稿件。黄色警告为利益冲突项，默认不选。
             </DialogDescription>
