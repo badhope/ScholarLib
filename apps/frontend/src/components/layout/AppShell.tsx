@@ -72,12 +72,12 @@ const NAV: NavItem[] = [
   { to: '/me', label: '我的', icon: User, group: '一级入口' },
 
   // 我的工作：只放需要登录的个人链路。
-  { to: '/dashboard', label: '我的概览', icon: Home, auth: true, group: '我的工作' },
-  { to: '/submissions', label: '我的提交', icon: ScrollText, auth: true, group: '我的工作' },
-  { to: '/appeals', label: '作者申诉', icon: Scale, auth: true, group: '我的工作' },
-  { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '我的工作' },
-  { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '我的工作' },
-  { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '我的工作' },
+  { to: '/dashboard', label: '我的概览', icon: Home, auth: true, group: '我的工作', subgroup: '个人' },
+  { to: '/submissions', label: '我的提交', icon: ScrollText, auth: true, group: '我的工作', subgroup: '个人' },
+  { to: '/appeals', label: '作者申诉', icon: Scale, auth: true, group: '我的工作', subgroup: '个人' },
+  { to: '/library', label: '阅读列表', icon: Library, auth: true, group: '我的工作', subgroup: '个人' },
+  { to: '/follows', label: '关注与订阅', icon: Heart, auth: true, group: '我的工作', subgroup: '个人' },
+  { to: '/recommendations', label: '推荐', icon: Lightbulb, auth: true, group: '我的工作', subgroup: '个人' },
   {
     to: '/review/assignments',
     label: '审稿工作台',
@@ -85,6 +85,7 @@ const NAV: NavItem[] = [
     auth: true,
     roles: ['reviewer', 'editor_in_chief'],
     group: '我的工作',
+    subgroup: '编辑与投稿',
   },
   {
     to: '/editor/workbench',
@@ -93,9 +94,10 @@ const NAV: NavItem[] = [
     auth: true,
     roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'],
     group: '我的工作',
+    subgroup: '编辑与投稿',
   },
-  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'], group: '我的工作' },
-  { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '我的工作' },
+  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'], group: '我的工作', subgroup: '编辑与投稿' },
+  { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '我的工作', subgroup: '个人' },
 
   // 期刊门面：指标并入「关于本刊」的页签，规则并入「投稿指南」。
   // 这里只保留四条真正不同的去处，避免同一内容出现两个入口。
@@ -317,7 +319,7 @@ export function AppShell() {
             const isTop = group.name === '一级入口'
             const isOpen = collapsed || isTop || openGroup === group.name
             const subgroups =
-              group.name === '站点管理' && !collapsed
+              !collapsed && group.items.some((item) => item.subgroup)
                 ? (() => {
                     const order: string[] = []
                     const buckets = new Map<string, NavItem[]>()
