@@ -280,3 +280,12 @@ async def test_delete(client: AsyncClient, test_user: dict, db_session: AsyncSes
     # Subsequent list shows 0.
     listed = await client.get("/api/notifications", headers=auth_headers(test_user))
     assert listed.json()["meta"]["total"] == 0
+
+
+async def test_long_title_is_truncated_to_column_limit(
+    test_user: dict, db_session: AsyncSession
+) -> None:
+    """Long submission titles must not break the assignment transaction."""
+    n = await _seed(db_session, user_id=test_user["user_id"], title="长" * 260)
+    assert len(n.title) == 200
+    assert n.title.endswith("…")

@@ -21,7 +21,7 @@ export function requireChiefGuard(): void {
   const state = getAuthState()
   if (!state.isAuthenticated) throw redirect({ to: '/login' })
   const roles = state.user?.roles ?? []
-  if (!state.isAdmin && !roles.some((r) => ['chief_editor', 'deputy_editor'].includes(r))) {
+  if (!state.isAdmin && !roles.some((r) => ['chief_editor', 'deputy_editor', 'editor_in_chief'].includes(r))) {
     throw redirect({ to: '/403' })
   }
 }
@@ -33,7 +33,7 @@ export function requireShopManagerGuard(): void {
   const roles = state.user?.roles ?? []
   if (
     !state.isAdmin &&
-    !roles.some((r) => ['chief_editor', 'deputy_editor', 'shop_manager'].includes(r))
+    !roles.some((r) => ['chief_editor', 'deputy_editor', 'editor_in_chief', 'shop_manager'].includes(r))
   ) {
     throw redirect({ to: '/403' })
   }

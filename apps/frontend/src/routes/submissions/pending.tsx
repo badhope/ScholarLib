@@ -81,7 +81,7 @@ export const Route = createFileRoute('/submissions/pending')({
     const { isAuthenticated, isAdmin, user } = getAuthState()
     if (!isAuthenticated) throw redirect({ to: '/login' })
     const roles = user?.roles ?? []
-    if (!isAdmin && !roles.includes('editor') && !roles.includes('section_editor')) {
+    if (!isAdmin && !roles.some((r) => ['editor', 'section_editor', 'editor_in_chief'].includes(r))) {
       throw redirect({ to: '/dashboard' })
     }
   },

@@ -235,7 +235,7 @@ function BadgeProgressStrip() {
 function DashboardPage() {
   const { user, isAdmin } = useAuth()
   const roles = user?.roles ?? []
-  const isEditorial = isAdmin || roles.includes('editor') || roles.includes('section_editor')
+  const isEditorial = isAdmin || roles.some((r) => ['editor', 'section_editor', 'editor_in_chief'].includes(r))
 
   const profile = useGamificationProfile()
   const stats = useCatalogStats()

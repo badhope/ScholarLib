@@ -37,7 +37,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function AppealsPage() {
   const { user, isAdmin } = useAuth()
-  const isEditor = isAdmin || (user?.roles ?? []).some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'].includes(r))
+  const isEditor = isAdmin || (user?.roles ?? []).some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'].includes(r))
   const mine = useMyAppeals()
   const subs = useMySubmissions(undefined, 1, 100)
   const inbox = useAppeals(isEditor ? 'pending' : undefined)

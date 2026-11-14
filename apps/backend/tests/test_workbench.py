@@ -455,3 +455,33 @@ async def test_editor_email_digest_records_endpoint(
         "/api/editor/workbench/email-digest/records", headers=auth_headers(reviewer)
     )
     assert forbidden.status_code == 403
+
+
+async def test_batch_assign_handles_long_submission_title(
+    client: AsyncClient, admin_user: dict, test_user: dict, db_session: AsyncSession
+) -> None:
+    """长标题稿件不能让指派 500：通知标题必须在写入边界截断到 200。"""
+    await client.get("/api/health")
+    tenant = (await db_session.execute(select(Tenant).where(Tenant.slug == "default"))).scalar_one()
+    reviewer = await _register_reviewer(client, db_session, tenant, "wb-long")
+    long_title = "A Very Long Manuscript Title " * 12
+    sub = await _create_submission(client, test_user, long_title)
+
+    resp = await client.post(
+        "/api/editor/workbench/batch-assign",
+        json={
+            "items": [
+                {"submission_id": sub["id"], "reviewer_ids": [reviewer["user_id"]]}
+            ],
+            "due_days": 10,
+        },
+        headers=auth_headers(admin_user),
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["created_count"] == 1
+
+    notes = await client.get("/api/notifications", headers=auth_headers(reviewer))
+    assert notes.status_code == 200
+    invited = [n for n in notes.json()["data"] if n["type"] == "review.invited"]
+    assert len(invited) == 1
+    assert len(invited[0]["title"]) <= 200

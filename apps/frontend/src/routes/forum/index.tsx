@@ -297,42 +297,37 @@ function ForumListPage() {
 
         {activeRoot ? (
           <div className="space-y-1.5 rounded-xl border bg-muted/30 p-2">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="px-1 text-[11px] font-medium text-muted-foreground">{activeRoot.name}</span>
-              {activeRoot.children.map((child) => (
-                <button
-                  key={child.slug}
-                  type="button"
-                  onClick={() => updateSearch({ category: child.slug, page: 1 })}
-                  className={cn(
-                    'rounded-lg border px-2.5 py-1 text-left text-xs transition-colors',
-                    normalizedCategory === child.slug
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'bg-background hover:border-primary/25',
-                  )}
-                >
-                  {child.name}
-                  <span className="ml-1 text-[10px] text-muted-foreground">{child.total_topics}</span>
-                </button>
-              ))}
-            </div>
-            {activeBoard && activeBoard.children.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5 border-l-2 border-primary/20 pl-3">
-                <span className="text-[10px] text-muted-foreground">子板块</span>
-                {activeBoard.children.map((child) => (
-                  <button
-                    key={child.slug}
-                    type="button"
-                    onClick={() => updateSearch({ category: child.slug, page: 1 })}
-                    className="inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-[11px] hover:border-primary/40 hover:text-primary"
-                  >
-                    <ChevronRight className="h-3 w-3" aria-hidden="true" />
-                    {child.name}
-                    <span className="text-[10px] text-muted-foreground">{child.total_topics}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => updateSearch({ category: activeRoot.slug, page: 1 })}
+              className={cn(
+                'w-full rounded-lg border px-2.5 py-1 text-left text-xs transition-colors',
+                normalizedCategory === activeRoot.slug
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'bg-background hover:border-primary/25',
+              )}
+            >
+              <span className="font-medium">{activeRoot.name}</span>
+              <span className="ml-1 text-[10px] text-muted-foreground">{activeRoot.total_topics} 帖</span>
+            </button>
+            {collectBoards(activeRoot.children).map((child) => (
+              <button
+                key={child.slug}
+                type="button"
+                onClick={() => updateSearch({ category: child.slug, page: 1 })}
+                style={{ marginLeft: `${child.depth * 14}px` }}
+                className={cn(
+                  'flex items-center gap-1 rounded-lg border px-2.5 py-1 text-left text-xs transition-colors',
+                  normalizedCategory === child.slug
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'bg-background hover:border-primary/25',
+                )}
+              >
+                {child.depth > 0 ? <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" /> : null}
+                <span className="min-w-0 truncate">{child.name}</span>
+                <span className="ml-auto text-[10px] text-muted-foreground">{child.total_topics}</span>
+              </button>
+            ))}
           </div>
         ) : null}
       </div>

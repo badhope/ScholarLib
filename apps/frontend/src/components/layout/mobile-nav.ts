@@ -75,7 +75,7 @@ export const MOBILE_MORE: MobileMoreItem[] = [
     label: '主编工作台',
     icon: Gavel,
     auth: true,
-    roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'],
+    roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'],
     group: '工作台',
   },
   { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor'], group: '工作台' },

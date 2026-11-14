@@ -72,7 +72,10 @@ export function CookieBanner() {
     if (consent !== null || blocked) return
     const previous = document.body.style.paddingBottom
     const apply = () => {
-      document.body.style.paddingBottom = window.matchMedia('(min-width: 640px)').matches ? '56px' : '104px'
+      const desktop = typeof window.matchMedia === 'function'
+        ? window.matchMedia('(min-width: 640px)').matches
+        : window.innerWidth >= 640
+      document.body.style.paddingBottom = desktop ? '56px' : '104px'
     }
     apply()
     window.addEventListener('resize', apply)

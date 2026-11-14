@@ -36,7 +36,8 @@ export const Route = createFileRoute('/admin/')({
 // 每张卡是一个可点击的落点，管理员不用再猜入口在哪个折叠组里。
 const WORKFLOWS: { title: string; desc: string; to: string; icon: typeof Gavel }[][] = [
   [
-    { title: '编辑工作台', desc: '初筛 · 送审 · 推荐', to: '/submissions/pending', icon: Gavel },
+    { title: '主编工作台', desc: '指派 · 催办 · 裁决 · 冲突', to: '/editor/workbench', icon: Gavel },
+    { title: '初筛工作台', desc: '初审 · 送审 · 推荐', to: '/submissions/pending', icon: ClipboardCheck },
     { title: '审稿工作台', desc: '邀请 · 评审 · 意见', to: '/review/assignments', icon: ClipboardCheck },
     { title: '认领审批', desc: '作者认领存量文章', to: '/admin/claims', icon: FileSignature },
   ],

@@ -334,7 +334,13 @@ async def user_role_names(db: AsyncSession, user: User) -> list[str]:
             Role.tenant_id == tenant_id,
         )
     )
-    return sorted({r for r in result.scalars() if r})
+    names = {r for r in result.scalars() if r}
+    # 新五层权限轴以 users.role 为准；历史账号仍可能只有 user_roles。
+    # 这里把规范档位名一并下发，前端才能给“只设了 users.role”的主编渲染入口。
+    canonical = (user.role or "").strip()
+    if canonical in {"reviewer", "editor", "editor_in_chief"}:
+        names.add(canonical)
+    return sorted(names)
 
 
 async def require_reviewer(

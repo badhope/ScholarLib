@@ -218,7 +218,7 @@ function CatalogDetailPage() {
   // 清空 quality_* / quartile，前端再按角色 gate 渲染，避免「尚未评分」占位。
   const SCORE_STAFF_ROLES = new Set([
     'reviewer', 'senior_reviewer', 'editor', 'section_editor',
-    'board_editor', 'deputy_editor', 'chief_editor',
+    'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief',
   ])
   const canSeeScores =
     isAdmin || (user?.roles ?? []).some((r) => SCORE_STAFF_ROLES.has(r))

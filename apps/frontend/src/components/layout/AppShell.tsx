@@ -316,7 +316,7 @@ export function AppShell() {
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium">{displayName}</p>
                   <p className="truncate text-[10px] text-sidebar-foreground/55">
-                    {user.roles?.includes('chief_editor') ? '主编' : user.roles?.includes('reviewer') ? '审稿人' : '作者 / 读者'}
+                    {user.roles?.some((r) => ['chief_editor','editor_in_chief'].includes(r)) ? '主编' : user.roles?.includes('reviewer') ? '审稿人' : '作者 / 读者'}
                   </p>
                 </div>
               </div>
@@ -402,7 +402,7 @@ export function AppShell() {
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  {(user.roles?.some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor'].includes(r)) || isAdmin) && (
+                  {(user.roles?.some((r) => ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'].includes(r)) || isAdmin) && (
                     <DropdownMenuItem asChild>
                       <Link to="/editor/workbench">
                         <Gavel className="h-4 w-4" />
