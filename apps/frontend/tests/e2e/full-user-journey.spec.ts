@@ -86,7 +86,7 @@ test.describe('全流程用户旅程', () => {
     await page.goto('/settings')
     await expect(page.getByRole('heading', { name: '账号设置' })).toBeVisible()
     // 用户名同时出现在侧边栏用户菜单和设置卡片里，限定到主区域。
-    await expect(page.getByRole('main').getByText(user.username)).toBeVisible()
+    await expect(page.getByRole('main').getByText(user.username).first()).toBeVisible()
     // 1.6.0 起设置页分「资料 / 安全」两个标签，2FA 在安全页
     await page.getByRole('tab', { name: '安全' }).click()
     await expect(page.getByText('两步验证（2FA）')).toBeVisible()
