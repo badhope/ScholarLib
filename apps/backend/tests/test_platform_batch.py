@@ -146,3 +146,33 @@ async def test_system_health_requires_admin(client: AsyncClient, admin_user: dic
     # 迁移图里有元组 down_revision 与重复 revision id，健康页必须用
     # Alembic 自己的图取 head，不能靠正则差集。
     assert body["code_revision"] == "040_user_notification_prefs"
+
+
+@pytest.mark.asyncio
+async def test_submission_edit_recomputes_similarity(
+    client: AsyncClient, admin_user: dict, test_user: dict
+) -> None:
+    original = "原创摘要：讨论可复现实验的登记、版本锁定与失败样本归档，不涉及任何已有站内文本。"
+    copied = "站内相似度编辑重算：这段摘要会故意与站内资源保持一致，用来验证修改后的重算链路是否生效。"
+    resource = await client.post(
+        "/api/catalog",
+        json={**_SAMPLE, "title": "编辑重算基准", "abstract": copied},
+        headers=auth_headers(admin_user),
+    )
+    assert resource.status_code == 201
+    created = await client.post(
+        "/api/submissions",
+        json={**_PAYLOAD, "title": "编辑重算前的原创标题", "abstract": original, "doi": "10.1234/edit.001"},
+        headers=auth_headers(test_user),
+    )
+    assert created.status_code == 201, created.text
+    sid = created.json()["id"]
+    patched = await client.patch(
+        f"/api/submissions/{sid}",
+        json={"title": "编辑重算基准", "abstract": copied},
+        headers=auth_headers(test_user),
+    )
+    assert patched.status_code == 200, patched.text
+    body = patched.json()
+    assert body["similarity_score"] >= 35
+    assert body["similarity_matches"]

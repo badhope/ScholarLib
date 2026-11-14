@@ -236,6 +236,23 @@ async def update_submission(
         if field in ("download_url", "external_url") and value is not None:
             value = str(value)
         setattr(entry, field, value)
+    # 标题/摘要变了，敏感词与站内相似度都必须重算；否则详情页会继续
+    # 展示旧分，编辑入口就等于绕过了投稿时的风控。
+    if "title" in updates or "abstract" in updates:
+        blocked = rejection_detail(f"{entry.title}\n{entry.abstract or ''}")
+        if blocked is not None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=blocked
+            )
+        score, matches = await check_against_site(
+            db,
+            entry.tenant_id,
+            title=entry.title,
+            abstract=entry.abstract or "",
+            exclude_submission_id=entry.id,
+        )
+        entry.similarity_score = score
+        entry.similarity_matches = matches
     await db.commit()
     await db.refresh(entry)
     return _to_response(entry)
