@@ -85,6 +85,9 @@ export function AiAccessCard() {
     }
   }
 
+  const active = rows.filter((r) => !r.revoked_at)
+  const revoked = rows.filter((r) => r.revoked_at)
+
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://rubbish.argjiemi.cn'
   const mcpConfig = `{
   "mcpServers": {
@@ -155,30 +158,49 @@ export function AiAccessCard() {
           ) : rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">还没有 Token。</p>
           ) : (
-            <ul className="divide-y rounded-lg border">
-              {rows.map((r) => (
-                <li key={r.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
-                  <KeyRound className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">{r.name}</span>
-                  <code className="text-xs text-muted-foreground">{r.prefix}…</code>
-                  <Badge variant={r.revoked_at ? 'outline' : 'secondary'}>
-                    {r.revoked_at ? '已撤销' : '有效'}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">
-                    创建 {fmt(r.created_at)} · 到期 {fmt(r.expires_at)} · 调用 {r.request_count}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="ml-auto text-destructive"
-                    onClick={() => revoke(r.id)}
-                    disabled={Boolean(r.revoked_at)}
-                  >
-                    <Trash2 className="mr-1 h-3.5 w-3.5" /> 撤销
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-2">
+              {active.length === 0 ? (
+                <p className="text-sm text-muted-foreground">没有有效 Token。</p>
+              ) : (
+                <ul className="divide-y rounded-lg border">
+                  {active.map((r) => (
+                    <li key={r.id} className="flex flex-wrap items-center gap-2 p-3 text-sm">
+                      <KeyRound className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{r.name}</span>
+                      <code className="text-xs text-muted-foreground">{r.prefix}…</code>
+                      <Badge variant="secondary">有效</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        创建 {fmt(r.created_at)} · 到期 {fmt(r.expires_at)} · 调用 {r.request_count}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto text-destructive"
+                        onClick={() => revoke(r.id)}
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" /> 撤销
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {revoked.length > 0 ? (
+                <details className="rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer select-none">
+                    已撤销 {revoked.length} 个（仅保留审计信息）
+                  </summary>
+                  <ul className="mt-2 space-y-1">
+                    {revoked.map((r) => (
+                      <li key={r.id} className="flex flex-wrap items-center gap-2">
+                        <span>{r.name}</span>
+                        <code>{r.prefix}…</code>
+                        <span>撤销于 {fmt(r.revoked_at)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
           )}
         </CardContent>
       </Card>
