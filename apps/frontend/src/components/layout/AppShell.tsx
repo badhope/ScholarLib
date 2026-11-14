@@ -318,13 +318,19 @@ export function AppShell() {
             const isOpen = collapsed || isTop || openGroup === group.name
             const subgroups =
               group.name === '站点管理' && !collapsed
-                ? group.items.reduce<Array<{ name: string; items: NavItem[] }>>((acc, item) => {
-                    const name = item.subgroup ?? ''
-                    const last = acc[acc.length - 1]
-                    if (last && last.name === name) last.items.push(item)
-                    else acc.push({ name, items: [item] })
-                    return acc
-                  }, [])
+                ? (() => {
+                    const order: string[] = []
+                    const buckets = new Map<string, NavItem[]>()
+                    for (const item of group.items) {
+                      const name = item.subgroup ?? ''
+                      if (!buckets.has(name)) {
+                        order.push(name)
+                        buckets.set(name, [])
+                      }
+                      buckets.get(name)!.push(item)
+                    }
+                    return order.map((name) => ({ name, items: buckets.get(name)! }))
+                  })()
                 : null
             return (
               <Fragment key={group.name}>

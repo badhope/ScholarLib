@@ -112,11 +112,11 @@ test.describe('auth: register + verify + login + logout', () => {
     await loginViaUi(page, ADMIN)
     await expect(page).toHaveURL(/\/dashboard/)
     // 侧边栏默认只展开当前组；后台入口收在「站点管理」手风琴里。
-    await page.getByRole('button', { name: /站点管理/ }).click()
-    await page.getByRole('button', { name: /用户与权限/ }).click()
-    await expect(page.getByRole('link', { name: /用户管理/ })).toBeVisible()
-    await page.getByRole('button', { name: /系统与安全/ }).click()
-    await expect(page.getByRole('link', { name: /审计日志/ })).toBeVisible()
+    await page.getByRole('button', { name: /站点管理/ }).first().click()
+    await page.getByRole('button', { name: /用户与权限/ }).first().click()
+    await expect(page.getByRole('link', { name: /用户管理/ }).first()).toBeVisible()
+    await page.getByRole('button', { name: /系统与安全/ }).first().click()
+    await expect(page.getByRole('link', { name: /审计日志/ }).first()).toBeVisible()
 
     // 退出
     await logoutViaUi(page)
