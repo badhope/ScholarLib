@@ -78,7 +78,7 @@ export const MOBILE_MORE: MobileMoreItem[] = [
     roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'],
     group: '工作台',
   },
-  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor'], group: '工作台' },
+  { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'], group: '工作台' },
   { to: '/sections', label: '栏目', icon: Layers, group: '期刊' },
   { to: '/archive', label: '卷期归档', icon: CalendarDays, group: '期刊' },
   { to: '/about', label: '关于与指标', icon: Building2, group: '期刊' },

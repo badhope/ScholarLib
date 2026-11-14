@@ -442,6 +442,58 @@ async def editor_email_digest_records(
 
 
 # ---------------------------------------------------------------------------
+# Reviewer workload (editor-in-chief / admin)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/editor/workbench/reviewers")
+async def reviewer_workload(
+    current_user: User = Depends(require_editor),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """审稿人负载与完成情况：接受中、已完成、逾期、累计邀请。
+
+    只做聚合，不返回审稿报告内容；供主编决定把新稿派给谁。
+    """
+    tenant_id = require_tenant_id()
+    now = utcnow()
+    active = ReviewAssignment.status.in_(ACTIVE_ASSIGNMENT_STATUSES)
+    overdue = active & (ReviewAssignment.due_date.is_not(None)) & (ReviewAssignment.due_date < now)
+    rows = (
+        await db.execute(
+            select(
+                ReviewAssignment.reviewer_id,
+                User.username,
+                func.count(ReviewAssignment.id).label("total_count"),
+                func.count(ReviewAssignment.id).filter(active).label("active_count"),
+                func.count(ReviewAssignment.id)
+                .filter(ReviewAssignment.status == "completed")
+                .label("completed_count"),
+                func.count(ReviewAssignment.id).filter(overdue).label("overdue_count"),
+            )
+            .join(User, User.id == ReviewAssignment.reviewer_id)
+            .where(ReviewAssignment.tenant_id == tenant_id)
+            .group_by(ReviewAssignment.reviewer_id, User.username)
+            .order_by(desc("active_count"), desc("total_count"))
+        )
+    ).all()
+    return {
+        "count": len(rows),
+        "items": [
+            {
+                "reviewer_id": r.reviewer_id,
+                "username": r.username,
+                "active_count": int(r.active_count),
+                "completed_count": int(r.completed_count),
+                "overdue_count": int(r.overdue_count),
+                "total_count": int(r.total_count),
+            }
+            for r in rows
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Batch assign
 # ---------------------------------------------------------------------------
 

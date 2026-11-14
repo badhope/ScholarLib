@@ -10,6 +10,7 @@ import {
   MailWarning,
   Send,
   UserPlus,
+  Users,
   XCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -22,6 +23,7 @@ import {
   useEditorWorkbench,
   useRemindReviewers,
   useReviewerCandidates,
+  useReviewerWorkload,
   type ConflictCandidate,
 } from '@/hooks/api/use-modules'
 import { extractError } from '@/lib/utils'
@@ -73,6 +75,7 @@ const COLUMN_META: { key: ColumnKey; title: string; accent: string }[] = [
 function EditorWorkbenchPage() {
   const { data, isLoading, isError, refetch } = useEditorWorkbench()
   const candidates = useReviewerCandidates(200)
+  const workload = useReviewerWorkload()
   const batchMut = useBatchAssign()
   const conflictsMut = useCheckConflicts()
   const remindMut = useRemindReviewers()
@@ -120,16 +123,18 @@ function EditorWorkbenchPage() {
     })
   }
 
-  const openAssignDialog = async () => {
-    if (checked.size === 0) {
+  const openAssignDialog = async (ids?: number[]) => {
+    const selectedIds = ids ?? [...checked]
+    if (selectedIds.length === 0) {
       toast.info('请先勾选至少一篇待指派稿件')
       return
     }
+    setChecked(new Set(selectedIds))
     setAssignOpen(true)
     setSelectedReviewers([])
     setConflicts({})
     // 对第一篇勾选稿件跑一次冲突检查（多稿件时共用候选名单；冲突提示以该稿件为准）
-    const firstSubId = [...checked][0]
+    const firstSubId = selectedIds[0]
     if (candidates.data && candidates.data.length) {
       try {
         const res = await conflictsMut.mutateAsync({
@@ -231,7 +236,7 @@ function EditorWorkbenchPage() {
               清空
             </Button>
             <Button
-              onClick={openAssignDialog}
+              onClick={() => openAssignDialog()}
               disabled={checked.size === 0 || batchMut.isPending}
             >
               <UserPlus className="h-4 w-4" /> 批量指派
@@ -346,6 +351,44 @@ function EditorWorkbenchPage() {
         </div>
       )}
 
+      {workload.data && workload.data.length > 0 && (
+        <Card className="mb-4">
+          <CardContent className="py-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+              <Users className="h-4 w-4" />
+              审稿人负载
+              <span className="text-xs font-normal text-muted-foreground">按接受中任务排序</span>
+            </div>
+            <div className="max-h-56 overflow-auto">
+              <table className="w-full min-w-[520px] text-xs">
+                <thead className="text-muted-foreground">
+                  <tr className="border-b text-left">
+                    <th className="py-1 pr-3 font-normal">审稿人</th>
+                    <th className="py-1 pr-3 font-normal">接受中</th>
+                    <th className="py-1 pr-3 font-normal">已完成</th>
+                    <th className="py-1 pr-3 font-normal">已逾期</th>
+                    <th className="py-1 font-normal">累计邀请</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workload.data.map((r) => (
+                    <tr key={r.reviewer_id} className="border-b border-border/50 last:border-0">
+                      <td className="py-1.5 pr-3">{r.username}</td>
+                      <td className="py-1.5 pr-3 font-medium">{r.active_count}</td>
+                      <td className="py-1.5 pr-3">{r.completed_count}</td>
+                      <td className={`py-1.5 pr-3 ${r.overdue_count > 0 ? 'font-semibold text-red-600' : ''}`}>
+                        {r.overdue_count}
+                      </td>
+                      <td className="py-1.5">{r.total_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <LoadingSkeleton rows={4} />
       ) : isError ? (
@@ -444,6 +487,17 @@ function EditorWorkbenchPage() {
                                   </div>
                                 ))}
                               </div>
+                            )}
+
+                            {col.key === 'to_assign' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => openAssignDialog([item.submission_id])}
+                              >
+                                <UserPlus className="h-3 w-3" /> 指派审稿人
+                              </Button>
                             )}
 
                             {col.key === 'to_decide' && item.recommendations && (

@@ -390,6 +390,26 @@ export function useReviewerCandidates(limit = 200) {
   })
 }
 
+export interface ReviewerWorkload {
+  reviewer_id: number
+  username: string
+  active_count: number
+  completed_count: number
+  overdue_count: number
+  total_count: number
+}
+
+export function useReviewerWorkload() {
+  return useQuery<ReviewerWorkload[]>({
+    queryKey: ['editor', 'reviewer-workload'] as const,
+    queryFn: async () =>
+      (
+        await api.get<{ items: ReviewerWorkload[] }>('/editor/workbench/reviewers')
+      ).data.items,
+    staleTime: 60_000,
+  })
+}
+
 export function usePendingSubmissions(
   page = 1,
   pageSize = 20,

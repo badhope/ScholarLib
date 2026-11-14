@@ -85,6 +85,14 @@ const NAV: NavItem[] = [
     roles: ['reviewer', 'editor_in_chief'],
     group: '我的工作',
   },
+  {
+    to: '/editor/workbench',
+    label: '主编工作台',
+    icon: Gavel,
+    auth: true,
+    roles: ['editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'],
+    group: '我的工作',
+  },
   { to: '/ingest', label: '导入', icon: Upload, auth: true, roles: ['author', 'editor', 'section_editor', 'board_editor', 'deputy_editor', 'chief_editor', 'editor_in_chief'], group: '我的工作' },
   { to: '/notifications', label: '通知', icon: Bell, auth: true, group: '我的工作' },
 
