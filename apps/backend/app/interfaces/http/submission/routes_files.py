@@ -24,7 +24,11 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ROLE_EDITOR, get_current_user, get_current_user_optional, user_has_role
+from app.api.deps import (
+    get_current_user,
+    get_current_user_optional,
+    user_has_editor_access,
+)
 from app.core.db import get_db
 from app.core.storage import get_storage
 from app.domain.review.models import ReviewAssignment
@@ -795,7 +799,7 @@ async def _can_access_submission_file(
 ) -> bool:
     if entry.submitted_by == user_id:
         return True
-    if user is not None and await user_has_role(db, user, ROLE_EDITOR):
+    if user is not None and await user_has_editor_access(db, user):
         return True
     assignment = (
         (
@@ -928,7 +932,7 @@ async def download_submission_file(
     if file_format == "md" and (entry.file_path or entry.markdown_path):
         is_privileged_md = current_user is not None and (
             entry.submitted_by == current_user.id
-            or await user_has_role(db, current_user, ROLE_EDITOR)
+            or await user_has_editor_access(db, current_user)
         )
         if is_privileged_md:
             # 作者上传的 .md 原件优先（保留原始换行/字节）；没有原件时
@@ -954,7 +958,7 @@ async def download_submission_file(
     # 稿件都下载不了，整个评审流程卡死。现在改为**从 Markdown 现场生成**
     # 匿名 Word/PDF：不依赖外部 URL，也不会把原始 PDF 的元数据带出去。
     is_privileged = current_user is not None and (
-        entry.submitted_by == current_user.id or await user_has_role(db, current_user, ROLE_EDITOR)
+        entry.submitted_by == current_user.id or await user_has_editor_access(db, current_user)
     )
     needs_anonymized = False
     if not is_privileged:

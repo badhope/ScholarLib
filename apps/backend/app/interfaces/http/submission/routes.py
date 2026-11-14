@@ -25,9 +25,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    ROLE_EDITOR,
     get_current_user,
-    user_has_role,
+    user_has_editor_access,
 )
 from app.core.db import get_db
 from app.core.moderation import rejection_detail
@@ -180,7 +179,7 @@ async def get_submission(
     if (
         entry.submitted_by != current_user.id
         and not current_user.is_admin
-        and not await user_has_role(db, current_user, ROLE_EDITOR)
+        and not await user_has_editor_access(db, current_user)
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -278,7 +277,7 @@ async def _editable_submission_or_error(
     submission_id: int, current_user: User, db: AsyncSession
 ) -> Submission:
     entry = await _get_or_404(db, submission_id)
-    is_staff = current_user.is_admin or await user_has_role(db, current_user, ROLE_EDITOR)
+    is_staff = current_user.is_admin or await user_has_editor_access(db, current_user)
     if entry.submitted_by != current_user.id and not is_staff:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -357,7 +356,7 @@ async def list_submission_versions(
     allowed = (
         entry.submitted_by == current_user.id
         or current_user.is_admin
-        or await user_has_role(db, current_user, ROLE_EDITOR)
+        or await user_has_editor_access(db, current_user)
     )
     if not allowed:
         raise HTTPException(
@@ -392,7 +391,7 @@ async def download_submission_version(
     allowed = (
         entry.submitted_by == current_user.id
         or current_user.is_admin
-        or await user_has_role(db, current_user, ROLE_EDITOR)
+        or await user_has_editor_access(db, current_user)
     )
     if not allowed:
         raise HTTPException(

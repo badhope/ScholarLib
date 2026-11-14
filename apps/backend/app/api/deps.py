@@ -234,6 +234,17 @@ async def effective_permission_role(db: AsyncSession, user: User) -> str:
     return best
 
 
+async def user_has_editor_access(db: AsyncSession, user: User) -> bool:
+    """是否具备编辑部读/写权限（五层轴 >= editor）。
+
+    不能再直接 ``user_has_role(user, "editor")``：主编/副主编/栏目编辑
+    的实际档位不是字面 ``editor``，精确匹配会把非 admin 的主编挡在
+    ``GET /submissions/{id}`` 之外，工作台就会“能进但打不开稿”。
+    """
+    actual = await effective_permission_role(db, user)
+    return PERMISSION_RANK[actual] >= PERMISSION_RANK["editor"]
+
+
 def require_role(min_role: str) -> Any:
     """权限校验统一依赖：要求当前用户权限档位 >= min_role。
 
