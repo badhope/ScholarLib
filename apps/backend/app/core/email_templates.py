@@ -32,7 +32,7 @@ def _shell(title: str, body_html: str, footer_note: str = "") -> str:
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#fff;border:1px solid {LINE};border-radius:10px;">
     <tr><td style="padding:22px 26px 6px;">
       <div style="font-size:20px;font-weight:700;color:{INK};letter-spacing:.5px;">{site}</div>
-      <div style="margin-top:4px;font-size:12px;color:{MUTED};">开放获取学术期刊 · Open Access Journal</div>
+      <div style="margin-top:4px;font-size:12px;color:{MUTED};">学术底刊 · Academic Bottom Journal</div>
     </td></tr>
     <tr><td style="padding:14px 26px 4px;">
       <h1 style="margin:0 0 12px;font-size:17px;line-height:1.5;color:{INK};">{escape(title)}</h1>

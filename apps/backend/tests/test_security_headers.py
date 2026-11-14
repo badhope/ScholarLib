@@ -100,3 +100,13 @@ async def test_api_responses_are_not_cached(client: AsyncClient) -> None:
     response = await client.get("/api/capabilities")
     assert response.status_code == 200
     assert response.headers.get("cache-control") == "no-store"
+
+
+@pytest.mark.asyncio
+async def test_head_root_returns_200_without_body(client: AsyncClient) -> None:
+    """HEAD / must be a 200 for monitors and link unfurlers, not a 405."""
+    response = await client.head("/")
+    assert response.status_code == 200
+    assert response.content == b""
+    for header, expected in _REQUIRED_HEADERS.items():
+        assert response.headers[header] == expected, f"Missing/incorrect {header} on HEAD /"

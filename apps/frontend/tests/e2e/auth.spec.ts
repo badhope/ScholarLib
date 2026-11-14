@@ -111,8 +111,11 @@ test.describe('auth: register + verify + login + logout', () => {
   test('admin login + logout cycle', async ({ page }) => {
     await loginViaUi(page, ADMIN)
     await expect(page).toHaveURL(/\/dashboard/)
-    // 侧边栏 admin 菜单可见
+    // 侧边栏默认只展开当前组；后台入口收在「站点管理」手风琴里。
+    await page.getByRole('button', { name: /站点管理/ }).click()
+    await page.getByRole('button', { name: /用户与权限/ }).click()
     await expect(page.getByRole('link', { name: /用户管理/ })).toBeVisible()
+    await page.getByRole('button', { name: /系统与安全/ }).click()
     await expect(page.getByRole('link', { name: /审计日志/ })).toBeVisible()
 
     // 退出

@@ -288,7 +288,7 @@ export interface ResourceResponse extends ResourceBase {
   /** 中图分类号（P0）：clc_code 如 TP3，clc_label 如「计算技术、计算机技术」 */
   clc_code?: string | null
   clc_label?: string | null
-  /** R 因子：单篇 R 指数（详情接口返回） */
+  /** 站内热度：单篇 R 指数（详情接口返回） */
   r_factor?: number | null
   /** 结构化作者列表（v5）：未认领者 email/affiliation/user_id 为 null，
    *  前端绝不能从 PDF/Word 抓私人邮箱展示。 */
@@ -398,7 +398,7 @@ export interface JournalMetrics {
   avg_review_days: number | null
   median_review_days: number | null
   open_access_rate: number | null
-  /** R 因子：全刊 R 指数均值，本刊自设计的旗舰指标（口径不公开） */
+  /** 站内热度：全刊 R 指数均值，本刊自设计的旗舰指标（口径不公开） */
   r_factor: number | null
   /** 无引文数据，自引率恒为 0 */
   self_citation_rate: number

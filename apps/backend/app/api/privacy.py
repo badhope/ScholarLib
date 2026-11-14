@@ -31,7 +31,7 @@ _最后更新：2026-10-22_
 
 ## 我们是谁
 
-Rubbish（rubbish.argjiemi.cn）是一份开放获取学术期刊，由本站编辑部运营。
+Rubbish（rubbish.argjiemi.cn）是一份学术底刊，由本站编辑部运营。
 隐私相关事宜请联系 `{CONTACT_EMAIL}`。
 
 ## 我们收集哪些数据

@@ -65,10 +65,10 @@ const DISPLAY_FONT =
   "'Playfair Display Variable', Georgia, 'Noto Serif SC Site', 'Songti SC', 'DejaVu Serif', serif"
 
 const TYPEWRITER_PHRASES = [
-  '投稿 · 同行评审 · 开放出版',
-  '让每一篇经过评审的研究被世界看见',
+  '投稿 · 评审 · 开放出版',
+  '让每一篇值得留下的稿子被看见',
   'Open Access · No Paywall · No Embargo',
-  '匿名评审 · 版本留痕 · 全文免费',
+  '编辑评审 · 版本留痕 · 全文免费',
 ]
 
 const DEPARTMENTS = [
@@ -80,8 +80,8 @@ const DEPARTMENTS = [
 
 const REVIEW_STEPS = [
   { title: '投稿与初检', detail: '作者在线提交稿件并上传 PDF；编辑部检查格式、范围与完整性。' },
-  { title: '分配审稿人', detail: '编辑按学科匹配审稿人，可选择单盲或双盲评审。' },
-  { title: '同行评审', detail: '审稿人在浏览器内阅读全文，提交评分、意见与录用建议。' },
+  { title: '选择评审方式', detail: '编辑按学科与稿件类型决定编辑评审或外部评审，并记录评审方式。' },
+  { title: '评审', detail: '审稿人在浏览器内阅读全文，提交评分、意见与录用建议。' },
   { title: '编辑裁决', detail: '编辑综合意见给出录用、小修、大修或拒稿决定，全程留痕。' },
   { title: '刊前整理与发布', detail: '录用稿件经刊前整理后进入当期目录，全文免费开放，支持引用导出。' },
 ]
@@ -583,7 +583,7 @@ function DiscoverTabs({
               </li>
               <li>
                 <Link to="/journal-metrics" className="hover:text-foreground hover:underline">
-                  期刊指标与 R 因子
+                  本刊数据
                 </Link>
               </li>
               <li>
@@ -701,6 +701,7 @@ function HomePage() {
   const seriousTotal = stats?.by_paper_kind?.serious ?? 0
   const absurdTotal = stats?.by_paper_kind?.absurd ?? 0
   const funTotal = funStats?.total ?? 0
+  const totalPublished = paperTotal + funTotal
   const disciplines = stats ? Object.keys(stats.by_discipline).length : 0
   // 分类入口数据：按篇数降序，点击直达 /catalog?discipline=…（跳转式导航）
   const disciplineEntries = Object.entries(stats?.by_discipline ?? {}).sort(
@@ -746,7 +747,7 @@ function HomePage() {
         {/* ── 顶部细条：身份 + 公告 + 账号入口（<header> 即 banner 地标） ── */}
         <header className="bg-muted/40">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-1.5 text-xs text-muted-foreground sm:px-6">
-            <span className="tracking-wide">An Open Access Journal · 开放获取期刊</span>
+            <span className="tracking-wide">An Academic Bottom Journal · 学术底刊</span>
             <div className="flex items-center gap-3">
               <AnnouncementChip
                 announcement={notice.announcement}
@@ -799,7 +800,7 @@ function HomePage() {
               className="flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.35em] text-muted-foreground"
             >
               <span aria-hidden className="h-1.5 w-1.5 rotate-45 bg-primary" />
-              Open Access · Peer Reviewed
+              Open Access · Bottom Journal
               <span aria-hidden className="h-1.5 w-1.5 rotate-45 bg-primary" />
             </motion.p>
 
@@ -819,6 +820,15 @@ function HomePage() {
                 Rubbish
               </span>
             </motion.h1>
+
+            <motion.p
+              variants={rise}
+              custom={1}
+              className="mx-auto mt-4 max-w-2xl px-2 text-sm leading-relaxed text-muted-foreground sm:text-base"
+            >
+              不是顶刊，是<span className="font-medium text-foreground">学术底刊</span>：
+              给不够完美、但值得留下的研究，一个正式、可引用的落点。
+            </motion.p>
 
             {/* 打字机口号：固定两行高度 + 移动端降字号。
                 之前只有 min-h-7，长句在 390px 上换行→高度跳变，
@@ -841,7 +851,7 @@ function HomePage() {
               custom={3}
               className="mt-3 text-xs text-muted-foreground/80"
             >
-              ISSN 申请中
+              底刊编号 · DOI 选填
             </motion.p>
 
             <motion.div
@@ -878,16 +888,15 @@ function HomePage() {
               className="mx-auto mt-6 grid max-w-4xl grid-cols-2 gap-2.5 sm:mt-12 sm:gap-4 lg:grid-cols-4"
             >
               {[
-                // 四项都必须回答读者/作者真正关心的问题：
-                // 有多少可读、覆盖多广、是否付费、审稿要多久。
-                // 「累计阅读」这种虚荣指标留给后台看，不放在期刊门面。
+                // 四张卡只回答「这里有什么、怎么定位、是否收费、编号怎么给」。
+                // 不再把「平均处理天数」当门面：评审样本不足时，这个数字只会误导。
                 {
-                  label: '已刊论文',
+                  label: '已刊稿件',
                   node: (
                     <span className="inline-flex flex-col items-start">
-                      <CountUpNumber target={paperTotal} />
+                      <CountUpNumber target={totalPublished} />
                       <span className="mt-1 text-[10px] font-normal tracking-normal text-muted-foreground sm:text-xs">
-                        学术 {seriousTotal} · 荒诞 {absurdTotal}
+                        学术 {seriousTotal} · 荒诞 {absurdTotal} · 副刊 {funTotal}
                       </span>
                     </span>
                   ),
@@ -903,15 +912,15 @@ function HomePage() {
                     ),
                 },
                 {
-                  label: '平均处理天数',
-                  node:
-                    // 0 天不是「很快」，是「还没有完成的评审」：旧逻辑把 0 也
-                    // 渲染成「0 天」，门面上等于自曝一份没人审过的刊物。
-                    metrics?.avg_review_days ? (
-                      <CountUpNumber target={Math.round(metrics.avg_review_days)} suffix=" 天" />
-                    ) : (
-                      <span className="text-base text-muted-foreground">数据积累中</span>
-                    ),
+                  label: '赛道',
+                  node: (
+                    <span className="inline-flex flex-col items-start">
+                      <span className="text-2xl sm:text-3xl">学术底刊</span>
+                      <span className="mt-1 text-[10px] font-normal tracking-normal text-muted-foreground sm:text-xs">
+                        自建赛道 · DOI 选填
+                      </span>
+                    </span>
+                  ),
                 },
               ].map((s) => (
                 <motion.div
@@ -1205,9 +1214,9 @@ function HomePage() {
                 Rubbish
               </p>
               <p className="mt-2 text-xs leading-relaxed text-primary-foreground/70">
-                开放获取学术期刊
+                学术底刊
                 <br />
-                An Open Access Journal · ISSN 申请中
+                An Academic Bottom Journal · 底刊编号可选
               </p>
             </div>
             <div className="text-sm">
@@ -1321,9 +1330,9 @@ function HomePage() {
           <div className="border-t border-primary-foreground/15">
             <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs text-primary-foreground/60 sm:px-6">
               <span>
-                © {new Date().getFullYear()} Rubbish · An Open Access Journal
+                © {new Date().getFullYear()} Rubbish · An Academic Bottom Journal
               </span>
-              <span className="text-primary-foreground/50">
+              <span className="text-primary-foreground/70">
                 独立实验项目 · 非正式出版机构 · 不收取任何费用
               </span>
             </div>

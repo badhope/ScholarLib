@@ -87,15 +87,13 @@ BADGES: tuple[BadgeSpec, ...] = (
         "第一份审稿意见",
         "silver",
         "审稿",
-        "完成第一次同行评审。",
+        "完成第一次评审。",
         "reviews_completed",
         1,
     ),
+    BadgeSpec("review.10", "同行之锚", "gold", "审稿", "完成 10 次评审。", "reviews_completed", 10),
     BadgeSpec(
-        "review.10", "同行之锚", "gold", "审稿", "完成 10 次同行评审。", "reviews_completed", 10
-    ),
-    BadgeSpec(
-        "review.30", "守门人", "special", "审稿", "完成 30 次同行评审。", "reviews_completed", 30
+        "review.30", "守门人", "special", "审稿", "完成 30 次评审。", "reviews_completed", 30
     ),
     # --- 编辑 ---
     BadgeSpec(

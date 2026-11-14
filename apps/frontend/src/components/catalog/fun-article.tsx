@@ -236,7 +236,7 @@ export function FunArticle({
         ) : null}
 
         <p className="mt-8 border-t pt-4 text-[11px] leading-5 text-muted-foreground">
-          副刊轨：不计分 · 不进 R 因子 · 不走同行评审 · 不代表编辑部立场。正文里的“研究”“样本”“显著性”请默认在整活。
+          副刊轨：不计分 · 不进站内热度 · 不走评审 · 不代表编辑部立场。正文里的“研究”“样本”“显著性”请默认在整活。
         </p>
 
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>

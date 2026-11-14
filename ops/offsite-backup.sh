@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 异地备份：配置 rclone 远端后启用；未配置时明确 SKIP，不假装已备份。
+# 异地备份：只备份数据库 + 上传文件，不备份代码/镜像/构建产物。
+# 代码随时可从远程仓库取；配置 rclone 远端后启用；未配置时明确 SKIP，不假装已备份。
 set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-/home/ubuntu/backups}"
 LOG="${LOG:-/home/ubuntu/rubbish-offsite.log}"

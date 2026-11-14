@@ -88,8 +88,8 @@ export function FunCatalog({
             </span>
           </div>
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground sm:mt-2 sm:leading-7">
-            小说、随笔、评论、指南，以及大量假装是论文的整活。这里不计分、不进 R 因子、
-            不走同行评审——只负责让你在改稿的间隙笑一下。
+            小说、随笔、评论、指南，以及大量假装是论文的整活。这里不计分、不进站内热度、
+            不走评审——只负责让你在改稿的间隙笑一下。
           </p>
         </div>
       </header>

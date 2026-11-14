@@ -33,10 +33,9 @@ from app.models import Tenant
 router = APIRouter(tags=["seo"])
 
 SITE_NAME = "Rubbish"
-JOURNAL_TITLE = "Rubbish — 开放获取期刊"
+JOURNAL_TITLE = "Rubbish — 学术底刊"
 DEFAULT_DESCRIPTION = (
-    "Rubbish 是一份开放获取学术期刊：在线投稿、同行评审、录用后全文免费开放，"
-    "覆盖论文、图书、数据集与教程。"
+    "Rubbish 是一份学术底刊：在线投稿、编辑评审、录用后全文免费开放，覆盖论文、图书、数据集与教程。"
 )
 
 # 每个公开入口都应有自己的标题与描述；共用默认 title 会让 12 个页面在
@@ -254,7 +253,7 @@ async def llms_txt(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
     lines = [
         "# Rubbish",
         "",
-        "> Rubbish 是一份开放获取学术期刊，收录论文、荒诞论文、副刊与讨论。",
+        "> Rubbish 是一份学术底刊，收录论文、荒诞论文、副刊与讨论。",
         "> 所有已刊文章全文免费开放；审稿与编辑流程公开在 /policies 与 /guide。",
         "",
         "## 核心入口",
@@ -347,7 +346,7 @@ async def rss_feed(request: Request, db: AsyncSession = Depends(get_db)) -> Resp
         '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
         f"<title>{site}</title>"
         f"<link>{html.escape(root)}</link>"
-        f"<description>{site} · 开放获取学术期刊 · 最新发表</description>"
+        f"<description>{site} · 学术底刊 · 最新发表</description>"
         "<language>zh-cn</language>"
         f'<atom:link href="{html.escape(root)}/feed.xml" rel="self" type="application/rss+xml"/>'
         + (f"<lastBuildDate>{format_datetime(latest)}</lastBuildDate>" if latest else "")
@@ -590,9 +589,13 @@ async def build_index_html(
         root=root,
         og_type=og_type,
     )
-    out = index_html.replace(
-        f"<title>{JOURNAL_TITLE}</title>", f"<title>{html.escape(title)}</title>"
-    )
+    # 不依赖 index.html 里的标题恰好等于 JOURNAL_TITLE：容器重建、前端改版
+    # 或旧模板缓存都会让精确替换失效，页面就会退回全站默认标题。
+    out = index_html
+    start = out.find("<title>")
+    end = out.find("</title>", start) if start >= 0 else -1
+    if start >= 0 and end >= 0:
+        out = out[:start] + f"<title>{html.escape(title)}</title>" + out[end + len("</title>") :]
     if "</head>" in out:
         out = out.replace("</head>", f"    {block}\n  </head>", 1)
     return out, status

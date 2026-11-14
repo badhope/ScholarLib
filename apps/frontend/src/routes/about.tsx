@@ -30,7 +30,7 @@ function AboutTabs({ active }: { active: 'about' | 'metrics' }) {
         data-active={active === 'metrics'}
         className="seg-link px-3.5 py-2 text-sm font-medium"
       >
-        期刊指标
+        本刊数据
       </Link>
     </div>
   )
@@ -73,7 +73,7 @@ const BOARD = [
   },
   {
     name: '审稿人池',
-    role: '同行评审',
+    role: '评审',
     affiliation: '匿名 · 逐维证据',
     note: '按五维逐项写理由与正文证据；没有证据的判断不计分，审稿人身份不公开。',
   },
@@ -82,8 +82,8 @@ const BOARD = [
 const TIMELINE = [
   ['2026 年 10 月', '创刊。首卷上线，投稿、匿名评审与在线阅读全流程开放。'],
   ['2026 年 11 月', '五入口与社区版块上线；学术轨与荒诞轨分轨评审，不再共用一把尺子。'],
-  ['2026 年 11 月', 'RQS v5.0 收口：五维、逐维证据、分区硬门槛；90 分只留给顶刊级完成度。'],
-  ['现在', 'ISSN 与 DOI 均不伪造：刊号申请中，官方 DOI 由作者自行决定是否注册。'],
+  ['2026 年 11 月', 'RQS v5.0 收口：五维、逐维证据、分区硬门槛；90 分只留给满分档完成度。'],
+  ['现在', '底刊编号由本站自建；DOI/ISSN 由作者按需选择，不伪造、不强制。'],
 ]
 
 function AboutPage() {
@@ -108,7 +108,7 @@ function AboutPage() {
 
       <PageHeader
         title="关于本刊"
-        description="Rubbish 是一家严肃格式与自由主题兼容的开放获取学术期刊——用严格的格式，收纳一切认真的思考。"
+        description="Rubbish 是一份严肃格式与自由主题兼容的学术底刊——用严格的格式，收纳一切认真的思考。"
       />
       <AboutTabs active="about" />
 
@@ -120,9 +120,14 @@ function AboutPage() {
               「学问的尊严在于格式，不在题材。」
             </p>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Rubbish（国际刊号申请中）创刊于 2026 年，是一份免费投稿、免费阅读、免费评审的
-              纯开放获取期刊。我们收录标准学术研究，也正式收录传统刊物不敢收的脑洞选题——
+              Rubbish 创刊于 2026 年，是一份免费投稿、免费阅读、免费评审的
+              纯开放获取学术底刊。我们收录标准学术研究，也正式收录传统刊物不敢收的脑洞选题——
               只要论证自洽、格式规范，玩梗也是一种严肃。
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              所谓「底刊」，不是低人一等，而是不参加顶刊竞赛：不拿影响因子当门槛，
+              不把「评审」当装饰。每篇稿件有编辑处置记录、有站内编号、有可引用版本；
+              DOI 与 ISSN 由作者和编辑部按需选择，不强制。
             </p>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               不收版面费，不设学历门槛，不问出处。
@@ -174,8 +179,8 @@ function AboutPage() {
           <h2 className="text-xl font-medium">出版信息</h2>
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
             {[
-              { icon: Newspaper, label: '刊名', value: 'Rubbish（开放获取学术期刊）' },
-              { icon: ScrollText, label: '刊号状态', value: 'ISSN 申请中；站内刊号不等同官方 DOI' },
+              { icon: Newspaper, label: '刊名', value: 'Rubbish（学术底刊 · Academic Bottom Journal）' },
+              { icon: ScrollText, label: '编号', value: '每篇自动分配底刊编号；DOI 选填；ISSN 不强制' },
               { icon: Globe, label: '出版形式', value: '纯数字出版 · 滚动刊出 + 不定期合卷' },
               { icon: ScrollText, label: '收录范围', value: '严肃格式与自由主题统一评审 · 学术/副刊/吐槽分类呈现' },
               { icon: Building2, label: '出版方', value: 'Rubbish 编辑部' },

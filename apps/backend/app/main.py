@@ -365,6 +365,12 @@ async def legacy_reader_redirect(resource_id: int) -> RedirectResponse:
     )
 
 
+# HEAD / 给监控与社交抓取一个无 body 的 200；必须在 SPA catch-all 之前注册。
+@app.head("/", include_in_schema=False)
+async def root_head() -> Response:
+    return Response(status_code=200)
+
+
 # --- 单端口部署模式（RUBBISH_STATIC_DIR） ---
 # 设置该环境变量后，FastAPI 直接托管前端构建产物（vite dist/），
 # SPA 深链接（如 /resources/1）回退到 index.html。这让整个应用

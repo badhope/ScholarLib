@@ -154,7 +154,7 @@ export function contentCategoryLabel(category: string | null | undefined): strin
 
 // ---------------------------------------------------------------------------
 // 学术 vs 娱乐：content_category 为 fun/rant，或后端给出 content_track=essay
-// 时，这篇是娱乐稿——全站不渲染任何学术评分元素（R 因子/分区、
+// 时，这篇是娱乐稿——全站不渲染任何学术评分元素（站内热度/分区、
 // RQS、quality_grade）。阅读量/收藏/评论等内容侧数据照常保留。
 // ---------------------------------------------------------------------------
 export function isScholarlyContent(

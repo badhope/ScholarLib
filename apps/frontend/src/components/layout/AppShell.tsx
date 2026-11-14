@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  ChevronDown,
   ChevronLeft,
   ClipboardCheck,
   Coffee,
@@ -128,6 +129,10 @@ export function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [cmdQ, setCmdQ] = useState('')
+  // 侧边栏只默认展开一级入口；工作台/期刊/后台按需展开，点开就收起另一组，
+  // 避免一进后台就被 15 个管理项铺满。
+  const [openGroup, setOpenGroup] = useState<string>('一级入口')
+  const [openSubgroup, setOpenSubgroup] = useState<string>('')
   const { isAuthenticated, isAdmin, user, logout } = useAuth()
   const displayName = user?.display_name || user?.username || ''
   const navigate = useNavigate()
@@ -143,6 +148,16 @@ export function AppShell() {
   })
 
   const activePath = resolveActiveNavPath(location.pathname, visibleNav)
+
+  // 当前页面所在的组自动展开，用户不用先找自己在哪。
+  // 只依赖字符串，不依赖每次 render 都新建的 visibleNav，否则用户手动切组会被重置。
+  const activeItem = visibleNav.find((item) => item.to === activePath)
+  const activeGroup = activeItem?.group
+  const activeSubgroup = activeItem?.subgroup
+  useEffect(() => {
+    if (activeGroup) setOpenGroup(activeGroup)
+    if (activeSubgroup) setOpenSubgroup(activeSubgroup)
+  }, [activePath, activeGroup, activeSubgroup])
 
   // 路由变化时关闭移动端抽屉，避免点击导航后抽屉仍挡住内容
   useEffect(() => {
@@ -199,6 +214,42 @@ export function AppShell() {
       logout()
       void navigate({ to: '/login' })
     }
+  }
+
+  // 按 group 切段，交给下面的手风琴渲染；不再把 30 多个入口平铺成一条长列表。
+  const navGroups = visibleNav.reduce<Array<{ name: string; items: NavItem[] }>>((acc, item) => {
+    const name = item.group ?? ''
+    const last = acc[acc.length - 1]
+    if (last && last.name === name) last.items.push(item)
+    else acc.push({ name, items: [item] })
+    return acc
+  }, [])
+
+  const renderNavLink = (item: NavItem) => {
+    const Icon = item.icon
+    const active = item.to === activePath
+    const showBadge = item.to === '/notifications' && (unread?.unread ?? 0) > 0
+    return (
+      <Link
+        key={item.to}
+        to={item.to}
+        data-active={active ? 'true' : 'false'}
+        className={cn(
+          'nav-item mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+          active
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
+        )}
+      >
+        <Icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span className="flex-1">{navLabel(item.to, item.label, lang)}</span>}
+        {showBadge && !collapsed && (
+          <span className="rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
+            {unread!.unread}
+          </span>
+        )}
+      </Link>
+    )
   }
 
   // 期刊门面模式：首页走独立的全宽 editorial 版式（自带报头/导航/页脚），
@@ -261,53 +312,63 @@ export function AppShell() {
           </button>
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-3">
-          {visibleNav.map((item, idx) => {
-            const Icon = item.icon
-            const active = item.to === activePath
-            const showBadge = item.to === '/notifications' && (unread?.unread ?? 0) > 0
-            // 角色化分组：组变化时插入分组标题（展开态）或分隔线（折叠态），
-            // 让读者/作者/审稿人/编辑一眼看清自己的工作区分块
-            const prev = idx > 0 ? visibleNav[idx - 1] : undefined
-            const showGroup = item.group !== undefined && (!prev || prev.group !== item.group)
-            const showSubgroup =
-              !collapsed &&
-              item.subgroup !== undefined &&
-              item.group !== undefined &&
-              (!prev || prev.group !== item.group || prev.subgroup !== item.subgroup)
+          {navGroups.map((group) => {
+            // 一级入口永远展开；其余组同一时间只开一个，避免整栏都是模块。
+            const isTop = group.name === '一级入口'
+            const isOpen = collapsed || isTop || openGroup === group.name
+            const subgroups =
+              group.name === '站点管理' && !collapsed
+                ? group.items.reduce<Array<{ name: string; items: NavItem[] }>>((acc, item) => {
+                    const name = item.subgroup ?? ''
+                    const last = acc[acc.length - 1]
+                    if (last && last.name === name) last.items.push(item)
+                    else acc.push({ name, items: [item] })
+                    return acc
+                  }, [])
+                : null
             return (
-              <Fragment key={item.to}>
-                {showGroup &&
-                  (collapsed ? (
-                    <div className="my-2 border-t border-sidebar-foreground/15" aria-hidden />
-                  ) : (
-                    <p className="nav-group-label mb-1 mt-3 px-3 text-[10px] font-medium uppercase tracking-widest text-sidebar-foreground/45 first:mt-1">
-                      {groupLabel(item.group ?? '', lang)}
-                    </p>
-                  ))}
-                {showSubgroup && (
-                  <p className="mb-1 mt-2 px-3 text-[10px] font-medium tracking-wide text-sidebar-foreground/35">
-                    {groupLabel(item.subgroup ?? '', lang)}
-                  </p>
+              <Fragment key={group.name}>
+                {!isTop && !collapsed && (
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroup(isOpen ? '' : group.name)}
+                    aria-expanded={isOpen}
+                    className="nav-group-label mb-1 mt-2 flex w-full items-center justify-between rounded-md px-3 py-1.5 text-left text-[10px] font-medium uppercase tracking-widest text-sidebar-foreground/45 transition-colors hover:text-sidebar-foreground/80"
+                  >
+                    <span>{groupLabel(group.name, lang)}</span>
+                    <ChevronDown
+                      className={cn('h-3 w-3 transition-transform', isOpen && 'rotate-180')}
+                    />
+                  </button>
                 )}
-                <Link
-                key={item.to}
-                to={item.to}
-                data-active={active ? 'true' : 'false'}
-                className={cn(
-                  'nav-item mb-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-                  active
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
+                {isOpen &&
+                  (subgroups
+                    ? subgroups.map((sub) => {
+                        const subOpen = openSubgroup === sub.name
+                        return (
+                          <Fragment key={sub.name}>
+                            <button
+                              type="button"
+                              onClick={() => setOpenSubgroup(subOpen ? '' : sub.name)}
+                              aria-expanded={subOpen}
+                              className="mt-1 flex w-full items-center justify-between rounded-md px-3 py-1 text-left text-[10px] font-medium tracking-wide text-sidebar-foreground/35 transition-colors hover:text-sidebar-foreground/70"
+                            >
+                              <span>{groupLabel(sub.name, lang)}</span>
+                              <ChevronDown
+                                className={cn(
+                                  'h-3 w-3 transition-transform',
+                                  subOpen && 'rotate-180',
+                                )}
+                              />
+                            </button>
+                            {subOpen && sub.items.map(renderNavLink)}
+                          </Fragment>
+                        )
+                      })
+                    : group.items.map(renderNavLink))}
+                {!isTop && collapsed && (
+                  <div className="my-2 border-t border-sidebar-foreground/15" aria-hidden />
                 )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {!collapsed && <span className="flex-1">{navLabel(item.to, item.label, lang)}</span>}
-                {showBadge && !collapsed && (
-                  <span className="rounded-full bg-destructive px-2 py-0.5 text-xs text-destructive-foreground">
-                    {unread!.unread}
-                  </span>
-                )}
-              </Link>
               </Fragment>
             )
           })}

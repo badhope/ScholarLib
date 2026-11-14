@@ -400,7 +400,7 @@ function CatalogDetailPage() {
                   <MetaItem label="出版物" value={data.venue} />
                   <MetaItem label="学科" value={data.discipline} />
                   <MetaItem label="子学科" value={data.subdiscipline} />
-                  <MetaItem label="本站刊号" value={data.site_id} />
+                  <MetaItem label="底刊编号" value={data.site_id} />
                   <MetaItem label="DOI" value={data.doi} />
                   <MetaItem
                     label="卷/期/页"
@@ -424,9 +424,9 @@ function CatalogDetailPage() {
                     />
                   )}
                   {data.r_factor != null && (
-                    <MetaItem label="R 因子" value={data.r_factor.toFixed(1)} />
+                    <MetaItem label="站内热度" value={data.r_factor.toFixed(1)} />
                   )}
-                  <MetaItem label="ISSN" value={data.issn} />
+                  <MetaItem label="ISSN（选填）" value={data.issn || '—'} />
                   <MetaItem label="ISBN" value={data.isbn} />
                 </CardContent>
               </FoldCard>
@@ -656,8 +656,8 @@ function CatalogDetailPage() {
             <CardContent className="space-y-1.5 text-xs">
               <MetaItem label="卷期" value={[data.volume, data.issue].filter(Boolean).join(' / ') || '—'} />
               <MetaItem label="页码" value={data.pages || '—'} />
-              <MetaItem label="本站刊号" value={data.site_id || '—'} />
-              <MetaItem label="DOI" value={data.doi || '—'} />
+              <MetaItem label="底刊编号" value={data.site_id || '—'} />
+              <MetaItem label="DOI（选填）" value={data.doi || '—'} />
               <MetaItem label="年份" value={String(data.year)} />
               {isPaperTrack && data.clc_code && (
                 <MetaItem label="中图分类号" value={`${data.clc_code}${data.clc_label ? ` · ${data.clc_label}` : ''}`} />
@@ -669,7 +669,7 @@ function CatalogDetailPage() {
                 />
               )}
               {isPaperTrack && data.r_factor != null && (
-                <MetaItem label="R 因子" value={data.r_factor.toFixed(1)} />
+                <MetaItem label="站内热度" value={data.r_factor.toFixed(1)} />
               )}
               <p className="pt-2 text-[11px] leading-relaxed text-muted-foreground">
                 本文以 CC BY-NC 4.0 许可发布；转载需注明出处并保持非商业用途。

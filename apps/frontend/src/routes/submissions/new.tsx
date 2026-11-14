@@ -664,7 +664,7 @@ function SubmissionWizardPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             分四步完成：题录 → 正文 → 作者与声明 → 预览提交。草稿会自动保存在本机。
-            <HelpTip className="ml-1" text="论文轨进入同行评审并按严格细则计分；副刊轨独立成刊，不走论文评审、不计分，只做编辑格式审读。" />
+            <HelpTip className="ml-1" text="论文轨进入评审并按严格细则计分；副刊轨独立成刊，不走论文评审、不计分，只做编辑格式审读。" />
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -1104,7 +1104,7 @@ function StepBibliography({
               placeholder="例如：10.12345/rubbish.2026.001；没有就留空"
             />
             <p className="text-xs text-muted-foreground">
-              本站会为每篇录用稿生成内部刊号；官方 DOI 由作者决定是否另行注册，不强制。
+              本站会为每篇录用稿生成底刊编号；官方 DOI 由作者决定是否另行注册，不强制。
             </p>
           </div>
         ) : null}

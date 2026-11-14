@@ -351,7 +351,7 @@ export function CatalogListPage({ fixedTrack }: { fixedTrack?: 'paper' | 'essay'
           {fixedTrack === 'paper'
             ? paperKind === 'absurd'
               ? '荒诞论文：论文格式与评审标准不变，命题一本正经地荒诞'
-              : '学术论文：正式评审 · 百分制计分 · 进 R 因子'
+              : '学术论文：编辑评审 · 百分制计分 · 站内热度仅内部参考'
             : fixedTrack === 'essay'
               ? '副刊轨：非论文格式 · 格式与合规检查 · 不计分 · 独立成刊'
               : '论文与副刊分属两条轨道，从左侧导航或底部 Tab 进入对应目录。'}
@@ -1032,7 +1032,7 @@ function DisciplineChips({
         className={chipCls(!search.discipline)}
         onClick={() => updateSearch({ discipline: undefined, page: 1 })}
       >
-        全部
+        {track === 'paper' ? '论文轨' : track === 'essay' ? '副刊' : '全部'}
         <span className="tabular-nums opacity-60">{stats?.total ?? 0}</span>
       </button>
       {visible.map(([name, count]) => (
