@@ -27,7 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.email import get_email_sender, smtp_configured
-from app.core.email_templates import decision_notice, review_assigned, review_reminder
+from app.core.email_templates import (
+    decision_notice,
+    review_assigned,
+    review_reminder_digest,
+)
 from app.core.logging import get_logger
 from app.domain.notifications import services as notifications
 from app.domain.review.models import ReviewAssignment
@@ -123,6 +127,9 @@ async def run_overdue_reminders(db: AsyncSession, *, tenant_id: Any) -> dict[str
     """
     now = datetime.now(UTC)
     stats = {"checked": 0, "reminded": 0, "emailed": 0}
+    # 同一审稿人可能同时持有多个 assignment；逐篇发信会在几秒内连发多封。
+    # 这里按人聚合，循环结束后每人只发一封摘要邮件。
+    digests: dict[int, dict[str, Any]] = {}
 
     rows = list(
         (
@@ -168,21 +175,10 @@ async def run_overdue_reminders(db: AsyncSession, *, tenant_id: Any) -> dict[str
         reminder_count = (assignment.reminder_count or 0) + 1
         assignment.reminder_count = reminder_count
 
-        if smtp_configured():
-            base = settings.frontend_base_url.rstrip("/")
-            subject, text, html = review_reminder(
-                reviewer.username,
-                submission.title,
-                f"{base}/review/assignments",
-                days_pending,
-            )
-            try:
-                await get_email_sender().send(
-                    to=reviewer.email, subject=subject, body=text, html=html
-                )
-                stats["emailed"] += 1
-            except Exception:
-                logger.warning("review_reminder_email_failed", assignment_id=assignment.id)
+        digest = digests.setdefault(
+            reviewer.id, {"reviewer": reviewer, "items": []}
+        )
+        digest["items"].append((submission.title, days_pending))
 
         db.add(
             AuditLog(
@@ -199,6 +195,27 @@ async def run_overdue_reminders(db: AsyncSession, *, tenant_id: Any) -> dict[str
             )
         )
         stats["reminded"] += 1
+
+    if smtp_configured():
+        base = settings.frontend_base_url.rstrip("/")
+        for digest in digests.values():
+            reviewer = digest["reviewer"]
+            subject, text, html = review_reminder_digest(
+                reviewer.username,
+                digest["items"][:10],
+                f"{base}/review/assignments",
+            )
+            try:
+                await get_email_sender().send(
+                    to=reviewer.email, subject=subject, body=text, html=html
+                )
+                stats["emailed"] += 1
+            except Exception:
+                logger.warning(
+                    "review_reminder_email_failed",
+                    reviewer_id=reviewer.id,
+                    count=len(digest["items"]),
+                )
 
     await db.commit()
     return stats

@@ -19,6 +19,7 @@ import { extractError } from '@/lib/utils'
 import { isSafeExternalUrl, safeHref } from '@/lib/url-safety'
 import { PageHeader } from '@/components/common/page-header'
 import { Pagination } from '@/components/common/pagination'
+import { MarkdownContent } from '@/components/common/markdown-content'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
 import {
   ReviewAttachmentLinks,
@@ -646,14 +647,23 @@ function ReviewManuscriptPane({ assignmentId }: { assignmentId: number }) {
         <p className="whitespace-pre-wrap leading-relaxed">{data.abstract || '—'}</p>
       </div>
       <SimilarityNotice score={data.similarity_score} matches={data.similarity_matches} />
-      {data.preview && (
+      {data.manuscript_body ? (
         <div>
-          <div className="text-xs text-muted-foreground">正文预览</div>
+          <div className="mb-1 text-xs text-muted-foreground">
+            正文（双盲稿已自动隐藏作者姓名与邮箱）
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto rounded-md border bg-muted/20 p-3">
+            <MarkdownContent text={data.manuscript_body} className="text-sm leading-relaxed" />
+          </div>
+        </div>
+      ) : data.preview ? (
+        <div>
+          <div className="text-xs text-muted-foreground">正文预览（完整正文请打开下方 PDF/Word）</div>
           <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
             {data.preview}
           </p>
         </div>
-      )}
+      ) : null}
       {(data.keywords?.length ?? 0) > 0 && (
         <div>
           <div className="text-xs text-muted-foreground">关键词</div>
@@ -735,14 +745,25 @@ function SubmissionDetailDialog({
               </p>
             </div>
             <SimilarityNotice score={data.similarity_score} matches={data.similarity_matches} />
-            {data.preview && (
+            {data.manuscript_body ? (
               <div>
-                <div className="text-xs text-muted-foreground">预览</div>
+                <div className="mb-1 text-xs text-muted-foreground">
+            正文（双盲稿已自动隐藏作者姓名与邮箱）
+          </div>
+                <div className="max-h-[55vh] overflow-y-auto rounded-md border bg-muted/20 p-3">
+                  <MarkdownContent text={data.manuscript_body} className="text-sm leading-relaxed" />
+                </div>
+              </div>
+            ) : data.preview ? (
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  正文预览（完整正文请用下方 PDF/Word 打开）
+                </div>
                 <p className="whitespace-pre-wrap text-muted-foreground">
                   {data.preview}
                 </p>
               </div>
-            )}
+            ) : null}
             {(data.keywords?.length ?? 0) > 0 && (
               <div>
                 <div className="text-xs text-muted-foreground">关键词</div>

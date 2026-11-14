@@ -6,6 +6,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Eye,
+  FileText,
   Gavel,
   MailWarning,
   Send,
@@ -24,9 +26,13 @@ import {
   useRemindReviewers,
   useReviewerCandidates,
   useReviewerWorkload,
+  useSubmission,
+  useSubmissionDownloadTicket,
+  useSubmissionMarkdown,
   type ConflictCandidate,
 } from '@/hooks/api/use-modules'
 import { extractError } from '@/lib/utils'
+import { MarkdownContent } from '@/components/common/markdown-content'
 import { PageHeader } from '@/components/common/page-header'
 import { HelpTip } from '@/components/common/help-tip'
 import { EmptyState, ErrorState, LoadingSkeleton } from '@/components/common/state'
@@ -90,6 +96,8 @@ function EditorWorkbenchPage() {
 
   // 待裁决：当前正在裁决的稿件 id
   const [decidingId, setDecidingId] = useState<number | null>(null)
+  // 查看稿件（裁决前必须能读正文，而不是只看标题）
+  const [viewingId, setViewingId] = useState<number | null>(null)
   const [decision, setDecision] = useState<'accept' | 'minor_revision' | 'major_revision' | 'reject'>('major_revision')
   const [editorNote, setEditorNote] = useState('')
 
@@ -442,6 +450,14 @@ function EditorWorkbenchPage() {
                                   {item.type ?? '未分类'} · 提交于{' '}
                                   {new Date(item.submitted_at).toLocaleDateString()}
                                 </p>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="mt-1 h-6 px-1 text-[11px] text-muted-foreground"
+                                  onClick={() => setViewingId(item.submission_id)}
+                                >
+                                  <Eye className="h-3 w-3" /> 查看稿件
+                                </Button>
                               </div>
                             </div>
 
@@ -607,6 +623,12 @@ function EditorWorkbenchPage() {
         </DialogContent>
       </Dialog>
 
+      {/* 查看稿件弹层：主编裁决前先读完整正文 */}
+      <EditorManuscriptDialog
+        submissionId={viewingId}
+        onClose={() => setViewingId(null)}
+      />
+
       {/* 裁决弹层 */}
       <Dialog
         open={decidingId !== null}
@@ -656,5 +678,105 @@ function EditorWorkbenchPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+
+function EditorManuscriptDialog({
+  submissionId,
+  onClose,
+}: {
+  submissionId: number | null
+  onClose: () => void
+}) {
+  const subQ = useSubmission(submissionId ?? 0)
+  const mdQ = useSubmissionMarkdown(
+    submissionId ?? 0,
+    submissionId !== null && !!subQ.data?.markdown_path,
+  )
+  const pdfTicket = useSubmissionDownloadTicket(submissionId ?? 0, 'pdf', submissionId !== null)
+  const docxTicket = useSubmissionDownloadTicket(submissionId ?? 0, 'docx', submissionId !== null)
+  const data = subQ.data
+
+  return (
+    <Dialog open={submissionId !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>查看稿件</DialogTitle>
+          <DialogDescription>
+            裁决前先读正文、摘要与审稿意见；Markdown 稿直接读全文，PDF/Word 稿可在线打开原件。
+          </DialogDescription>
+        </DialogHeader>
+        {subQ.isLoading ? (
+          <LoadingSkeleton rows={4} />
+        ) : subQ.isError ? (
+          <ErrorState message="加载稿件失败" onRetry={() => subQ.refetch()} />
+        ) : !data ? null : (
+          <div className="max-h-[72vh] space-y-4 overflow-y-auto pr-1 text-sm">
+            <div>
+              <h3 className="text-base font-semibold leading-snug">{data.title}</h3>
+              <div className="mt-1 flex flex-wrap gap-1">
+                <Badge variant="secondary">{data.type}</Badge>
+                <Badge variant="outline">{data.discipline}</Badge>
+                {data.subdiscipline && <Badge variant="outline">{data.subdiscipline}</Badge>}
+                <Badge variant="outline">状态：{data.status}</Badge>
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">作者</div>
+              <div>{(data.authors ?? []).join(' · ') || '—'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">摘要</div>
+              <p className="whitespace-pre-wrap leading-relaxed">{data.abstract || '—'}</p>
+            </div>
+            {mdQ.data?.content ? (
+              <div>
+                <div className="mb-1 text-xs text-muted-foreground">正文</div>
+                <div className="rounded-md border bg-muted/20 p-3">
+                  <MarkdownContent text={mdQ.data.content} className="text-sm leading-relaxed" />
+                </div>
+              </div>
+            ) : data.preview ? (
+              <div>
+                <div className="text-xs text-muted-foreground">
+                  正文预览（若为 PDF/Word 稿，请用下方按钮打开全文）
+                </div>
+                <p className="whitespace-pre-wrap leading-relaxed text-muted-foreground">
+                  {data.preview}
+                </p>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-2 border-t pt-3">
+              {pdfTicket.data ? (
+                <a
+                  href={pdfTicket.data}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium hover:bg-muted"
+                >
+                  <FileText className="h-4 w-4" /> 在线打开 PDF
+                </a>
+              ) : null}
+              {docxTicket.data ? (
+                <a
+                  href={docxTicket.data}
+                  download
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm font-medium hover:bg-muted"
+                >
+                  <FileText className="h-4 w-4" /> 下载 Word
+                </a>
+              ) : null}
+              {!mdQ.data?.content && !pdfTicket.data && !docxTicket.data ? (
+                <span className="text-xs text-muted-foreground">该稿件暂无可打开的原件。</span>
+              ) : null}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>关闭</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

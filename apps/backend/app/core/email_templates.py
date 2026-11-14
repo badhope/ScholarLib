@@ -230,6 +230,41 @@ def review_reminder(
     return subject, text, html
 
 
+def review_reminder_digest(
+    reviewer: str, items: list[tuple[str, int]], link: str
+) -> tuple[str, str, str]:
+    """One digest email per reviewer, instead of one email per assignment.
+
+    同一审稿人同时被指派多篇稿件时，逐篇发信会在几秒内塞满收件箱；
+    合并成一封，既保留全部待办，也避免被判成骚扰邮件。
+    """
+    count = len(items)
+    max_days = max((days for _, days in items), default=0)
+    subject = f"{settings.site_name}：审稿提醒（{count} 篇待办，最久 {max_days} 天）"
+    lines = "\n".join(f"- 《{title}》（已等待 {days} 天）" for title, days in items)
+    text = (
+        f"你好，{reviewer}：\n\n"
+        f"你有 {count} 篇稿件等待评审：\n{lines}\n\n"
+        f"请打开以下链接继续：\n{link}\n\n"
+        "如果时间不便，请在页面中选择拒绝，编辑会改派其他审稿人。\n"
+    )
+    lis = "".join(
+        f"<li>《{escape(title)}》已等待 <strong>{days} 天</strong></li>"
+        for title, days in items
+    )
+    html = _shell(
+        f"审稿提醒（{count} 篇待办）",
+        f"<p>你好，{escape(reviewer)}：</p>"
+        f"<p>你有 <strong>{count} 篇</strong>稿件等待评审：</p>"
+        f"<ul>{lis}</ul>"
+        + _button("进入审稿工作台", link)
+        + '<p style="margin-top:16px;font-size:12px;color:'
+        + MUTED
+        + ';">如果时间不便，请在页面中选择拒绝，编辑会改派其他审稿人。</p>',
+    )
+    return subject, text, html
+
+
 def decision_notice(
     author: str, paper_title: str, decision_label: str, note: str | None, link: str
 ) -> tuple[str, str, str]:

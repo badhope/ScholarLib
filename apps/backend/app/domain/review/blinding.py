@@ -15,6 +15,7 @@ Terminology (COPE / ICMJE 通行定义):
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal, cast
 from uuid import UUID
 
@@ -31,6 +32,41 @@ VALID_REVIEW_MODES: frozenset[str] = frozenset({"single_blind", "double_blind"})
 # 双盲下对审稿人隐藏的占位文案。用可读占位而不是 None，让审稿人
 # 明确知道「这里被刻意隐藏了」，而不是误以为作者没填。
 ANONYMIZED_AUTHOR = "[双盲评审：作者信息已隐藏]"
+
+# 正文里的邮箱/作者名在双盲下必须抹掉：Markdown 稿常把 byline 和
+# 通讯邮箱写进正文头部，只裁剪字段（authors/email）挡不住这道侧信道。
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z .\-']*[A-Za-z]")
+
+
+def redact_manuscript_identity(text: str, authors: Any) -> str:
+    """双盲正文脱敏：替换作者姓名与邮箱，保留学术内容。
+
+    这是尽力而为的自动脱敏，不能替代编辑上传正式匿名稿；但至少能挡住
+    模板 byline、通讯邮箱这类最常见的破盲信息。姓名按整词替换，避免
+    把正文里的英文单词误伤。
+    """
+    names: list[str] = []
+    if isinstance(authors, list):
+        for item in authors:
+            if isinstance(item, str) and item.strip():
+                names.append(item.strip())
+            elif isinstance(item, dict):
+                name = str(item.get("name") or item.get("full_name") or "").strip()
+                if name:
+                    names.append(name)
+    for name in sorted(set(names), key=len, reverse=True):
+        if len(name) < 2:
+            continue
+        if _NAME_TOKEN_RE.fullmatch(name):
+            text = re.sub(
+                rf"(?<![A-Za-z]){re.escape(name)}(?![A-Za-z])",
+                ANONYMIZED_AUTHOR,
+                text,
+            )
+        else:
+            text = text.replace(name, ANONYMIZED_AUTHOR)
+    return _EMAIL_RE.sub("[邮箱已隐藏]", text)
 
 # 审稿人视角**允许看到**的字段白名单。
 #
@@ -58,6 +94,8 @@ REVIEWER_VISIBLE_FIELDS: frozenset[str] = frozenset(
         "tags",
         "abstract",
         "preview",
+        # 审稿人读全文：只由 assignment 详情端点填充，按 assignment 鉴权。
+        "manuscript_body",
         "status",
         "submitted_at",
         "resource_id",

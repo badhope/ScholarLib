@@ -567,6 +567,10 @@ export interface SubmissionResponse {
   similarity_score?: number | null
   similarity_matches?: Array<{ kind: 'resource' | 'submission'; id: number; title: string; score: number }>
   file_path?: string | null
+  /** 在线阅读 Markdown 稿件的存储 key（可空 = 仅有上传文件） */
+  markdown_path?: string | null
+  /** 审稿人分配端点下发的完整正文；列表/详情默认不返回 */
+  manuscript_body?: string | null
   /**
    * 双盲评审下编辑提供给审稿人的匿名稿外链。
    * 与作者可控的 download_url / external_url 完全隔离：只能经编辑端点

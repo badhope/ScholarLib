@@ -37,6 +37,10 @@ from app.core.logging import get_logger
 
 logger = get_logger("rubbish.email")
 
+# 只接收、不发送的联系邮箱。它没有 SMTP 授权，不能作为 From/登录身份。
+# 这里硬性拦住，避免以后有人把页脚联系邮箱误填进 SMTP_FROM。
+CONTACT_ONLY_ADDRESSES: frozenset[str] = frozenset({"rubbish_eb@qun.mail.163.com"})
+
 
 @runtime_checkable
 class EmailSender(Protocol):
@@ -100,6 +104,13 @@ class SMTPEmailSender:
         self._retries = retries
 
     def _build_message(self, to: str, subject: str, body: str, html: str | None) -> EmailMessage:
+        if self._from_addr.strip().lower() in CONTACT_ONLY_ADDRESSES:
+            logger.error(
+                "email_from_address_is_receive_only",
+                from_address=self._from_addr,
+                reason="contact mailbox cannot be used as SMTP sender",
+            )
+            raise RuntimeError("Contact mailbox is receive-only and cannot send mail")
         msg = EmailMessage()
         msg["From"] = (
             f"{self._from_name} <{self._from_addr}>" if self._from_name else self._from_addr

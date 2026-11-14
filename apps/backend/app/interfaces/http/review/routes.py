@@ -42,7 +42,11 @@ from app.core.time import utcnow
 from app.domain.catalog.models import Resource
 from app.domain.notifications import services as notifications
 from app.domain.quality.rubric import RUBRIC_VERSION, DimensionScore, dimensions_for, evaluate
-from app.domain.review.blinding import get_review_mode, reviewer_facing_payload
+from app.domain.review.blinding import (
+    get_review_mode,
+    redact_manuscript_identity,
+    reviewer_facing_payload,
+)
 from app.domain.review.models import ReviewAssignment, ReviewReport
 from app.domain.submission.models import Submission
 from app.interfaces.http.review.schemas import (
@@ -308,6 +312,18 @@ async def get_assignment_submission(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Submission not found",
         )
+    mode = await get_review_mode(db, s.tenant_id)
+    manuscript_body: str | None = None
+    if s.markdown_path:
+        try:
+            raw = await get_storage().load(s.markdown_path)
+            manuscript_body = raw.decode("utf-8", errors="replace")
+            if mode == "double_blind":
+                # 正文头部常含 byline / 通讯邮箱，不能只靠字段裁剪。
+                manuscript_body = redact_manuscript_identity(manuscript_body, s.authors)
+        except FileNotFoundError:
+            manuscript_body = None
+
     payload = {
         "id": s.id,
         "title": s.title,
@@ -337,6 +353,9 @@ async def get_assignment_submission(
         "editor_note": s.editor_note,
         "resource_id": s.resource_id,
         "file_path": s.file_path,
+        # 审稿人必须能读到完整正文，而不是只看摘要/截断预览。
+        # 仅对「已分配给该审稿人」的 assignment 下发；由本端点鉴权保证。
+        "manuscript_body": manuscript_body,
         "submitted_by": s.submitted_by,
         "submitted_at": s.submitted_at,
         "reviewed_by": s.reviewed_by,
@@ -344,7 +363,6 @@ async def get_assignment_submission(
     }
     # admin 例外：平台管理员需要能复现问题，且其身份天然不受盲审约束。
     if not current_user.is_admin:
-        mode = await get_review_mode(db, s.tenant_id)
         # 单盲与双盲都走字段裁剪：编辑的内部备注在两种模式下都不属于
         # 审稿人可见信息（单盲只解除"作者是谁"，不解除编辑的私密评语）。
         payload = reviewer_facing_payload(payload, double_blind=(mode == "double_blind"))

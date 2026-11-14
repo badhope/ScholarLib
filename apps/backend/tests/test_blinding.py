@@ -20,7 +20,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.review.blinding import ANONYMIZED_AUTHOR
+from app.domain.review.blinding import ANONYMIZED_AUTHOR, redact_manuscript_identity
 from app.models import Tenant
 
 _PAYLOAD = {
@@ -388,3 +388,12 @@ async def test_single_blind_reviewer_gets_original_file(
     )
     assert resp.status_code == 200
     assert resp.content.startswith(b"%PDF")
+
+
+def test_redact_manuscript_identity_strips_byline_and_email() -> None:
+    """Markdown 正文头部的 byline/邮箱必须一起脱敏，不能只裁字段。"""
+    body = "Author Mcx 1,*\nCorrespondence: mcx@example.org\n\nLiterature review by Mcx."
+    redacted = redact_manuscript_identity(body, ["Mcx"])
+    assert "Mcx" not in redacted
+    assert "mcx@example.org" not in redacted
+    assert "Literature" in redacted
