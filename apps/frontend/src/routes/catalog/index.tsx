@@ -877,6 +877,11 @@ function MobileFilters({
     search.type,
     search.discipline,
     search.year,
+    search.year_from,
+    search.year_to,
+    search.author,
+    search.doi,
+    search.clc,
   ].filter(Boolean).length
 
   return (
@@ -934,6 +939,11 @@ function DesktopFilters({
     search.type,
     search.discipline,
     search.year,
+    search.year_from,
+    search.year_to,
+    search.author,
+    search.doi,
+    search.clc,
   ].filter(Boolean).length
   const [open, setOpen] = useState(() => activeCount > 0)
 

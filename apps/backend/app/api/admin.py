@@ -13,6 +13,7 @@ import os
 import secrets
 import shutil
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -1237,6 +1238,28 @@ async def system_health(
     except Exception:
         db_latency_ms = None
 
+    # 轻量反作弊信号：只做聚合，不记录 IP、不暴露账号明细。
+    # 24h 新用户暴增或 R 币集中发放时健康页转为“需关注”，
+    # 便于人工复核；不是自动封禁。
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    for key, sql in (
+        (
+            "new_users_24h",
+            "SELECT count(*) FROM users WHERE created_at >= :cutoff",
+        ),
+        (
+            "coin_issued_24h",
+            "SELECT coalesce(sum(delta), 0) FROM point_events "
+            "WHERE identity = 'coin' AND delta > 0 AND created_at >= :cutoff",
+        ),
+    ):
+        try:
+            counts[key] = int(
+                (await db.execute(text(sql), {"cutoff": cutoff})).scalar_one()
+            )
+        except Exception:
+            counts[key] = -1
+
     pending_reports = 0
     pending_comments = 0
     try:
@@ -1320,6 +1343,16 @@ async def system_health(
             "detail": "已配置并启用"
             if smtp_ok and settings.email_outbound_enabled
             else ("已配置但未启用" if smtp_ok else "未配置 SMTP，仅站内通知"),
+        },
+        {
+            "key": "anomaly",
+            "label": "异常频率（24h）",
+            "status": "warn"
+            if counts.get("new_users_24h", 0) >= 20
+            or counts.get("coin_issued_24h", 0) >= 5000
+            else "ok",
+            "detail": f"新用户 {counts.get('new_users_24h', -1)} · "
+            f"发放 R 币 {counts.get('coin_issued_24h', -1)}",
         },
     ]
     overall = "fail" if any(c["status"] == "fail" for c in checks) else (

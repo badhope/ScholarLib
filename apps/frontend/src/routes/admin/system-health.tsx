@@ -162,6 +162,14 @@ export function SystemHealthPage() {
                 <p className="font-medium tabular-nums">{data.counts.submissions ?? '—'}</p>
               </div>
               <div>
+                <p className="text-xs text-muted-foreground">24h 新用户</p>
+                <p className="font-medium tabular-nums">{data.counts.new_users_24h ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">24h 发放 R 币</p>
+                <p className="font-medium tabular-nums">{data.counts.coin_issued_24h ?? '—'}</p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground">库迁移版本</p>
                 <p className="font-medium">{data.db_revision ?? '—'}</p>
               </div>
