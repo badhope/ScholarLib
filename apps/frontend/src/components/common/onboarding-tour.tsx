@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { ArrowRight, X } from 'lucide-react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { ArrowRight, Compass, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 
@@ -13,13 +13,20 @@ export function OnboardingTour() {
   const isReviewer = (user?.roles ?? []).includes('reviewer')
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
+  const [expanded, setExpanded] = useState(false)
+  const location = useLocation()
 
   useEffect(() => {
     try { setOpen(localStorage.getItem(KEY) !== 'done') } catch { /* 隐私模式下忽略 */ }
   }, [])
 
   const close = () => { try { localStorage.setItem(KEY, 'done') } catch { /* ignore */ } setOpen(false) }
-  if (!open) return null
+
+  // 不在设置、后台、审稿、投稿这些“正在办事”的页面弹浮层：
+  // 用户此刻要看表单和按钮，引导卡不能压住正文。
+  const busy = ['/settings', '/admin', '/review', '/editor', '/submissions', '/ingest', '/account']
+    .some((prefix) => location.pathname === prefix || location.pathname.startsWith(prefix + '/'))
+  if (!open || busy) return null
 
   const steps = [
     { title: '先看五个入口', body: '顶部固定 首页 / 论文 / 副刊 / 讨论 / 我的；“栏目”已降级为论文筛选与专题索引，不再单独占一级入口。', to: '/papers', label: '去论文' },
@@ -30,8 +37,25 @@ export function OnboardingTour() {
   ]
   const current = steps[Math.min(step, steps.length - 1)]
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="fixed bottom-[calc(5.2rem+env(safe-area-inset-bottom))] right-4 z-[70] inline-flex items-center gap-1.5 rounded-full border bg-background/95 px-3 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted"
+        aria-label="打开新手指引"
+      >
+        <Compass className="h-3.5 w-3.5" />
+        新手指引
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+          {step + 1}/{steps.length}
+        </span>
+      </button>
+    )
+  }
+
   return (
-    <div className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[80] rounded-xl border bg-background p-4 shadow-xl sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-96">
+    <div className="fixed inset-x-3 bottom-[calc(5.2rem+env(safe-area-inset-bottom))] z-[80] rounded-xl border bg-background p-4 shadow-xl sm:inset-x-auto sm:right-6 sm:bottom-20 sm:w-80">
       <button className="absolute right-3 top-3 text-muted-foreground" onClick={close} aria-label="关闭引导"><X className="h-4 w-4" /></button>
       <p className="text-xs text-muted-foreground">首次使用 · {step + 1}/{steps.length}</p>
       <h3 className="mt-1 text-base font-semibold">{current.title}</h3>

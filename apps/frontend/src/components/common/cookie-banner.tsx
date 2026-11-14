@@ -66,6 +66,22 @@ export function CookieBanner() {
     }
   }, [])
 
+  // 固定条不能永久压住正文：显示期间给页面底部留出等高空白，
+  // 最后一条内容仍能滚到条上方。桌面压成一行，减少视线遮挡。
+  useEffect(() => {
+    if (consent !== null || blocked) return
+    const previous = document.body.style.paddingBottom
+    const apply = () => {
+      document.body.style.paddingBottom = window.matchMedia('(min-width: 640px)').matches ? '56px' : '104px'
+    }
+    apply()
+    window.addEventListener('resize', apply)
+    return () => {
+      document.body.style.paddingBottom = previous
+      window.removeEventListener('resize', apply)
+    }
+  }, [consent, blocked])
+
   if (consent !== null || blocked) return null
 
   const accept = () => {
@@ -88,13 +104,17 @@ export function CookieBanner() {
       aria-live="polite"
       aria-label="Cookie 使用同意"
       data-testid="cookie-banner"
-      className="fixed left-3 right-16 bottom-20 z-[80] max-h-[24vh] overflow-y-auto rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:left-0 sm:right-0 sm:bottom-0 sm:max-h-none sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-6 sm:py-2 sm:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
+      className="fixed left-3 right-3 bottom-[calc(4.65rem+env(safe-area-inset-bottom))] z-[80] overflow-hidden rounded-lg border bg-background/95 px-3 py-2 shadow-sm backdrop-blur sm:left-0 sm:right-0 sm:bottom-0 sm:rounded-none sm:border-x-0 sm:border-b-0 sm:px-6 sm:py-0 sm:shadow-[0_-4px_16px_rgba(0,0,0,0.08)]"
     >
-      <div className="flex flex-wrap items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <div className="flex flex-nowrap items-center gap-2 sm:h-14 sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/90">
-          <p className="text-[13px] font-medium leading-tight">本站使用 Cookie</p>
-          <p className="mt-1 hidden text-foreground/70 sm:block">
-            必要 Cookie 用于保持登录与防跨站伪造；本站无广告、无第三方追踪。
+          <p className="text-[12px] font-medium leading-tight sm:hidden">Cookie 仅必要</p>
+          <p className="mt-0.5 whitespace-nowrap text-[11px] leading-snug text-foreground/70 sm:hidden">
+            保持登录与防伪造；无广告追踪。
+          </p>
+          <p className="hidden text-xs text-foreground/70 sm:block sm:truncate">
+            <span className="font-medium text-foreground">必要 Cookie：</span>
+            用于保持登录与防跨站伪造；本站无广告、无第三方追踪。
             <a href="/privacy" className="ml-1 underline hover:text-foreground">
               隐私政策
             </a>
@@ -105,7 +125,7 @@ export function CookieBanner() {
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 px-2.5 text-xs sm:h-9 sm:flex-1"
+            className="h-7 shrink-0 px-2 text-[11px] sm:h-9 sm:flex-1 sm:text-xs"
             onClick={essentialOnly}
             data-testid="cookie-banner-essential"
           >
@@ -114,7 +134,7 @@ export function CookieBanner() {
           <Button
             type="button"
             size="sm"
-            className="h-8 px-3 text-xs sm:h-9 sm:flex-1"
+            className="h-7 shrink-0 px-2.5 text-[11px] sm:h-9 sm:flex-1 sm:text-xs"
             onClick={accept}
             data-testid="cookie-banner-accept"
           >
