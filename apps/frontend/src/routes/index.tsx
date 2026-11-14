@@ -1098,7 +1098,7 @@ function HomePage() {
             <div>
               {/* 横向滚动的封面卡条（v1.11）：首页最新发表从干列表升级为
                   可扫读的封面流，一屏多卡；列表形态保留在目录页。 */}
-              <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+              <div className="flex snap-x gap-4 overflow-x-auto pb-3">
                 {resources.map((r, i) => (
                   <Link
                     key={r.id}
