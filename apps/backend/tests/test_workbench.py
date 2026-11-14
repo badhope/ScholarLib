@@ -17,8 +17,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.notifications.models import EmailDigestRecord
 from app.models import Role, Tenant, UserRole
-from app.modules.notifications.models import EmailDigestRecord
 
 _PAYLOAD = {
     "title": "Workbench Split Test",

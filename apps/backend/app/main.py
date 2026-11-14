@@ -101,8 +101,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     if not settings.is_test:
         # 后台维护任务（审稿催办）：单节点进程内调度，随应用生命周期启停。
-        from app.core.scheduler import start_scheduler
-        from app.modules.release.scheduler import start_release_scheduler
+        from app.application.scheduler import start_scheduler
+        from app.domain.release.scheduler import start_release_scheduler
 
         start_scheduler()
         start_release_scheduler()
@@ -110,8 +110,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     if not settings.is_test:
-        from app.core.scheduler import stop_scheduler
-        from app.modules.release.scheduler import stop_release_scheduler
+        from app.application.scheduler import stop_scheduler
+        from app.domain.release.scheduler import stop_release_scheduler
 
         await stop_release_scheduler()
         await stop_scheduler()
@@ -340,14 +340,14 @@ for name, module_router in registry.all_routers():
 
 # --- 审稿人/主编工作台（独立路由，与 review 模块主路由分开挂载，
 #     路径前缀 /review/workbench 与 /editor/workbench） ---
-from app.modules.review.workbench import router as workbench_router  # noqa: E402
+from app.interfaces.http.review.workbench import router as workbench_router  # noqa: E402
 
 app.include_router(workbench_router, prefix="/api")
 logger.info("module_router_mounted", module="workbench", prefix="/api")
 
 # --- 评论审核后台（/api/admin/comments）：comments 模块的 admin 子路由，
 #     不经过模块 registry（registry 每模块只挂一个 router），这里显式挂载。
-from app.modules.comments.admin_routes import router as comments_admin_router  # noqa: E402
+from app.interfaces.http.comments.admin_routes import router as comments_admin_router  # noqa: E402
 
 app.include_router(comments_admin_router, prefix="/api")
 logger.info("module_router_mounted", module="comments_admin", prefix="/api/admin/comments")

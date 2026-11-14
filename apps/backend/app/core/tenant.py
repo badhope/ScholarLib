@@ -22,6 +22,7 @@ import time
 import uuid
 from contextvars import ContextVar
 
+from fastapi import HTTPException, status
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.core.config import settings
@@ -241,3 +242,19 @@ class TenantContextMiddleware:
             await session.refresh(tenant)
             logger.info("bootstrap_tenant_created", slug=slug, tenant_id=str(tenant.id))
             return tenant.id
+
+
+def get_current_tenant_id() -> uuid.UUID | None:
+    """Return the current request's tenant id from the ContextVar."""
+    return TENANT_CONTEXT_VAR.get()
+
+
+def require_tenant_id() -> uuid.UUID:
+    """Resolve tenant id or raise 400; write paths need an explicit scope."""
+    tenant_id = get_current_tenant_id()
+    if tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant context not resolved",
+        )
+    return tenant_id

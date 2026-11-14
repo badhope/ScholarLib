@@ -46,9 +46,9 @@ if not DB_URL.startswith("postgresql"):
 # Import models so Base.metadata includes catalog tables.
 # These imports are intentional side-effects (model registration);
 # the symbols themselves are unused, hence noqa: F401.
+from app.domain.catalog.models import Resource  # noqa: E402, F401
+from app.domain.library.models import ReadingListItem  # noqa: E402, F401
 from app.models import Base  # noqa: E402
-from app.modules.catalog.models import Resource  # noqa: E402, F401
-from app.modules.library.models import ReadingListItem  # noqa: E402, F401
 
 
 @pytest.fixture(scope="module")

@@ -7,8 +7,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.catalog.models import AuthorClaim, Resource
 from app.models import Tenant
-from app.modules.catalog.models import AuthorClaim, Resource
 
 
 async def _default_tenant(db: AsyncSession) -> Tenant:

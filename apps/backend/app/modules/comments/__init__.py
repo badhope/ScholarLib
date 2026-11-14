@@ -15,8 +15,8 @@ from app.core.modules import ModuleManifest, registry
 
 # Importing this package registers Comment with the shared core
 # Base.metadata so Alembic and tests see it.
-from app.modules.comments import models  # noqa: F401
-from app.modules.comments.routes import router
+from app.domain.comments import models  # noqa: F401
+from app.interfaces.http.comments.routes import router
 
 registry.register(
     ModuleManifest(

@@ -24,9 +24,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.modules.catalog.models import Resource
-from app.modules.doi import registration
-from app.modules.doi.models import DOIRegistration
+from app.domain.catalog.models import Resource
+from app.domain.doi import registration
+from app.domain.doi.models import DOIRegistration
 
 _SAMPLE = {
     "type": "paper",

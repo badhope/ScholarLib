@@ -22,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import search as fulltext
 from app.core.config import settings
+from app.domain.catalog.models import Resource
 from app.models import Tenant
-from app.modules.catalog.models import Resource
 
 
 @pytest.fixture(autouse=True)

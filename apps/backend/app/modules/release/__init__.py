@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.release import models  # noqa: F401
-from app.modules.release.routes import router
+from app.domain.release import models  # noqa: F401
+from app.interfaces.http.release.routes import router
 
 registry.register(
     ModuleManifest(

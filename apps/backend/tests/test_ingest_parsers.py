@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.modules.ingest.parsers import (
+from app.domain.ingest.parsers import (
     _format_validation_error,
     _parse_year,
     _split_authors,

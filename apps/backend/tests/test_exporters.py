@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.modules.export.exporters import (
+from app.domain.export.exporters import (
     export_resources,
     to_bibtex,
     to_csv,

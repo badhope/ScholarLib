@@ -7,7 +7,7 @@ from conftest import auth_headers
 from httpx import AsyncClient
 from sqlalchemy import update
 
-from app.modules.catalog.models import Resource
+from app.domain.catalog.models import Resource
 from tests.test_catalog import _SAMPLE
 from tests.test_submission import _PAYLOAD
 

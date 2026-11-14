@@ -33,8 +33,8 @@ from app.core.key_rotation import _active_secret_keys, _signing_key, reload_sett
 from app.core.logging import get_logger
 from app.core.security import hash_password
 from app.core.site_settings import get_all_site_flags, set_site_flag
+from app.domain.review.blinding import get_review_mode, set_review_mode
 from app.models import AuditLog, Role, User, UserRole
-from app.modules.review.blinding import get_review_mode, set_review_mode
 from app.schemas import (
     AdminUserCreate,
     AdminUserCreateResponse,
@@ -731,7 +731,7 @@ async def trigger_review_reminders(
     定时任务每 6 小时自动跑一次；此端点让管理员在需要时立即执行，
     返回本轮检查/催办/发信的计数。催办本身幂等（3 天窗口内不重置）。
     """
-    from app.modules.submission.review_reminders import run_overdue_reminders
+    from app.domain.submission.review_reminders import run_overdue_reminders
 
     tenant_id = require_tenant_id()
     stats = await run_overdue_reminders(db, tenant_id=tenant_id)
@@ -827,7 +827,7 @@ async def list_claims(
     _admin: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
     """认领申请列表（编辑部审批台）。"""
-    from app.modules.catalog.models import AuthorClaim, Resource
+    from app.domain.catalog.models import AuthorClaim, Resource
 
     tenant_id = require_tenant_id()
     stmt = (
@@ -875,9 +875,9 @@ async def decide_claim(
     同时给认领人发通知。全程写审计日志。
     """
     from app.core.time import utcnow
-    from app.modules.catalog.models import AuthorClaim, Resource
-    from app.modules.notifications import services as notifications
-    from app.modules.submission.models import Submission
+    from app.domain.catalog.models import AuthorClaim, Resource
+    from app.domain.notifications import services as notifications
+    from app.domain.submission.models import Submission
 
     if body.action not in ("approve", "reject"):
         raise HTTPException(
@@ -951,7 +951,7 @@ async def decide_claim(
         notify_title = f"认领已批准：{resource.title}"
         notify_body = "编辑部已批准你对该文章的认领，文章已挂到你的名下。"
         # 等级轴：认领审核通过，author 身份 +20（幂等，同一 claim 只记一次）。
-        from app.modules.gamification import levels_axis
+        from app.domain.gamification import levels_axis
 
         claim_user = (
             await db.execute(select(User).where(User.id == claim.user_id))
@@ -1022,7 +1022,7 @@ async def assign_owner(
     - 标记对应 author_position 为已认领，拷入该用户账号邮箱；
     - 每次写审计日志。
     """
-    from app.modules.catalog.models import Resource
+    from app.domain.catalog.models import Resource
 
     tenant_id = require_tenant_id()
     resource = (
@@ -1104,7 +1104,7 @@ async def edit_resource_authors(
     current_admin: User = Depends(require_admin),
 ) -> dict[str, Any]:
     """管理端编辑文章作者位（发布前）：保存 names + structured authors_meta。"""
-    from app.modules.catalog.models import Resource
+    from app.domain.catalog.models import Resource
 
     tenant_id = require_tenant_id()
     resource = (
@@ -1157,7 +1157,7 @@ async def edit_submission_authors(
     current_admin: User = Depends(require_admin),
 ) -> dict[str, Any]:
     """管理端编辑投稿作者位（发布前）：保存到 submission.authors。"""
-    from app.modules.submission.models import Submission
+    from app.domain.submission.models import Submission
 
     tenant_id = require_tenant_id()
     sub = (

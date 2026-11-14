@@ -152,7 +152,7 @@ async def get_notification_preferences(
     current_user: User = Depends(get_current_user),
 ) -> dict[str, bool]:
     """当前用户的通知偏好（缺省值与用户显式设置合并后返回）。"""
-    from app.modules.notifications.services import merged_prefs
+    from app.domain.notifications.services import merged_prefs
 
     return merged_prefs(current_user)
 
@@ -164,7 +164,7 @@ async def update_notification_preferences(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, bool]:
     """只写入用户显式提交的键；其余保持默认或原值。"""
-    from app.modules.notifications.services import merged_prefs
+    from app.domain.notifications.services import merged_prefs
 
     current = merged_prefs(current_user)
     for key in payload.model_fields_set:
@@ -247,12 +247,12 @@ async def get_public_profile(
     访客版本不返回账号 email、密码、内部 id 列表等敏感字段。
     """
     from app.core.time import utcnow
-    from app.modules.catalog.models import Resource
-    from app.modules.follows.models import AuthorFollow
-    from app.modules.forum.models import ForumReply, ForumTopic
-    from app.modules.gamification.badges import BADGE_BY_KEY
-    from app.modules.gamification.models import UserAchievement
-    from app.modules.submission.models import Submission
+    from app.domain.catalog.models import Resource
+    from app.domain.follows.models import AuthorFollow
+    from app.domain.forum.models import ForumReply, ForumTopic
+    from app.domain.gamification.badges import BADGE_BY_KEY
+    from app.domain.gamification.models import UserAchievement
+    from app.domain.submission.models import Submission
 
     tenant_id = require_tenant_id()
     user = (

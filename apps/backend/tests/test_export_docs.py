@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.modules.submission.clc import clc_status_of, parse_clc
-from app.modules.submission.export_docs import (
+from app.domain.submission.clc import clc_status_of, parse_clc
+from app.domain.submission.export_docs import (
     _story_html,
     _style_captions,
     md_to_html,

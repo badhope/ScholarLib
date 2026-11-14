@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.api import deps
 from app.core.tracks import canonicalize_track_category
-from app.modules.catalog import cover_defaults
+from app.domain.catalog import cover_defaults
 
 
 def test_discipline_cover_mapping():
@@ -50,7 +50,7 @@ def test_role_assign_schema_accepts_editorial_chain():
 
 def test_recommendation_is_category_scoped():
     """铁律三：读者有类别偏好时，推荐只在该类别内比对。"""
-    from app.modules.recommendations.engine import UserProfile, _Candidate
+    from app.domain.recommendations.engine import UserProfile, _Candidate
 
     profile = UserProfile()
     profile.categories["academic"] += 3

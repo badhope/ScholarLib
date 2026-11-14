@@ -25,10 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.db import get_db
+from app.domain.catalog.models import Resource
+from app.domain.catalog.sections import SECTION_LABELS, SECTIONS
+from app.domain.catalog.visibility import public_conditions
 from app.models import Tenant
-from app.modules.catalog.models import Resource
-from app.modules.catalog.sections import SECTION_LABELS, SECTIONS
-from app.modules.catalog.visibility import public_conditions
 
 router = APIRouter(tags=["seo"])
 

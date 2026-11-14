@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from app.modules.submission.markdown_clean import clean
-from app.modules.submission.markdown_clean import reflow_paragraphs as _reflow
+from app.domain.submission.markdown_clean import clean
+from app.domain.submission.markdown_clean import reflow_paragraphs as _reflow
 
 SAMPLE = """Rubbish - 于荒诞处见同路人
 

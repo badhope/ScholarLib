@@ -1,6 +1,6 @@
 """身份门禁（identity enforcement）。
 
-身份体系定义在 ``app.modules.gamification.ladder``；本模块把它变成
+身份体系定义在 ``app.domain.gamification.ladder``；本模块把它变成
 FastAPI 依赖，让规则只有一处。
 
 与旧版本的关键差别：**不再有积分门槛**。
@@ -31,15 +31,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.db import get_db
+from app.domain.gamification.levels_axis import CURRENT_RULES_VERSION
 from app.models import User
 
 # 投稿规范版本：与 docs/editorial-standards.md 的「版本 1.1」一致。
 # 规范改版时同步 +1，所有作者需重新确认。
-CURRENT_RULES_VERSION = "1.1"
 
 
 async def _role_names(db: AsyncSession, user: User) -> list[str]:
-    from app.modules.gamification import service as gamification
+    from app.domain.gamification import service as gamification
 
     return await gamification._user_role_names(db, user)
 
@@ -50,7 +50,7 @@ async def level_of(db: AsyncSession, user: User) -> int:
     保留这个函数名与返回类型，是为了让外部调用方（admin 用户列表、
     认证响应）不用改动；语义已从"九级 XP 等级"变成"四层身份序号"。
     """
-    from app.modules.gamification.ladder import (
+    from app.domain.gamification.ladder import (
         IDENTITY_RANK,
         identity_for_roles,
         is_author_eligible,

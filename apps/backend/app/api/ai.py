@@ -27,11 +27,12 @@ from app.api.levels import CURRENT_RULES_VERSION
 from app.core.db import get_db
 from app.core.moderation import rejection_detail
 from app.core.time import utcnow
+from app.domain.submission._helpers import _snapshot_submission
+from app.domain.submission.models import Submission
+from app.domain.submission.similarity import check_against_site
+from app.interfaces.http.submission.responses import _to_response
+from app.interfaces.http.submission.schemas import SubmissionCreate, SubmissionResponse
 from app.models import ApiToken, AuditLog, User
-from app.modules.submission._helpers import _snapshot_submission, _to_response
-from app.modules.submission.models import Submission
-from app.modules.submission.schemas import SubmissionCreate, SubmissionResponse
-from app.modules.submission.similarity import check_against_site
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -387,7 +388,7 @@ async def ai_create_submission(
     db.add(submission)
     await db.flush()
     await _snapshot_submission(db, submission, created_by=user.id)
-    from app.modules.gamification import service as gamification
+    from app.domain.gamification import service as gamification
 
     await gamification.award(
         db, user, "submission.create", ref_type="submission", ref_id=str(submission.id)

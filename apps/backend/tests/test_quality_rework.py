@@ -120,7 +120,7 @@ async def test_override_requires_admin_and_reason(
 @pytest.mark.asyncio
 async def test_suggest_endpoint_public_and_deterministic(client: AsyncClient) -> None:
     """建议分端点无需登录（作者自查），且同输入同输出。"""
-    from app.modules.quality.review_form import CHECK_ITEMS
+    from app.domain.quality.review_form import CHECK_ITEMS
 
     answers = {item.key: "yes" for item in CHECK_ITEMS}
     a = await client.post("/api/quality/suggest", json={"answers": answers})
@@ -204,8 +204,8 @@ async def test_rework_notifies_reviewer_and_author(
     # 打回必须通知到「实际审过这篇稿子的人」，而不是通知编辑自己。
     from sqlalchemy import select
 
+    from app.domain.review.models import ReviewAssignment
     from app.models import User as UserModel
-    from app.modules.review.models import ReviewAssignment
 
     reviewer_id = (
         (

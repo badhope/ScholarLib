@@ -28,8 +28,8 @@ from app.core.modules import ModuleManifest, registry
 
 # Importing this package registers AuthorFollow + DisciplineSubscription
 # with the shared core Base.metadata so Alembic and tests see them.
-from app.modules.follows import models  # noqa: F401
-from app.modules.follows.routes import router
+from app.domain.follows import models  # noqa: F401
+from app.interfaces.http.follows.routes import router
 
 registry.register(
     ModuleManifest(

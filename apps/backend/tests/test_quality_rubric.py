@@ -15,7 +15,7 @@ import itertools
 
 import pytest
 
-from app.modules.quality.review_form import (
+from app.domain.quality.review_form import (
     ABSURD_CHECK_ITEMS,
     ACADEMIC_CHECK_ITEMS,
     CHECK_ITEMS,
@@ -25,7 +25,7 @@ from app.modules.quality.review_form import (
     score_answers,
     suggest_dimension_score,
 )
-from app.modules.quality.rubric import (
+from app.domain.quality.rubric import (
     GRADE_BANDS,
     WEIGHTS,
     DimensionScore,

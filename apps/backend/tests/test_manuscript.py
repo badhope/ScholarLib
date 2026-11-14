@@ -9,7 +9,7 @@ import pymupdf
 import pytest
 from httpx import AsyncClient
 
-from app.modules.submission.manuscript import convert_to_markdown, markdown_storage_key
+from app.domain.submission.manuscript import convert_to_markdown, markdown_storage_key
 from tests.test_catalog import _SAMPLE
 
 
@@ -155,7 +155,7 @@ def test_pdf_image_embedding_does_not_replace_unrelated_urls(
         return f"![local]({image_path.as_posix()})\n![remote](https://example.org/image.png)"
 
     monkeypatch.setattr(pymupdf4llm, "to_markdown", fake_convert)
-    from app.modules.submission.manuscript import _pdf_to_markdown
+    from app.domain.submission.manuscript import _pdf_to_markdown
 
     md = _pdf_to_markdown(_make_pdf())
     assert md is not None
@@ -167,7 +167,7 @@ def test_pdf_embedded_jpeg_preserves_original_bytes() -> None:
     import base64
     import re
 
-    from app.modules.submission.manuscript import _pdf_to_markdown
+    from app.domain.submission.manuscript import _pdf_to_markdown
 
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(150)
@@ -189,7 +189,7 @@ def test_pdf_embedded_jpeg_preserves_original_bytes() -> None:
     "pdf_colorspace", ["/DeviceGray", "/DeviceCMYK", "[/CalRGB << /WhitePoint [1 1 1] >>]"]
 )
 def test_pdf_original_image_rejects_mismatched_colorspace(pdf_colorspace: str) -> None:
-    from app.modules.submission.manuscript import _original_simple_pdf_image
+    from app.domain.submission.manuscript import _original_simple_pdf_image
 
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(150)
@@ -226,7 +226,7 @@ def test_pdf_original_image_requires_simple_page(
 
     import pymupdf4llm
 
-    from app.modules.submission.manuscript import _pdf_to_markdown
+    from app.domain.submission.manuscript import _pdf_to_markdown
 
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(150)
@@ -295,7 +295,7 @@ def test_pdf_original_image_inspection_exception_falls_back(
 
     import pymupdf4llm
 
-    from app.modules.submission.manuscript import _pdf_to_markdown
+    from app.domain.submission.manuscript import _pdf_to_markdown
 
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(150)
@@ -323,7 +323,7 @@ def test_pdf_image_with_overlay_keeps_rendered_content() -> None:
     import base64
     import re
 
-    from app.modules.submission.manuscript import _pdf_to_markdown
+    from app.domain.submission.manuscript import _pdf_to_markdown
 
     pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 120, 80), False)
     pix.clear_with(150)
@@ -527,8 +527,8 @@ async def _seed_published_md(
     from sqlalchemy import select as sa_select
 
     from app.core.storage import get_storage
+    from app.domain.submission.models import Submission
     from app.models import Tenant
-    from app.modules.submission.models import Submission
     from tests.test_catalog import _SAMPLE
 
     payload = {**_SAMPLE, "title": "Embedded Image Split", "publication_status": status}

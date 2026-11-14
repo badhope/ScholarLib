@@ -12,7 +12,7 @@ import zipfile
 from docx import Document
 from docx.oxml.ns import qn
 
-from app.modules.submission.docx_template import BODY_FONT, Meta, build
+from app.domain.submission.docx_template import BODY_FONT, Meta, build
 
 SAMPLE = """## 摘要
 本文研究绿色排版。
@@ -127,7 +127,7 @@ def test_fonts_are_domestic_system_fonts() -> None:
 
 
 def test_essayize_removes_paper_labels_and_multilevel_numbering() -> None:
-    from app.modules.submission.docx_template import _essayize
+    from app.domain.submission.docx_template import _essayize
 
     source = """## 摘要
 这是导读正文。

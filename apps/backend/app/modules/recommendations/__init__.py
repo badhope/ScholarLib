@@ -9,7 +9,7 @@ no tables; recommendations are computed on demand from existing catalog
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.recommendations.routes import router
+from app.interfaces.http.recommendations.routes import router
 
 registry.register(
     ModuleManifest(

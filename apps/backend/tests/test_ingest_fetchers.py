@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 import pytest
 
-from app.modules.ingest import fetchers
+from app.domain.ingest import fetchers
 
 
 class FakeResponse:

@@ -12,7 +12,7 @@ Owns no database tables (stateless transformers + HTTP fetchers).
 from __future__ import annotations
 
 from app.core.modules import ModuleManifest, registry
-from app.modules.ingest.routes import router
+from app.interfaces.http.ingest.routes import router
 
 registry.register(
     ModuleManifest(

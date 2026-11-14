@@ -22,8 +22,8 @@ import pytest
 from conftest import auth_headers
 from httpx import AsyncClient
 
-from app.modules.ingest.fetchers import ResourceNotFoundError, UpstreamError
-from app.modules.ingest.schemas import IngestResource
+from app.domain.ingest.fetchers import ResourceNotFoundError, UpstreamError
+from app.interfaces.http.ingest.schemas import IngestResource
 
 _BIBTEX_OK = """\
 @article{Cesar2013,
@@ -99,7 +99,7 @@ def _stub_httpx_response(monkeypatch: pytest.MonkeyPatch, response: Any) -> None
             return response
 
     monkeypatch.setattr(
-        "app.modules.ingest.fetchers.httpx.AsyncClient",
+        "app.domain.ingest.fetchers.httpx.AsyncClient",
         _StubAsyncClient,
     )
 
@@ -121,7 +121,7 @@ def _stub_httpx_exception(monkeypatch: pytest.MonkeyPatch, exc: BaseException) -
             raise exc
 
     monkeypatch.setattr(
-        "app.modules.ingest.fetchers.httpx.AsyncClient",
+        "app.domain.ingest.fetchers.httpx.AsyncClient",
         _StubAsyncClient,
     )
 
@@ -477,7 +477,7 @@ async def test_fetcher_exceptions_map_to_status_codes(
     async def raise_not_found(_doi: str) -> IngestResource:
         raise ResourceNotFoundError("not found")
 
-    monkeypatch.setattr("app.modules.ingest.routes.fetch_crossref", raise_not_found)
+    monkeypatch.setattr("app.interfaces.http.ingest.routes.fetch_crossref", raise_not_found)
     response = await client.post(
         "/api/ingest/fetch",
         json={"source": "crossref", "id": "10.9999/x"},
@@ -488,7 +488,7 @@ async def test_fetcher_exceptions_map_to_status_codes(
     async def raise_upstream(_arxiv_id: str) -> IngestResource:
         raise UpstreamError("upstream down")
 
-    monkeypatch.setattr("app.modules.ingest.routes.fetch_arxiv", raise_upstream)
+    monkeypatch.setattr("app.interfaces.http.ingest.routes.fetch_arxiv", raise_upstream)
     response = await client.post(
         "/api/ingest/fetch",
         json={"source": "arxiv", "id": "2401.01234"},

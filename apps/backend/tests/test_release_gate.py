@@ -8,8 +8,8 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.catalog.models import Resource
 from app.models import AuditLog, Tenant
-from app.modules.catalog.models import Resource
 
 
 async def _tenant(db: AsyncSession) -> Tenant:

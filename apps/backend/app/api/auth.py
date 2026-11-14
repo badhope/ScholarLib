@@ -198,7 +198,7 @@ async def register(
     await db.refresh(user)
 
     # 注册即得 10 XP：L1 起步，确认社区规范后到 L2。
-    from app.modules.gamification import service as gamification
+    from app.domain.gamification import service as gamification
 
     await gamification.award(db, user, "register", ref_type="user", ref_id=str(user.id))
     await db.commit()

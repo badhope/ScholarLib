@@ -20,9 +20,9 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.notifications.models import Notification
+from app.domain.notifications.services import create as create_notification
 from app.models import Tenant, User
-from app.modules.notifications.models import Notification
-from app.modules.notifications.services import create as create_notification
 
 
 async def _resolve_tenant(db: AsyncSession) -> Tenant:

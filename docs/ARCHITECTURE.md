@@ -35,6 +35,45 @@ Rubbish 是一个**模块化、多租户的学术期刊发表平台**:核心只�
    (主库 + RLS)       (缓存 + 限流)       (PDF、上传文件)
 ```
 
+## 物理分层（2026-11 起）
+
+架构不再只靠 `app/modules/<name>/` 把模型、服务、路由混在一个包里。真实代码按依赖方向分到四层：
+
+```text
+apps/backend/app/
+├── core/               基础层：配置、DB、安全、租户、日志、限流、邮件、存储
+├── domain/             核心业务层：实体模型、业务规则、领域服务
+│   ├── catalog/ submission/ review/ notifications/ gamification/
+│   └── ... 共 17 个领域包
+├── application/        应用编排层：跨领域后台任务、定时调度
+│   ├── scheduler.py
+│   └── ...
+├── interfaces/http/    接入层：路由、请求/响应 DTO、HTTP 依赖
+│   ├── catalog/ submission/ review/ ... 共 17 个 HTTP 包
+│   └── system/ （预留：系统级 API）
+├── api/                系统级 HTTP 入口（auth、admin、health、OIDC 等）
+├── models/             身份/租户内核模型与共享 Base
+└── modules/            组合清单 + 兼容壳（不再是业务实现所在地）
+```
+
+### 依赖方向（CI 强制）
+
+| 层 | 可以依赖 | 禁止依赖 |
+|---|---|---|
+| `core` 基础层 | 第三方库、`app.models` | `domain` / `application` / `interfaces` / 业务 `modules` |
+| `domain` 核心业务层 | `core`、`app.models`、同层领域 | `api` / `interfaces` / `modules` |
+| `application` 应用编排层 | `core`、`domain` | `interfaces` |
+| `interfaces` 接入层 | `core`、`domain`、`application` | 反向被内层依赖 |
+
+唯一例外是 `core/modules.py`：它是组合根，负责加载模块清单。`tests/test_architecture_layers.py` 会在 CI 中扫描 AST，发现反向依赖即失败。
+
+### 兼容策略
+
+- 旧 `app.modules.<domain>.<file>` 路径保留为**只做 re-export 的兼容壳**，注释固定以 `Compatibility shim` 开头。
+- `app.modules.<domain>/__init__.py` 保留模块清单（名称、版本、依赖、router），它不是业务实现。
+- 迁移不改变 URL、数据库表名、OpenAPI 路径；迁移前后 OpenAPI 240 条路径逐条比对一致。
+- 新增业务代码一律写进 `app/domain` 与 `app/interfaces/http`，不再往 `app/modules` 里放实现。
+
 ## 核心层(core)负责什么
 
 核心层刻意保持最小,只承担每个学术期刊站点都需要的"地基":

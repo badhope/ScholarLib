@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.contextvars import bind_contextvars
 
+from app.core import tenant as tenant_core
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.security import decode_access_token, token_version_matches
@@ -33,23 +34,13 @@ oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_e
 
 
 def get_current_tenant_id() -> UUID | None:
-    """Return the current request's tenant id from the ContextVar.
-
-    Always set by ``TenantContextMiddleware`` for HTTP requests. Returns
-    ``None`` for non-HTTP contexts (background jobs) — callers must check.
-    """
-    return TENANT_CONTEXT_VAR.get()
+    """Return the request tenant id from the foundation context."""
+    return tenant_core.get_current_tenant_id()
 
 
 def require_tenant_id() -> UUID:
-    """Resolve tenant id or 400. Write endpoints need an explicit tenant scope."""
-    tenant_id = get_current_tenant_id()
-    if tenant_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tenant context not resolved",
-        )
-    return tenant_id
+    """Resolve tenant id or 400; delegates to the foundation layer."""
+    return tenant_core.require_tenant_id()
 
 
 async def get_current_user(

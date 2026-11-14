@@ -22,9 +22,9 @@ from app.api.deps import (
     get_current_user,
 )
 from app.core.db import get_db
+from app.domain.gamification import levels_axis
+from app.domain.gamification.models import PointEvent
 from app.models import User
-from app.modules.gamification import levels_axis
-from app.modules.gamification.models import PointEvent
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -68,7 +68,7 @@ async def _has_author_activity(db: AsyncSession, user: User) -> bool:
     没有产出就不展示「作者」等级轨——避免一个只读过文章的账号在个人中心
     看到一枚无意义的 L1。
     """
-    from app.modules.submission.models import Submission
+    from app.domain.submission.models import Submission
 
     submitted = (
         await db.execute(
