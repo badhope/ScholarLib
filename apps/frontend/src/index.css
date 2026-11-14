@@ -540,6 +540,70 @@ h4 {
   background: white;
 }
 /* 站内学术表情包：不按正文配图占满整行，保持“表情”的尺度。 */
+/* 正文插图：点击查看原图（灯箱只做阅读放大，不改变正文排版）。 */
+.markdown-body img.md-image-zoom {
+  cursor: zoom-in;
+}
+.markdown-body img.md-image-zoom:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.md-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
+  background: rgb(8 16 12 / 88%);
+  backdrop-filter: blur(4px);
+}
+.md-lightbox img {
+  display: block;
+  max-width: 94vw;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  border-radius: 0.5rem;
+  background: white;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+.md-lightbox-close {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: 1rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  padding: 0.55rem 1.1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #17281f;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+}
+.md-lightbox-close:hover { background: white; }
+
+/* 正文文献标记 [1]：可点击跳到参考文献，并自动展开折叠区。 */
+.markdown-body .md-cite {
+  color: var(--color-primary);
+  font-size: 0.78em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  vertical-align: super;
+  line-height: 0;
+  white-space: nowrap;
+}
+.markdown-body .md-cite:hover { text-decoration: underline; }
+.refs-collapse .md-ref-entry {
+  scroll-margin-top: 5.5rem;
+  border-radius: 0.25rem;
+}
+.refs-collapse .md-ref-entry:target {
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+
 .markdown-body img[src*="/stickers/"] {
   width: 148px;
   margin: 0.65em 0;

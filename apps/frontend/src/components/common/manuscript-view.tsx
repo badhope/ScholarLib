@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -701,11 +702,78 @@ function referenceEntries(refs: string): string[] {
     .filter(Boolean)
 }
 
+/**
+ * 把正文里的 [1] / [1,3] 文献标记变成可点击跳转，并给参考文献逐条加锚点。
+ * 只处理纯文本节点，跳过链接、代码、公式和参考文献区，避免重复包裹。
+ */
+function enhanceCitations(
+  root: HTMLElement,
+  refCount: number,
+  openRefs: (targetId: string) => void,
+) {
+  const section = root.querySelector<HTMLElement>('#refs .refs-body')
+  if (!section) return
+  const entries = Array.from(section.querySelectorAll<HTMLElement>('p, li'))
+  entries.forEach((entry, index) => {
+    entry.id = `ref-${index + 1}`
+    entry.classList.add('md-ref-entry')
+  })
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const nodes: Text[] = []
+  while (walker.nextNode()) nodes.push(walker.currentNode as Text)
+  nodes.forEach((node) => {
+    const value = node.nodeValue ?? ''
+    if (!/\[\d/.test(value) || !node.parentElement) return
+    if (node.parentElement.closest('a, code, pre, .katex, #refs, script, style, button, input, textarea')) return
+    const re = /\[(\d+(?:\s*[-,–]\s*\d+)?(?:\s*,\s*\d+(?:\s*[-,–]\s*\d+)?)*)\]/g
+    const fragment = document.createDocumentFragment()
+    let last = 0
+    let matched = false
+    for (const match of value.matchAll(re)) {
+      const first = Number(match[1].match(/\d+/)?.[0] ?? 0)
+      if (first < 1 || first > refCount) continue
+      matched = true
+      fragment.append(value.slice(last, match.index))
+      const anchor = document.createElement('a')
+      anchor.href = `#ref-${first}`
+      anchor.className = 'md-cite'
+      anchor.dataset.cite = '1'
+      anchor.textContent = match[0]
+      anchor.addEventListener('click', (event) => {
+        event.preventDefault()
+        openRefs(`ref-${first}`)
+      })
+      fragment.append(anchor)
+      last = (match.index ?? 0) + match[0].length
+    }
+    if (!matched) return
+    fragment.append(value.slice(last))
+    node.parentElement?.replaceChild(fragment, node)
+  })
+}
+
 // 公式/插图原图 404 时，浏览器会把 img 的 alt（整段 LaTeX 回退文本）
 // 当正文渲染出来，看起来像"一堆乱码"（生产 /reader/133 实锤）。
 // onError 后换成小占位元素：保留 a11y 信息，但不显示 alt 原文。
 function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false)
+  const [zoomOpen, setZoomOpen] = useState(false)
+
+  useEffect(() => {
+    if (!zoomOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoomOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [zoomOpen])
+
   if (failed) {
     return (
       <span
@@ -719,13 +787,51 @@ function ManuscriptImage({ src, alt }: { src: string; alt: string }) {
     )
   }
   return (
-    <img
-      src={src}
-      alt={alt || '稿件插图'}
-      loading="lazy"
-      decoding="async"
-      onError={() => setFailed(true)}
-    />
+    <>
+      <img
+        src={src}
+        alt={alt || '稿件插图'}
+        loading="lazy"
+        decoding="async"
+        className="md-image-zoom"
+        role="button"
+        tabIndex={0}
+        title="点击查看原图"
+        onClick={() => setZoomOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setZoomOpen(true)
+          }
+        }}
+        onError={() => setFailed(true)}
+      />
+      {zoomOpen
+        ? createPortal(
+            <div
+              className="md-lightbox"
+              role="dialog"
+              aria-modal="true"
+              aria-label={alt || '查看大图'}
+              onClick={() => setZoomOpen(false)}
+            >
+              <img
+                src={src}
+                alt={alt || '稿件插图'}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <button
+                type="button"
+                className="md-lightbox-close"
+                onClick={() => setZoomOpen(false)}
+              >
+                关闭
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   )
 }
 
@@ -945,6 +1051,37 @@ export function ManuscriptView({
  setToc(entries)
  onTocReadyRef.current?.(entries)
  }, [data, refs])
+
+  // 文献引用跳转：正文 [1] 点击后展开参考文献并滚到对应条目。
+  useEffect(() => {
+    const root = articleRef.current
+    if (!root || !refCount) return
+    const openRefs = (targetId: string) => {
+      setRefsOpen(true)
+      const align = () => {
+        const target = document.getElementById(targetId)
+        if (!target) return
+        if (useWindowScroll) {
+          window.scrollTo({
+            top: target.getBoundingClientRect().top + window.scrollY - 88,
+          })
+        } else if (scrollRef.current) {
+          const host = scrollRef.current
+          host.scrollTop =
+            target.getBoundingClientRect().top -
+            host.getBoundingClientRect().top +
+            host.scrollTop -
+            88
+        }
+      }
+      // <details> 展开与懒加载图片会继续改变文档高度，分几次对齐，
+      // 保证最终落点仍在目标文献，而不是半路被撑开。
+      window.requestAnimationFrame(() => window.requestAnimationFrame(align))
+      window.setTimeout(align, 350)
+      window.setTimeout(align, 1000)
+    }
+    enhanceCitations(root, refCount, openRefs)
+  }, [data, refCount, refsOpen, useWindowScroll])
 
   useEffect(() => {
     if (isError) onFatalError?.(queryError)
