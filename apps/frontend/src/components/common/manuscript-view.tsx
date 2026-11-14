@@ -10,21 +10,25 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import { ListTree, ALargeSmall, Baseline } from 'lucide-react'
 import 'katex/dist/katex.min.css'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { EmptyState, Loading } from '@/components/common/state'
+import { markdownSanitizeSchema, markdownUrlTransform } from '@/components/common/markdown-content'
 
 // 在线阅读的 Markdown 渲染视图（0.7.0）。
 // - 数据：GET /api/catalog/{id}/manuscript（text/markdown，公开边界与
 //   PDF 下载端点一致；上传时服务端从 PDF/Word 自动转换）。
-// - 渲染：react-markdown（默认转义原始 HTML，XSS 面为零）+ GFM 表格
-//   + KaTeX 公式；图片为 data URI 自包含（urlTransform 白名单放行）。
+// - 渲染：react-markdown + GFM 表格 + KaTeX 公式；编辑器写入的行内 HTML
+//   （<u>/<mark>/<sup>/<sub>）经 rehype-raw 保留，再走与 MarkdownContent
+//   同一个 rehype-sanitize 白名单清洗（脚本/事件属性会被剥掉）。
 // - 阅读体验：桌面端目录侧栏（点击跳转）、参考文献折叠、滚动进度。
 /** 阅读偏好：字号/行距/衬线，localStorage 持久化（跨篇生效）。 */
 interface ReadingPrefs {
@@ -923,13 +927,13 @@ const markdownComponents: Components = {
 function ManuscriptMarkdown({ children, math = true }: { children: string; math?: boolean }) {
   return (
     <ReactMarkdown
-      urlTransform={(url) =>
-        // 转换管线把图表内嵌为 data:image URI；默认清洗会剥掉 data: 协议
-        // 导致破图。这里只放行图片 data URI，其余仍走默认清洗。
-        url.startsWith('data:image/') ? url : defaultUrlTransform(url)
-      }
+      urlTransform={markdownUrlTransform}
       remarkPlugins={math ? [remarkGfm, remarkCjkStrong, remarkMath] : [remarkGfm, remarkCjkStrong]}
-      rehypePlugins={math ? [[rehypeKatex, { strict: false }]] : []}
+      rehypePlugins={
+        math
+          ? [rehypeRaw, [rehypeSanitize, markdownSanitizeSchema], [rehypeKatex, { strict: false }]]
+          : [rehypeRaw, [rehypeSanitize, markdownSanitizeSchema]]
+      }
       components={markdownComponents}
     >
       {children}

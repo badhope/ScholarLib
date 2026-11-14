@@ -155,7 +155,7 @@ export function ProfileDetailsCard({ initial }: { initial?: UserResponse | null 
     if (Object.keys(body).length === 0) return
     try {
       await updateProfile.mutateAsync(body)
-      toast.success('主页资料已保存')
+      toast.success('主页资料已保存', { id: 'profile-save' })
     } catch (err) {
       toast.error(extractError(err, '保存失败，请检查主页链接是否为 http(s)'))
     }

@@ -111,6 +111,22 @@ async def test_export_json_format(client: AsyncClient, admin_user: dict) -> None
     assert records[0]["title"] == "A Test Paper"
 
 
+async def test_export_jats_format(client: AsyncClient, admin_user: dict) -> None:
+    create = await client.post(
+        "/api/catalog",
+        json=_SAMPLE,
+        headers={"Authorization": f"Bearer {admin_user['token']}"},
+    )
+    rid = create.json()["id"]
+
+    response = await client.get(f"/api/export?ids={rid}&format=jats")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/xml"
+    assert 'filename="rubbish-export.xml"' in response.headers["content-disposition"]
+    assert "<article" in response.text
+    assert "A Test Paper" in response.text
+
+
 async def test_export_preserves_request_order(client: AsyncClient, admin_user: dict) -> None:
     r1 = await client.post(
         "/api/catalog",

@@ -338,6 +338,13 @@ for name, module_router in registry.all_routers():
     app.include_router(module_router, prefix="/api")
     logger.info("module_router_mounted", module=name, prefix=f"/api/{name}")
 
+# --- 通用媒体上传（/api/media/images）：投稿正文与论坛共用，
+#     不把论文图片塞进论坛语义的路径里。 ---
+from app.interfaces.http.media.routes import router as media_router  # noqa: E402
+
+app.include_router(media_router, prefix="/api")
+logger.info("module_router_mounted", module="media", prefix="/api/media")
+
 # --- 审稿人/主编工作台（独立路由，与 review 模块主路由分开挂载，
 #     路径前缀 /review/workbench 与 /editor/workbench） ---
 from app.interfaces.http.review.workbench import router as workbench_router  # noqa: E402

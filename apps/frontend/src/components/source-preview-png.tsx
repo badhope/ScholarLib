@@ -14,12 +14,34 @@ interface SourcePreviewPngProps {
  * 大文件、慢网只影响当前页，不会撞 pdf.js 的整份解析超时。
  */
 export default function SourcePreviewPng({ token, pages }: SourcePreviewPngProps) {
-  const [page, setPage] = useState(1)
+  // token 变化必须在同一次渲染里把页码归 1：否则换一份更短的稿时，
+  // 旧页码会先发一次 `/4.png` 请求，用户看到 404 空白后才被 effect 纠正。
+  const [pager, setPager] = useState({ token, page: 1 })
+  const page = pager.token === token ? pager.page : 1
+  const safePages = Math.max(0, pages)
+  const setPage = (next: number | ((value: number) => number)) => {
+    setPager((prev) => {
+      const current = prev.token === token ? prev.page : 1
+      const value = typeof next === 'function' ? next(current) : next
+      return { token, page: value }
+    })
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const imgRef = useRef<HTMLImageElement>(null)
 
-  const imageUrl = `/api/submissions/source-preview/${token}/${page}.png`
+  const imageUrl = `/api/submissions/source-preview/${token}/${page}.png${retry ? `?v=${retry}` : ''}`
+
+  useEffect(() => {
+    setPager((prev) => (prev.token === token ? prev : { token, page: 1 }))
+  }, [token])
+
+  useEffect(() => {
+    if (safePages > 0) setPage((value) => Math.min(value, safePages))
+    // setPage 是渲染内闭包，token 变化时已由上面的 pager 派生处理。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safePages])
 
   useEffect(() => {
     setLoading(true)
@@ -59,6 +81,17 @@ export default function SourcePreviewPng({ token, pages }: SourcePreviewPngProps
             <p className="text-center text-sm text-muted-foreground">
               原件预览加载失败：{error}
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null)
+                setLoading(true)
+                setRetry((value) => value + 1)
+              }}
+              className="rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-muted"
+            >
+              重新加载本页
+            </button>
             <a
               href={`/api/submissions/source-preview/${token}.pdf`}
               target="_blank"
@@ -70,7 +103,7 @@ export default function SourcePreviewPng({ token, pages }: SourcePreviewPngProps
           </div>
         )}
       </div>
-      {pages > 0 && !error && (
+      {safePages > 0 && !error && (
         <div className="flex items-center justify-center gap-2 pt-2 text-sm">
           <button
             type="button"
@@ -80,13 +113,13 @@ export default function SourcePreviewPng({ token, pages }: SourcePreviewPngProps
           >
             上一页
           </button>
-          <span className="tabular-nums">
-            {page} / {pages} 页
+          <span className="tabular-nums" aria-live="polite">
+            {page} / {safePages} 页
           </span>
           <button
             type="button"
-            onClick={() => setPage((value) => Math.min(pages, value + 1))}
-            disabled={page >= pages}
+            onClick={() => setPage((value) => Math.min(safePages, value + 1))}
+            disabled={page >= safePages}
             className="rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-muted disabled:opacity-50"
           >
             下一页

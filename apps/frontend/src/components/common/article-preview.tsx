@@ -1,9 +1,5 @@
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import 'katex/dist/katex.min.css'
 import { Badge } from '@/components/ui/badge'
+import { MarkdownContent } from '@/components/common/markdown-content'
 
 /**
  * 投稿前的“发布效果预览”。
@@ -83,14 +79,7 @@ export function ArticlePreview({
           </div>
         )}
         {main ? (
-          <article className="markdown-body min-w-0 max-w-full text-sm">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[[rehypeKatex, { strict: false }]]}
-            >
-              {main}
-            </ReactMarkdown>
-          </article>
+          <MarkdownContent text={main} className="min-w-0 max-w-full text-sm" />
         ) : (
           <p className="text-sm text-muted-foreground">正文为空，暂无可预览内容。</p>
         )}

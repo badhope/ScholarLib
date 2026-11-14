@@ -123,7 +123,13 @@ def _citation_key(resource: Exportable, index: int) -> str:
         if word and word[0].isalpha():
             first_word = word.lower()
             break
-    first_word = _KEY_SAFE_RE.sub("", first_word) or "untitled"
+    first_word = _KEY_SAFE_RE.sub("", first_word)
+    if not first_word:
+        # 中文/日文等无 ASCII 首词的标题：用资源 id 兜底。否则所有中文稿
+        # 都会生成 ``author2024untitled``，只能靠 _2/_3 后缀区分，既不稳定
+        # 也不可读。
+        fallback = _KEY_SAFE_RE.sub("", str(resource.id))
+        first_word = f"r{fallback}" if fallback else "untitled"
     key = f"{surname}{resource.year}{first_word}"
     if index:
         key += f"_{index}"
@@ -148,7 +154,7 @@ _BIBTEX_ESCAPES = {
 
 
 def _escape_bibtex(value: str) -> str:
-    """Escape LaTeX specials in free-text fields (title / abstract / venue).
+    """Escape LaTeX specials in free-text fields (title / author / abstract / venue / keywords).
 
     只用于自由文本：DOI、URL、页码这类结构化字段保持原样 —— 给 DOI 里的
     ``_`` 加反斜杠反而会让引用的 DOI 变成乱码。
@@ -160,10 +166,12 @@ def to_bibtex(resources: list[Exportable]) -> str:
     """Render resources as a BibTeX bibliography string."""
     used_keys: set[str] = set()
     blocks: list[str] = []
-    for i, resource in enumerate(resources):
+    for resource in resources:
         key = _citation_key(resource, 0)
-        if key in used_keys:
-            key = _citation_key(resource, i + 1)
+        suffix = 1
+        while key in used_keys:
+            suffix += 1
+            key = _citation_key(resource, suffix)
         used_keys.add(key)
         blocks.append(_resource_to_bibtex(resource, key))
     return "\n\n".join(blocks)
@@ -174,7 +182,8 @@ def _resource_to_bibtex(resource: Exportable, key: str) -> str:
     authors = _author_list(resource)
     fields: list[str] = [f"  title = {{{_escape_bibtex(resource.title)}}}"]
     if authors:
-        fields.append(f"  author = {{{' and '.join(authors)}}}")
+        escaped_authors = " and ".join(_escape_bibtex(author) for author in authors)
+        fields.append(f"  author = {{{escaped_authors}}}")
     fields.append(f"  year = {{{resource.year}}}")
     if resource.venue:
         venue_field = "journal" if resource.type == "paper" else "booktitle"
@@ -187,7 +196,8 @@ def _resource_to_bibtex(resource: Exportable, key: str) -> str:
         fields.append(f"  pages = {{{resource.pages}}}")
     keywords = _keywords(resource)
     if keywords:
-        fields.append(f"  keywords = {{{', '.join(keywords)}}}")
+        escaped_keywords = ", ".join(_escape_bibtex(keyword) for keyword in keywords)
+        fields.append(f"  keywords = {{{escaped_keywords}}}")
     if resource.doi:
         fields.append(f"  doi = {{{resource.doi}}}")
     url = _url(resource)
@@ -210,30 +220,49 @@ def to_ris(resources: list[Exportable]) -> str:
     return "\n\n".join(blocks)
 
 
+_PAGE_RANGE_RE = re.compile(r"^\s*(\d+)\s*[-–—]\s*(\d+)\s*$")
+
+
+def _ris_text(value: str) -> str:
+    """RIS 每条 tag 只占一行；换行会把一条记录拆成两条。"""
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
+def _ris_pages(pages: str) -> tuple[str, str | None]:
+    """RIS 没有 ``SP - 1-20`` 这种写法：起始页/结束页必须拆成 SP/EP。"""
+    raw = _ris_text(pages)
+    match = _PAGE_RANGE_RE.match(raw)
+    if match:
+        return match.group(1), match.group(2)
+    return raw, None
+
+
 def _resource_to_ris(resource: Exportable) -> str:
     lines: list[str] = [f"TY  - {_RIS_TYPE_MAP.get(resource.type, 'GEN')}"]
-    lines.append(f"TI  - {resource.title}")
+    lines.append(f"TI  - {_ris_text(resource.title)}")
     for author in _author_list(resource):
-        lines.append(f"AU  - {author}")
+        lines.append(f"AU  - {_ris_text(author)}")
     lines.append(f"PY  - {resource.year}")
     if resource.venue:
-        lines.append(f"JO  - {resource.venue}")
+        lines.append(f"JO  - {_ris_text(resource.venue)}")
     if resource.volume:
         lines.append(f"VL  - {resource.volume}")
     if resource.issue:
         lines.append(f"IS  - {resource.issue}")
     if resource.pages:
-        lines.append(f"SP  - {resource.pages}")
+        start, end = _ris_pages(resource.pages)
+        lines.append(f"SP  - {start}")
+        if end:
+            lines.append(f"EP  - {end}")
     for keyword in _keywords(resource):
-        lines.append(f"KW  - {keyword}")
+        lines.append(f"KW  - {_ris_text(keyword)}")
     if resource.doi:
         lines.append(f"DO  - {resource.doi}")
     url = _url(resource)
     if url:
         lines.append(f"UR  - {url}")
     if resource.abstract:
-        abstract = re.sub(r"\s+", " ", resource.abstract).strip()
-        lines.append(f"AB  - {abstract}")
+        lines.append(f"AB  - {_ris_text(resource.abstract)}")
     lines.append("ER  -")
     return "\n".join(lines)
 
@@ -371,7 +400,7 @@ def export_resources(format_: str, resources: list[Exportable]) -> str:
     fmt = format_.strip().lower()
     exporter = EXPORTERS.get(fmt)
     if exporter is None:
-        raise ValueError(f"Unsupported export format: {format_!r} (bibtex/ris/csv/json)")
+        raise ValueError(f"Unsupported export format: {format_!r} (bibtex/ris/csv/json/jats)")
     return exporter(resources)
 
 

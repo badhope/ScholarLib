@@ -78,7 +78,7 @@ async def export_endpoint(
             detail="No resources found for the given ids.",
         )
 
-    # format 已被 Query 的正则约束在四选一内，export_resources 不会抛
+    # format 已被 Query 的正则约束在五选一内，export_resources 不会抛
     # ValueError —— 无需 try/except。
     # Resource satisfies Exportable structurally (duck-typed), but mypy
     # can't see that without a runtime check; cast through.

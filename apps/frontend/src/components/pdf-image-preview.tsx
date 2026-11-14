@@ -18,19 +18,45 @@ export default function PdfImagePreview({
   resourceId,
   version = '21',
 }: PdfImagePreviewProps) {
-  const [page, setPage] = useState(1)
-  const [total, setTotal] = useState(0)
+  // 资源/版本变化时页码必须在同一次渲染里归 1，避免从 91 页文章切到
+  // 3 页文章时先请求 `/page=91` 的 404 空白。
+  const viewKey = `${resourceId}:${version}`
+  const [pager, setPager] = useState({ key: viewKey, page: 1 })
+  const page = pager.key === viewKey ? pager.page : 1
+  const setPage = (next: number | ((value: number) => number)) => {
+    setPager((prev) => {
+      const current = prev.key === viewKey ? prev.page : 1
+      const value = typeof next === 'function' ? next(current) : next
+      return { key: viewKey, page: value }
+    })
+  }
+  const [totalState, setTotalState] = useState({ key: viewKey, total: 0 })
+  const total = totalState.key === viewKey ? totalState.total : 0
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const imgRef = useRef<HTMLImageElement>(null)
 
-  const imageUrl = `/api/catalog/${resourceId}/export?format=png&v=${version}&page=${page}`
+  const imageUrl = `/api/catalog/${resourceId}/export?format=png&v=${version}&page=${page}${retry ? `&retry=${retry}` : ''}`
+
+  useEffect(() => {
+    setPager((prev) => (prev.key === viewKey ? prev : { key: viewKey, page: 1 }))
+    setTotalState((prev) => (prev.key === viewKey ? prev : { key: viewKey, total: 0 }))
+    setRetry(0)
+  }, [viewKey])
+
+  useEffect(() => {
+    if (total > 0) setPage((value) => Math.min(value, total))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total])
 
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setError(null)
     // 只取总页数（几十字节 JSON），图片仍交给 <img> 直接走浏览器缓存。
+    // 页数只跟资源/版本有关，不能把 imageUrl 放进依赖里——翻页时重复
+    // 请求 info 是纯浪费。
     fetch(`/api/catalog/${resourceId}/export?format=info&v=${version}`, {
       cache: 'force-cache',
       signal: controller.signal,
@@ -38,13 +64,15 @@ export default function PdfImagePreview({
       .then(async (response) => {
         if (!response.ok) return
         const payload = (await response.json()) as { pages?: number }
-        if (payload.pages && payload.pages > 0) setTotal(payload.pages)
+        if (payload.pages && payload.pages > 0) {
+          setTotalState({ key: viewKey, total: payload.pages })
+        }
       })
       .catch(() => {
         /* 页数失败不影响 <img> 显示，错误由 onError 兜底 */
       })
     return () => controller.abort()
-  }, [imageUrl, resourceId, version])
+  }, [resourceId, version, viewKey])
 
   // 图片命中浏览器缓存时，部分浏览器不会再触发 onLoad，加载遮罩会
   // 一直停在页面正中；渲染后检查 complete/naturalWidth 兜底关掉。
@@ -83,6 +111,17 @@ export default function PdfImagePreview({
             <p className="text-center text-sm text-muted-foreground">
               预览加载失败：{error}
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null)
+                setLoading(true)
+                setRetry((value) => value + 1)
+              }}
+              className="rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-muted"
+            >
+              重新加载本页
+            </button>
             <a
               href={`/api/catalog/${resourceId}/export?format=pdf&v=${version}`}
               target="_blank"
@@ -104,7 +143,7 @@ export default function PdfImagePreview({
           >
             上一页
           </button>
-          <span className="tabular-nums">
+          <span className="tabular-nums" aria-live="polite">
             {page} / {total} 页
           </span>
           <button

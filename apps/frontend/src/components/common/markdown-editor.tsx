@@ -148,6 +148,51 @@ export function MarkdownEditor({
     })
   }
 
+  const changeIndent = (outdent: boolean) => {
+    const area = areaRef.current
+    if (!area || disabled) return
+    const start = area.selectionStart
+    const end = area.selectionEnd
+
+    if (start === end && !outdent) {
+      insertText('  ')
+      return
+    }
+
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1
+    const lineEndIdx = value.indexOf('\n', end)
+    const lineEnd = lineEndIdx === -1 ? value.length : lineEndIdx
+    const block = value.slice(lineStart, lineEnd)
+    const lines = block.split('\n')
+    const currentLine = value.slice(lineStart, start).split('\n').length - 1
+
+    let removedPrefix = 0
+    const changed = lines.map((line, index) => {
+      if (!line.trim()) return line
+      if (!outdent) return `  ${line}`
+      const prefix = line.startsWith('\t') ? 1 : line.startsWith('  ') ? 2 : line.startsWith(' ') ? 1 : 0
+      if (index === currentLine) removedPrefix = prefix
+      return prefix ? line.slice(prefix) : line
+    })
+
+    const transformed = changed.join('\n')
+    const next = value.slice(0, lineStart) + transformed + value.slice(lineEnd)
+    let nextStart: number
+    let nextEnd: number
+    if (start === end) {
+      nextStart = outdent ? Math.max(lineStart, start - removedPrefix) : start + 2
+      nextEnd = nextStart
+    } else {
+      nextStart = lineStart
+      nextEnd = lineStart + transformed.length
+    }
+    onChange(next)
+    requestAnimationFrame(() => {
+      area.focus()
+      area.setSelectionRange(nextStart, nextEnd)
+    })
+  }
+
   const insertText = (text: string) => {
     const area = areaRef.current
     if (disabled) return
@@ -216,10 +261,13 @@ export function MarkdownEditor({
       } else if (key === 'k') {
         e.preventDefault()
         applyTool(LINK)
+      } else if (key === 'u') {
+        e.preventDefault()
+        applyTool(UNDERLINE)
       }
-    } else if (e.key === 'Tab' && !e.shiftKey) {
+    } else if (e.key === 'Tab') {
       e.preventDefault()
-      insertText('  ')
+      changeIndent(e.shiftKey)
     }
   }
 
@@ -249,6 +297,7 @@ export function MarkdownEditor({
               onClick={() => imageRef.current?.click()}
               className="h-7 gap-1 px-1.5 text-xs font-medium text-muted-foreground"
               title="上传图片（PNG / JPEG / GIF / WebP，最大 5MB）"
+              aria-label="上传图片"
             >
               <ImagePlus className="h-3.5 w-3.5" />
               {uploadingImage ? '上传中…' : '图片'}
@@ -299,6 +348,7 @@ export function MarkdownEditor({
               onKeyDown={onKeyDown}
               onDrop={onDrop}
               onPaste={onPaste}
+              aria-label={placeholder ? `Markdown 正文：${placeholder}` : 'Markdown 正文'}
               placeholder={placeholder}
               spellCheck={false}
               style={{ minHeight }}
@@ -339,6 +389,7 @@ function ToolButton({
       variant="ghost"
       size="sm"
       title={tool.title}
+      aria-label={tool.title}
       disabled={disabled}
       onClick={() => onPick(tool)}
       className="h-7 min-w-7 px-1.5 text-xs font-semibold"
@@ -368,6 +419,7 @@ function ToolMenu({
           variant="ghost"
           size="sm"
           disabled={disabled}
+          aria-label={`插入${label}`}
           className="h-7 gap-0.5 px-1.5 text-xs font-medium text-muted-foreground"
         >
           {label}

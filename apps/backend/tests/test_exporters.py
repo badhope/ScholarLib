@@ -84,10 +84,54 @@ def test_ris_renders_jour_entry() -> None:
     assert "JO  - Journal of Testing" in out
     assert "VL  - 10" in out
     assert "IS  - 2" in out
-    assert "SP  - 1-20" in out
+    assert "SP  - 1" in out
+    assert "EP  - 20" in out
+    assert "SP  - 1-20" not in out
     assert "KW  - testing" in out
     assert "DO  - 10.1234/test.1" in out
     assert out.rstrip().endswith("ER  -")
+
+
+def test_ris_flattens_multiline_fields() -> None:
+    out = to_ris([_stub(title="Line one\nLine two", authors=["Alice\nAuthor"])])
+    assert "TI  - Line one Line two" in out
+    assert "AU  - Alice Author" in out
+
+
+def test_ris_single_page_has_no_end_page() -> None:
+    out = to_ris([_stub(pages="7")])
+    assert "SP  - 7" in out
+    assert "EP  -" not in out
+
+
+def test_bibtex_escapes_authors_and_keywords() -> None:
+    out = to_bibtex(
+        [
+            _stub(
+                authors=["Alice & Bob", "A_B, C%D"],
+                keywords=["a&b", "c_d"],
+            )
+        ]
+    )
+    assert "  author = {Alice \\& Bob and A\\_B, C\\%D}" in out
+    assert "  keywords = {a\\&b, c\\_d}" in out
+
+
+def test_bibtex_chinese_title_uses_id_fallback_for_key() -> None:
+    out = to_bibtex([_stub(id=42, title="学术底刊的排版实验", authors=["张三"])])
+    assert "@article{anon2024r42," in out
+    assert "untitled" not in out
+
+
+def test_bibtex_chinese_titles_get_distinct_keys() -> None:
+    out = to_bibtex(
+        [
+            _stub(id=1, title="第一篇中文稿", authors=["张三"]),
+            _stub(id=2, title="第二篇中文稿", authors=["张三"]),
+        ]
+    )
+    assert "anon2024r1" in out
+    assert "anon2024r2" in out
 
 
 def test_ris_uses_data_type_for_dataset() -> None:
@@ -135,6 +179,19 @@ def test_dispatch_routes_by_format_name() -> None:
     assert "TY  - JOUR" in export_resources("ris", [res])
     assert "title,type,authors" in export_resources("csv", [res])
     assert '"title": "A Test Paper"' in export_resources("json", [res])
+
+
+def test_dispatch_supports_jats() -> None:
+    out = export_resources("jats", [_stub()])
+    assert "<article" in out
+    assert "A Test Paper" in out
+
+
+def test_unsupported_format_message_lists_jats() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="bibtex/ris/csv/json/jats"):
+        export_resources("yaml", [_stub()])
 
 
 def test_dispatch_is_case_insensitive() -> None:

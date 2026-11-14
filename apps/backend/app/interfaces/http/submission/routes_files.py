@@ -189,6 +189,42 @@ def _source_preview_dir() -> Path:
     return path
 
 
+_SOURCE_PREVIEW_TTL_SECONDS = 6 * 60 * 60
+_SOURCE_PREVIEW_MAX_FILES = 200
+
+
+def _prune_source_previews(now: float | None = None) -> None:
+    """清理过期/超量的预览 PDF。
+
+    token 是 PDF 内容哈希，同一份文件会复用；但登录用户反复上传不同文件
+    会不断新增缓存。这里按 mtime 做 TTL + 数量上限，避免把 /tmp 堆满。
+    """
+    path = _source_preview_dir()
+    try:
+        files = [p for p in path.glob("*.pdf") if p.is_file()]
+    except OSError:
+        return
+    current = time.time() if now is None else now
+    remaining: list[tuple[float, Path]] = []
+    for item in files:
+        try:
+            mtime = item.stat().st_mtime
+        except OSError:
+            continue
+        if current - mtime > _SOURCE_PREVIEW_TTL_SECONDS:
+            try:
+                item.unlink()
+            except OSError:
+                pass
+            continue
+        remaining.append((mtime, item))
+    for _mtime, item in sorted(remaining)[: max(0, len(remaining) - _SOURCE_PREVIEW_MAX_FILES)]:
+        try:
+            item.unlink()
+        except OSError:
+            pass
+
+
 async def _uploaded_file_to_pdf(file: UploadFile) -> bytes:
     """与 /source-preview 同一条转换口径：PDF 原样、DOCX 转 PDF。"""
     from app.domain.submission.export_docs import docx_to_pdf
@@ -230,6 +266,7 @@ async def preview_uploaded_source_pages(
         temp_path = cache_path.with_suffix(".tmp")
         temp_path.write_bytes(pdf_bytes)
         temp_path.replace(cache_path)
+    _prune_source_previews()
     with pymupdf.open(cache_path) as document:
         pages = document.page_count
     return {"token": token, "pages": pages}

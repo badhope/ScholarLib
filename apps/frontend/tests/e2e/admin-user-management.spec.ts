@@ -58,9 +58,9 @@ test.describe('admin: user management', () => {
     // 点 "审稿人" checkbox item(未选中 → 选中)
     const reviewerItem = adminPage.getByRole('menuitemcheckbox', { name: '审稿人', exact: true })
     await reviewerItem.waitFor({ state: 'visible', timeout: 5_000 })
-    await reviewerItem.focus()
-    await expect(reviewerItem).toBeFocused()
-    await adminPage.keyboard.press('Space')
+    // Radix 菜单项使用 roving tabindex（-1），由菜单自身的键盘导航管理焦点；
+    // 直接调用 DOM focus() 会触发 FocusScope 把焦点收回首项。用真实点击验证分配。
+    await reviewerItem.click()
     await expect(adminPage.getByText('已分配 审稿人 角色')).toBeVisible({ timeout: 5_000 })
 
     // 等表格刷新,验证 reviewer badge 出现在该行
@@ -83,9 +83,7 @@ test.describe('admin: user management', () => {
     await trigger2.press('Enter')
     const reviewerItem2 = adminPage.getByRole('menuitemcheckbox', { name: '审稿人', exact: true })
     await reviewerItem2.waitFor({ state: 'visible', timeout: 5_000 })
-    await reviewerItem2.focus()
-    await expect(reviewerItem2).toBeFocused()
-    await adminPage.keyboard.press('Space')
+    await reviewerItem2.click()
     await expect(adminPage.getByText('已撤销 审稿人 角色')).toBeVisible({ timeout: 5_000 })
 
     await adminCtx.close()

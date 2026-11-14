@@ -24,13 +24,39 @@ function blobToDataUrl(blob: Blob): Promise<string> {
  * 取 blob，再转 data URL（站点的 CSP 允许 data:，不允许 blob:）。每页单独
  * 请求，慢网/大文件不会卡整份解析。
  */
+const AUTH_PREVIEW_CACHE_LIMIT = 20
+
 export default function AuthPngPreview({ baseUrl, pages }: AuthPngPreviewProps) {
-  const [page, setPage] = useState(1)
+  // 与 SourcePreviewPng/PdfImagePreview 相同的规则：换一份原件时页码必须
+  // 在同一次渲染里归 1，不能等 effect 跑完再纠正。
+  const [pager, setPager] = useState({ key: baseUrl, page: 1 })
+  const page = pager.key === baseUrl ? pager.page : 1
+  const safePages = Math.max(0, pages)
+  const setPage = (next: number | ((value: number) => number)) => {
+    setPager((prev) => {
+      const current = prev.key === baseUrl ? prev.page : 1
+      const value = typeof next === 'function' ? next(current) : next
+      return { key: baseUrl, page: value }
+    })
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [url, setUrl] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const cache = useRef(new Map<number, string>())
+
+  useEffect(() => {
+    cache.current.clear()
+    setUrl(null)
+    setError(null)
+    setLoading(true)
+    setPager((prev) => (prev.key === baseUrl ? prev : { key: baseUrl, page: 1 }))
+  }, [baseUrl])
+
+  useEffect(() => {
+    if (safePages > 0) setPage((value) => Math.min(value, safePages))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safePages])
 
   useEffect(() => {
     let cancelled = false
@@ -47,6 +73,10 @@ export default function AuthPngPreview({ baseUrl, pages }: AuthPngPreviewProps) 
       .get(`${baseUrl}/${page}.png`, { responseType: 'blob', timeout: 60_000 })
       .then(async (res) => {
         const dataUrl = await blobToDataUrl(res.data)
+        if (cache.current.size >= AUTH_PREVIEW_CACHE_LIMIT) {
+          const oldest = cache.current.keys().next().value
+          if (oldest !== undefined) cache.current.delete(oldest)
+        }
         cache.current.set(page, dataUrl)
         if (!cancelled) {
           setUrl(dataUrl)
@@ -92,7 +122,7 @@ export default function AuthPngPreview({ baseUrl, pages }: AuthPngPreviewProps) 
           </div>
         ) : null}
       </div>
-      {pages > 0 && !error ? (
+      {safePages > 0 && !error ? (
         <div className="flex items-center justify-center gap-2 pt-2 text-sm">
           <button
             type="button"
@@ -102,13 +132,13 @@ export default function AuthPngPreview({ baseUrl, pages }: AuthPngPreviewProps) 
           >
             上一页
           </button>
-          <span className="tabular-nums">
-            {page} / {pages} 页
+          <span className="tabular-nums" aria-live="polite">
+            {page} / {safePages} 页
           </span>
           <button
             type="button"
-            onClick={() => setPage((value) => Math.min(pages, value + 1))}
-            disabled={page >= pages}
+            onClick={() => setPage((value) => Math.min(safePages, value + 1))}
+            disabled={page >= safePages}
             className="rounded-md border px-3 py-1.5 text-sm transition-colors hover:bg-muted disabled:opacity-50"
           >
             下一页

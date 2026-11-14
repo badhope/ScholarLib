@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
  * 3. 白名单清洗（含 id/class/colspan/rowspan），既保留排版又挡 XSS；
  * 4. data:image 图片白名单，避免上传图或公式图被默认 URL 清洗清空。
  */
-const schema = {
+export const markdownSanitizeSchema = {
   ...defaultSchema,
   tagNames: [
     ...new Set([
@@ -83,6 +83,10 @@ const markdownComponents: Components = {
   ),
 }
 
+export function markdownUrlTransform(url: string): string {
+  return url.startsWith('data:image/') ? url : defaultUrlTransform(url)
+}
+
 export function MarkdownContent({
   text,
   className,
@@ -96,12 +100,10 @@ export function MarkdownContent({
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[
           rehypeRaw,
-          [rehypeSanitize, schema],
+          [rehypeSanitize, markdownSanitizeSchema],
           [rehypeKatex, { strict: false }],
         ]}
-        urlTransform={(url) =>
-          url.startsWith('data:image/') ? url : defaultUrlTransform(url)
-        }
+        urlTransform={markdownUrlTransform}
         components={markdownComponents}
       >
         {text}

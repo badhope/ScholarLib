@@ -69,6 +69,17 @@ describe('ManuscriptView', () => {
  expect(dialog.textContent?.match(/方法/g)).toHaveLength(2)
  })
 
+ it('保留编辑器写入的行内排版并清洗脚本', async () => {
+  const { container } = renderView(
+    '## 1 引言\n\n<mark>高亮</mark> 与 <u>下划线</u>，公式 $E=mc^2$。\n\n<script>alert(1)</script>',
+  )
+  expect(await screen.findByText('高亮')).toBeInTheDocument()
+  expect(container.querySelector('mark')?.textContent).toBe('高亮')
+  expect(container.querySelector('u')?.textContent).toBe('下划线')
+  expect(container.querySelector('.katex')).toBeTruthy()
+  expect(container.querySelector('script')).toBeNull()
+ })
+
  it('渲染前剥离 Word 转换残留的 HTML 注释', async () => {
   renderView('# 标题\n\n<!-- Start of picture text -->\n\n正文第一段。\n\n<!--\n多行注释\n也应被剥掉\n-->\n\n正文第二段。')
   expect(await screen.findByText('正文第一段。')).toBeInTheDocument()

@@ -33,6 +33,7 @@ import {
 } from '@/hooks/api/use-modules'
 import { MarkdownEditor } from '@/components/common/markdown-editor'
 import { ArticlePreview } from '@/components/common/article-preview'
+import { uploadMediaImage } from '@/lib/media'
 import SourcePreviewPng from '@/components/source-preview-png'
 import {
   Dialog,
@@ -1290,6 +1291,7 @@ function StepUpload({
             '# 1 引言\n\n# 2 方法\n\n# 3 结果\n\n# 4 结论\n\n# 参考文献\n\n[1] …'
           }
           testId="wizard-body-editor"
+          onUploadImage={(file) => uploadMediaImage(file, 'submission')}
         />
         {fieldError('references') && (
           <FieldError>

@@ -907,7 +907,7 @@ export type IngestResourceType =
   | 'tutorial'
 
 export type ParseFormat = 'bibtex' | 'ris' | 'csv'
-export type FetchSource = 'crossref' | 'arxiv'
+export type FetchSource = 'crossref' | 'arxiv' | 'pubmed' | 'openalex' | 'semantic_scholar'
 
 export interface IngestResource {
   title: string
